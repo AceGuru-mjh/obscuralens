@@ -6,6 +6,7 @@ legacy code pages, and ANSI colours are disabled automatically when the output
 is not a terminal, when NO_COLOR is set, or when OBSCURALENS_NO_COLOR is set.
 """
 
+import contextlib
 import json
 import os
 import sys
@@ -53,10 +54,8 @@ def _setup_console() -> bool:
                 kernel32 = ctypes.windll.kernel32
                 if kernel32.SetConsoleOutputCP(65001):
                     switched = True
-                try:
+                with contextlib.suppress(Exception):
                     kernel32.SetConsoleCP(65001)
-                except Exception:
-                    pass
             except Exception:
                 switched = False
 

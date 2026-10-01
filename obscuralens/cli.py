@@ -5,6 +5,7 @@ Menu-driven OSINT console with multi-source aggregation.
 
 import json
 import os
+import re
 import sys
 from typing import Any, Dict, List
 
@@ -12,6 +13,7 @@ from .config import SERVICES, config
 from .core.cache import cache
 from .core.metrics import metrics
 from .database import db
+from .investigate import detect_kind, investigate, to_mermaid
 from .reporting import (
     ReportGenerator,
     domain_sections,
@@ -68,6 +70,7 @@ from .utils.formatting import (
     rows_from_fields as _rows_from_fields,
 )
 from .visualization import ChartGenerator
+from .watchlist import watchlist
 
 # Field rendering helpers (LABELS, _label, _fmt_value, _rows_from_fields)
 # are imported from obscuralens.utils.formatting above.
@@ -108,6 +111,8 @@ class ObscuraLensCLI:
                 '8': self.statistics_menu,
                 '9': self.settings_menu,
                 '10': self.api_status_menu,
+                '11': self.watchlist_menu,
+                '12': self.investigate_menu,
                 '0': self.exit_program,
             }
             action = handlers.get(choice)
@@ -131,6 +136,8 @@ class ObscuraLensCLI:
             ('8', 'Statistics'),
             ('9', 'Settings'),
             ('10', 'API Key Status'),
+            ('11', 'Watchlist'),
+            ('12', 'Universal Investigate'),
             ('0', 'Exit'),
         ]
         width = 58
@@ -855,11 +862,10 @@ class ObscuraLensCLI:
             self.view_recent_queries()
         elif choice == '2':
             self.search_history()
-        elif choice == '3':
-            if confirm_action("Clear all query history?"):
-                count = db.clear_history()
-                print_success(f"Cleared {count} records")
-                input("\nPress Enter to continue...")
+        elif choice == '3' and confirm_action("Clear all query history?"):
+            count = db.clear_history()
+            print_success(f"Cleared {count} records")
+            input("\nPress Enter to continue...")
 
     def view_recent_queries(self) -> None:
         history = db.get_history(limit=25)
@@ -1144,6 +1150,122 @@ class ObscuraLensCLI:
             return
         removed = cache.clear()
         print_success(f"Removed {removed} cached responses")
+        input("\nPress Enter to continue...")
+
+    # ------------------------------------------------------------------
+    # Watchlist / universal investigation
+    # ------------------------------------------------------------------
+
+    def watchlist_menu(self) -> None:
+        clear_screen()
+        print_section("WATCHLIST")
+        entries = watchlist.list()
+        if entries:
+            print_table([
+                [e.id, e.target, e.kind, e.label or '-', e.snapshots,
+                 e.last_checked or 'never']
+                for e in entries
+            ], headers=['ID', 'Target', 'Kind', 'Label', 'Snapshots',
+                        'Last Checked'])
+        else:
+            print_warning("No watched targets yet.")
+
+        print("\n  [1] Add target    [2] Run check    [3] Remove    [0] Back")
+        choice = input(f"{Colors.GREEN}Select: {Colors.RESET}").strip()
+
+        if choice == '1':
+            target = get_input("Target to watch")
+            label = get_input("Label", required=False)
+            try:
+                watch_id = watchlist.add(target, label=label)
+                print_success(f"Watching #{watch_id}: {target}")
+            except ValueError as e:
+                print_error(str(e))
+        elif choice == '2':
+            raw = get_input("Watch ID or target (blank = all)", required=False)
+            identifier = int(raw) if raw.isdigit() else (raw or None)
+            diffs = watchlist.check(identifier)
+            if not diffs:
+                print_warning("No matching watch entries.")
+            else:
+                print_subsection("Results")
+                print_table([
+                    [d.watch_id, d.target, 'yes' if d.is_first else 'no',
+                     len(d.added), len(d.removed), len(d.changed),
+                     'ok' if d.success else f"error: {d.error}"]
+                    for d in diffs
+                ], headers=['ID', 'Target', 'First', 'Added', 'Removed',
+                            'Changed', 'Status'])
+                rows = []
+                for d in diffs:
+                    for field, value in d.added.items():
+                        rows.append([d.target, 'added', field, '', value])
+                    for field, value in d.removed.items():
+                        rows.append([d.target, 'removed', field, value, ''])
+                    for field, change in d.changed.items():
+                        rows.append([d.target, 'changed', field,
+                                     change.get('from'), change.get('to')])
+                if rows:
+                    print_subsection("Changes")
+                    print_table(rows, headers=['Target', 'Change', 'Field',
+                                               'From', 'To'])
+        elif choice == '3':
+            raw = get_input("Watch ID or target")
+            identifier = int(raw) if raw.isdigit() else raw
+            removed = watchlist.remove(identifier)
+            if removed:
+                print_success(f"Removed {removed} watch entry")
+            else:
+                print_warning("No matching watch entry.")
+
+        input("\nPress Enter to continue...")
+
+    def investigate_menu(self) -> None:
+        clear_screen()
+        print_section("UNIVERSAL INVESTIGATE")
+
+        target = get_input("Enter IP / domain / email / phone / username")
+        kind = detect_kind(target)
+        if kind is None:
+            print_error(f"Cannot determine target type: {target!r}")
+            input("\nPress Enter to continue...")
+            return
+
+        pivot = confirm_action(
+            f"Detected {kind}. Follow related pivots "
+            f"(email->domain, domain->A, ip->PTR)?")
+        print_info(f"Investigating {target}...")
+        payload = investigate(target, pivot=pivot)
+
+        displayers = {
+            'ip': self.display_ip_results,
+            'phone': self.display_phone_results,
+            'username': self.display_username_results,
+            'email': self.display_email_results,
+            'domain': self.display_domain_results,
+        }
+        for kind_name in payload.get('order', []):
+            result = payload['results'].get(kind_name)
+            if result:
+                print_section(f"{kind_name.upper()} RESULT")
+                displayers[kind_name](result)
+
+        if payload.get('entities'):
+            print_subsection("Entities")
+            print_table([[e['type'], e['value'], e['role']]
+                         for e in payload['entities']],
+                        headers=['Type', 'Value', 'Role'])
+
+        if payload.get('errors'):
+            for error in payload['errors']:
+                print_warning(error)
+
+        if confirm_action("\nSave Mermaid graph?"):
+            filename = re.sub(r'[^A-Za-z0-9._-]', '_', target) + '.mmd'
+            path = self.report_gen.output_dir / filename
+            path.write_text(to_mermaid(payload), encoding='utf-8')
+            print_success(f"Graph saved: {path}")
+
         input("\nPress Enter to continue...")
 
     def exit_program(self) -> None:

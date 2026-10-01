@@ -1,4 +1,34 @@
-# Changelog
+# ObscuraLens
+
+## Changelog
+
+## 3.0.0 — 2026-10-01
+
+### Added
+
+- **Universal investigation** (`investigate` command and console menu):
+  automatic target-type detection, bounded pivots (email → domain,
+  domain → A records, ip → PTR), an entity/relationship graph and Mermaid
+  export (`--format mermaid`, `--graph FILE`).
+- **Watchlist** (`watch add|list|remove|check`): stores result snapshots in
+  SQLite and diffs successive runs — new/removed/changed fields with volatile
+  fields (timestamps, ages) ignored, username status tracked per platform.
+- **Plugin system** (`obscuralens plugins list|reload`, `docs/plugins.md`):
+  drop-in data sources for ip/domain/email from `<project>/plugins` or
+  `<config_dir>/plugins`, exposed in results as `plugin:<file>:<name>`,
+  error-isolated and switchable with `app.enable_plugins`.
+- New keyless sources: RIPEstat (announced prefix, origin ASN/holder, RIR),
+  urlscan.io (scan history, observed IPs/servers) and the Wayback Machine
+  (first/last capture) — 14 keyless sources plus 8 optional keyed ones.
+- Interactive menu entries for Watchlist and Universal Investigate.
+
+### Changed
+
+- Version bump to 3.0.0 across package metadata, banner and user agent.
+- `.gitignore` scratch patterns are now anchored to the project root so
+  package `__init__.py` files can never be ignored by accident.
+- `obscuralens sources` / `keys` and the source catalogs include the new
+  sources; plugin failures are reported per source like any other source.
 
 ## 2.0.0 — 2026-10-01
 

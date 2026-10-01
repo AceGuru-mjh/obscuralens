@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "obscuralens"
-version = "2.0.0"
+version = "3.0.0"
 description = "Multi-source OSINT console for IPs, phone numbers, usernames, emails and domains"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -41,6 +41,8 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "ruff>=0.4",
+    "build>=1.0",
+    "twine>=5.0",
 ]
 
 [project.scripts]
@@ -66,5 +68,5 @@ target-version = "py39"
 extend-exclude = ["_*.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
+select = ["E", "F", "W", "I", "B", "C4", "SIM"]
 ignore = ["E501"]

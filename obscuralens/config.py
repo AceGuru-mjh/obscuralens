@@ -12,6 +12,7 @@ when running from a project checkout, then a per-user directory
 (%APPDATA%/ObscuraLens on Windows, ~/.config/obscuralens elsewhere).
 """
 
+import contextlib
 import os
 import stat
 from dataclasses import asdict, dataclass, field
@@ -80,6 +81,7 @@ class AppConfig:
     cache_ttl: int = 900              # seconds a cached response stays fresh
     cache_path: str = "data/http_cache.db"
     proxy: str = ""                   # optional proxy URL for all requests
+    enable_plugins: bool = True       # load user plugins from plugins/ folders
     disabled_sources: List[str] = field(default_factory=list)
     report_dir: str = "reports"
     chart_dir: str = "reports/charts"
@@ -242,10 +244,9 @@ class ConfigManager:
         if secrets:
             with open(self.secrets_file, 'w', encoding='utf-8') as f:
                 yaml.dump(secrets, f, default_flow_style=False, sort_keys=False)
-            try:
+            with contextlib.suppress(OSError, NotImplementedError):
+                # non-POSIX filesystems do not support chmod
                 os.chmod(self.secrets_file, stat.S_IRUSR | stat.S_IWUSR)
-            except (OSError, NotImplementedError):
-                pass  # non-POSIX filesystems do not support this
         elif self.secrets_file.exists():
             self.secrets_file.unlink()
 

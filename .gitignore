@@ -49,9 +49,9 @@ reports/*
 .DS_Store
 Thumbs.db
 
-# Scratch / one-off scripts and any transient credentials
-_*.py
-_*.json
-_*.txt
-_*.ps1
-_token.txt
+# Scratch / one-off scripts and any transient credentials (project root only)
+/_*.py
+/_*.json
+/_*.txt
+/_*.ps1
+/_token.txt
