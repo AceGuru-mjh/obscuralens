@@ -6,20 +6,35 @@ Verifies every tracker against live data sources, then checks reporting,
 visualisation and persistence. Run from the project root.
 """
 
+import contextlib
+import io
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from obscuralens.trackers import IPTracker, PhoneTracker, UsernameTracker, EmailTracker
-from obscuralens.database import db
 from obscuralens.config import config
+from obscuralens.database import db
 from obscuralens.reporting import ReportGenerator
-from obscuralens.visualization import ChartGenerator
-from obscuralens.utils import (
-    SYM_OK, SYM_FAIL, print_section, print_subsection, print_table,
-    validate_ip, validate_email, validate_phone, validate_username,
+from obscuralens.trackers import (
+    DomainTracker,
+    EmailTracker,
+    IPTracker,
+    PhoneTracker,
+    UsernameTracker,
 )
+from obscuralens.utils import (
+    SYM_FAIL,
+    SYM_OK,
+    print_section,
+    render_table,
+    validate_domain,
+    validate_email,
+    validate_ip,
+    validate_phone,
+    validate_username,
+)
+from obscuralens.visualization import ChartGenerator
 
 PASSED: list = []
 FAILED: list = []
@@ -61,6 +76,8 @@ def test_validators():
         ("short phone", validate_phone("12"), False),
         ("valid username", validate_username("valid_user"), True),
         ("short username", validate_username("ab"), False),
+        ("valid domain", validate_domain("example.com"), True),
+        ("invalid domain", validate_domain("-bad.example"), False),
     ]
     for name, (ok, _err), expected in cases:
         check(name, ok == expected, f"got={ok} expected={expected}")
@@ -121,6 +138,11 @@ def test_ip_tracker():
         check("timezone", bool(info.get('timezone')), str(info.get('timezone')))
         check("field volume > 20", count_fields(result) > 20,
               f"{count_fields(result)} fields")
+        check("field provenance", bool(result.get('field_sources')),
+              f"{len(result.get('field_sources') or {})} fields traced to sources")
+        check("InternetDB consulted", 'internetdb' in result['sources_ok']
+              or 'internetdb' in result['sources_failed'],
+              f"status={'ok' if 'internetdb' in result['sources_ok'] else 'unavailable'}")
 
         own = tracker.get_own_ip()
         check("own IP", bool(own) and own.count('.') == 3, own)
@@ -198,6 +220,10 @@ def test_email_tracker():
               (info.get('spf_record') or '')[:50])
         check("DMARC present", bool(info.get('dmarc_record')),
               f"policy={info.get('dmarc_policy')}")
+        check("DNSSEC posture probed", 'dnssec' in info,
+              f"dnssec={info.get('dnssec')}")
+        check("NS/SOA records", bool(info.get('ns_records') or info.get('soa_record')),
+              f"ns={len(info.get('ns_records') or [])}")
         check("webmail detected", info.get('is_webmail') is True,
               str(info.get('is_webmail')))
         check("disposable checked", info.get('disposable') is False,
@@ -313,7 +339,7 @@ def test_visualization():
 def test_cli_imports():
     print_section("CLI Wiring")
     try:
-        from obscuralens.cli import ObscuraLensCLI, LABELS, _rows_from_fields
+        from obscuralens.cli import LABELS, ObscuraLensCLI, _rows_from_fields
         cli = ObscuraLensCLI()
         check("CLI instantiates", cli is not None, "ObscuraLensCLI()")
 
@@ -330,6 +356,104 @@ def test_cli_imports():
         check("CLI wiring", False, f"{type(e).__name__}: {e}")
 
 
+def test_domain_tracker():
+    print_section("Domain Tracker (RDAP + DNS + CT + HTTP)")
+    tracker = DomainTracker()
+    try:
+        result = tracker.track("example.com")
+        if not result['success']:
+            check("domain track", False, "all sources failed")
+            return
+
+        info = result['info']
+        check("domain success", result['success'],
+              f"{len(result['sources_ok'])} sources, {count_fields(result)} fields")
+        check("sources used", len(result['sources_ok']) >= 2,
+              ', '.join(result['sources_ok']))
+        check("registration dates", bool(info.get('domain_created')),
+              str(info.get('domain_created')))
+        check("nameservers", bool(info.get('nameservers')),
+              ', '.join(info.get('nameservers') or [])[:70])
+        check("mail security probed", 'dnssec' in info and 'spf_record' in info,
+              f"dnssec={info.get('dnssec')} spf={(info.get('spf_record') or '')[:30]}")
+        check("HTTP probe", bool(info.get('http_status') or info.get('http_final_url')),
+              f"status={info.get('http_status')} title={info.get('http_title')}")
+        check("field provenance", bool(result.get('field_sources')),
+              f"{len(result.get('field_sources') or {})} fields traced")
+        check("field volume > 10", count_fields(result) > 10,
+              f"{count_fields(result)} fields")
+
+        batch = tracker.batch_track(["EXAMPLE.com", "example.org"])
+        check("domain batch", len(batch) == 2 and all(r['domain'].islower() for r in batch),
+              "; ".join(f"{r['domain']}={r['field_count']}f" for r in batch))
+        check("domain history saved", db.get_history(query_type='domain', limit=1) != [],
+              "query recorded")
+    except Exception as e:
+        check("domain tracker", False, f"{type(e).__name__}: {e}")
+
+
+def test_cache_and_helpers():
+    print_section("Response Cache & Rendering Helpers")
+    try:
+        import tempfile
+
+        from obscuralens.config import config as cfg
+        from obscuralens.core.cache import HttpCache
+        with tempfile.TemporaryDirectory() as tmp:
+            previous = cfg.app_config.cache_enabled
+            cfg.app_config.cache_enabled = True
+            try:
+                cache = HttpCache(path=os.path.join(tmp, "cache.db"), default_ttl=60)
+                cache.set('json', 'https://unit.test/a', {'v': 1})
+                check("cache roundtrip", cache.get('json', 'https://unit.test/a') == {'v': 1},
+                      "stored and retrieved")
+                check("cache stats", cache.stats()['entries'] == 1,
+                      f"entries={cache.stats()['entries']}")
+                check("cache clear", cache.clear() == 1, "cleared")
+            finally:
+                cfg.app_config.cache_enabled = previous
+
+        table = render_table([['Country', 'US'], ['City', 'NY']],
+                             headers=['Field', 'Value'])
+        check("row-list table", 'Country' in table and 'NY' in table,
+              "print_table now accepts row lists")
+    except Exception as e:
+        check("cache/helpers", False, f"{type(e).__name__}: {e}")
+
+
+def test_cli_commands():
+    print_section("Non-interactive CLI")
+    from obscuralens import commands
+
+    def capture(argv):
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer):
+                code = commands.run(argv)
+        except SystemExit as e:  # argparse --version/--help exit
+            code = e.code if isinstance(e.code, int) else 0
+        return code, buffer.getvalue()
+
+    try:
+        code, out = capture(['--version'])
+        check("--version", code == 0 and 'ObscuraLens' in out, out.strip())
+
+        code, out = capture(['sources', 'ip'])
+        check("sources command", code == 0 and 'internetdb' in out,
+              "source catalog rendered")
+
+        code, out = capture(['keys', '-f', 'json'])
+        check("keys command", code == 0 and 'abuseipdb' in out, "key status JSON")
+
+        code, out = capture(['cache', 'stats', '-f', 'json'])
+        check("cache command", code == 0 and 'enabled' in out, "cache stats JSON")
+
+        code, out = capture(['ip', 'not-an-ip'])
+        check("invalid input exit code", code == 2, f"exit={code}")
+    except Exception as e:
+        check("CLI commands", False, f"{type(e).__name__}: {e}")
+
+
 def main():
     print("\n" + "=" * 62)
     print("ObscuraLens Core Functionality Test")
@@ -343,9 +467,12 @@ def main():
     test_phone_tracker()
     test_email_tracker()
     test_username_tracker()
+    test_domain_tracker()
     test_reporting()
     test_visualization()
+    test_cache_and_helpers()
     test_cli_imports()
+    test_cli_commands()
 
     print("\n" + "=" * 62)
     print(f"Results: {len(PASSED)} passed, {len(FAILED)} failed")
