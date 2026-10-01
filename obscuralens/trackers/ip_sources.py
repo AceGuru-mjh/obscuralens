@@ -174,6 +174,38 @@ def _shodan_internetdb(ip: str) -> Dict[str, Any]:
     }
 
 
+def _ripestat(ip: str) -> Dict[str, Any]:
+    """RIPEstat (keyless): announced prefix, origin ASN/holder and RIR."""
+    out: Dict[str, Any] = {}
+
+    ok, d, _ = http.get_json(
+        f"https://stat.ripe.net/data/prefix-overview/data.json?resource={ip}")
+    if ok and d:
+        data = d.get('data') or {}
+        if data.get('resource'):
+            out['prefix'] = data['resource']
+        asns = data.get('asns') or []
+        if asns:
+            out['asn'] = asns[0].get('asn')
+            holders = [a.get('holder') for a in asns if a.get('holder')]
+            if holders:
+                out['bgp_description'] = '; '.join(holders[:3])
+            if len(asns) > 1:
+                out['announced_by_count'] = len(asns)
+        block = data.get('block') or {}
+        if block.get('desc'):
+            out['ip_block'] = block['desc']
+
+    ok, d, _ = http.get_json(
+        f"https://stat.ripe.net/data/rir/data.json?resource={ip}&lod=0")
+    if ok and d:
+        rirs = (d.get('data') or {}).get('rirs') or []
+        if rirs and rirs[0].get('rir'):
+            out['rir'] = rirs[0]['rir']
+
+    return out
+
+
 def _reverse_dns(ip: str) -> Dict[str, Any]:
     """Reverse DNS (PTR) lookup via Google's DNS-over-HTTPS."""
     if '.' in ip:
@@ -371,6 +403,7 @@ FREE_SOURCES: Dict[str, Any] = {
     'db-ip.com': _db_ip,
     'iplocation.net': _iplocation_net,
     'internetdb': _shodan_internetdb,
+    'ripestat': _ripestat,
     'reverse_dns': _reverse_dns,
     'rdap': _rdap_registration,
 }
@@ -391,6 +424,7 @@ SOURCE_CATALOG = {
     'db-ip.com': 'Geolocation (keyless)',
     'iplocation.net': 'Geolocation, ISP (keyless)',
     'internetdb': 'Shodan InternetDB: open ports, CVEs, CPEs, hostnames (keyless)',
+    'ripestat': 'Announced prefix, origin ASN/holder and RIR via RIPEstat (keyless)',
     'reverse_dns': 'PTR record via DNS-over-HTTPS (keyless)',
     'rdap': 'Registry registration and abuse contact (keyless)',
     'shodan': 'Full Shodan host data (keyed)',
@@ -403,6 +437,16 @@ SOURCE_CATALOG = {
 def _keep(value: Any) -> bool:
     # Explicit False is a real answer (is_eu=False, is_proxy=False).
     return value is not None and value != '' and value != [] and value != {}
+
+
+def _plugin_sources(kind: str) -> Dict[str, Any]:
+    """Extra sources contributed by user plugins (lazy import avoids cycles)."""
+    try:
+        from .. import plugins
+    except ImportError:
+        return {}
+    getter = getattr(plugins, 'plugin_sources_named', None) or plugins.plugin_sources
+    return getter(kind)
 
 
 def gather_all(ip: str, keys: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
@@ -426,6 +470,11 @@ def gather_all(ip: str, keys: Optional[Dict[str, str]] = None) -> Dict[str, Any]
     for name, fn in FREE_SOURCES.items():
         if config.is_source_enabled(name):
             tasks[name] = (lambda f=fn: f(ip))
+
+    for name, fn in _plugin_sources('ip').items():
+        source_name = f"plugin:{name}"
+        if config.is_source_enabled(source_name):
+            tasks[source_name] = (lambda f=fn: f(ip))
 
     key_map = {
         'shodan': ('shodan', lambda k: _shodan(ip, k)),

@@ -1,27 +1,23 @@
-# ObscuraLens v2.0
+# ObscuraLens v3.0
 
 > **Founder & maintainer:** MJH
 
 Multi-source OSINT console for IP addresses, phone numbers, usernames, email addresses and domains. Every lookup fans out to all available data sources in parallel, merges the fields, tracks **which source supplied each fact**, and tells you exactly what answered — no silent single-source lookups, no false-positive "hits".
 
-## What's new in v2.0
+## What's new in v3.0
 
-- **Non-interactive CLI** — `obscuralens ip 8.8.8.8 --format json` for scripting and pipelines; the interactive menu still opens when you run `obscuralens` with no arguments.
-- **Domain tracker** — RDAP registration, DNS records, SPF/DMARC/DKIM/DNSSEC posture, Certificate Transparency subdomains (Cert Spotter), HTTP status/headers/security-headers and robots.txt in one pass.
-- **Field-level provenance** — every result records `field_sources`, so you can see (or export) exactly which source produced each value.
-- **Expanded IP sources** — Shodan InternetDB (open ports, CVEs, CPEs) joins the keyless pool; IPinfo and AbuseIPDB join the keyed pool.
-- **Expanded DNS/email posture** — A/AAAA/NS/SOA/CAA/TXT, DNSSEC and DKIM selector detection (empty anti-abuse keys are not counted), domain age/expiry in days.
-- **7 API-based username platforms** — Keybase, HackerNews, Lichess, Codeberg, Docker Hub, Dev.to, Chess.com. APIs give high-confidence found/not-found verdicts instead of guessing from JavaScript shells.
-- **Response cache, per-host rate limiting and proxy support** — repeat lookups are fast and public endpoints stay politely loaded.
-- **Reliability fixes** — the interactive result tables no longer crash, DMARC detection works with quoted DoH answers, null MX is reported correctly, and history pruning honors `max_history_entries`.
-- **Engineering** — pytest unit suite (network fully mocked), GitHub Actions CI, ruff, `pyproject.toml`, structured report sections shared by the console and the CLI.
+- **Universal investigate** — `obscuralens investigate <anything>` auto-detects the target type and follows bounded pivots (email → domain, domain → A records, ip → PTR), then exports a relationship graph as **Mermaid**.
+- **Watchlist & change detection** — `watch add/list/check/remove` stores snapshots in SQLite and reports exactly what changed between runs (new ports, new subdomains, new breaches, username status…), ignoring timestamps and ages.
+- **Plugin system** — drop a `*.py` file with a `SOURCES` dict into `plugins/` (project) or `<config dir>/plugins` (user) and its sources join the relevant trackers as `plugin:<file>:<name>`; broken plugins are isolated, and `app.enable_plugins: false` switches the whole mechanism off. See `docs/plugins.md`.
+- **New keyless sources** — RIPEstat (announced prefix, origin ASN/holder, RIR), urlscan.io (public scan history, observed IPs/servers) and the Wayback Machine (first/last capture).
+- v2.0 (previous release): non-interactive CLI, Domain tracker, field provenance, HTTP cache/rate limiting/proxy, Shodan InternetDB + IPinfo + AbuseIPDB, 7 JSON API username platforms, DNS/DKIM/DNSSEC posture, pytest suite + CI. See CHANGELOG.md.
 
 ## What it does
 
 | Tracker | Sources | Fields (example) |
 |---|---|---|
-| **IP** | ipwhois.app, ipwho.is, freeipapi, ip-api.com, db-ip, iplocation.net, Shodan InternetDB, reverse DNS, RDAP + keyed Shodan/VirusTotal/IPinfo/AbuseIPDB | 50+ fields for 8.8.8.8: geo, ASN, PTR (`dns.google`), open ports, RDAP org/abuse contact/CIDR, per-source coordinates, per-field provenance |
-| **Domain** | RDAP, DNS (MX/A/AAAA/NS/SOA/CAA/TXT, SPF, DMARC, DKIM, DNSSEC), Cert Spotter (CT), HTTP headers | registration dates + age, registrar, nameservers, CT subdomains, security headers, robots.txt |
+| **IP** | ipwhois.app, ipwho.is, freeipapi, ip-api.com, db-ip, iplocation.net, Shodan InternetDB, RIPEstat, reverse DNS, RDAP + keyed Shodan/VirusTotal/IPinfo/AbuseIPDB | 55+ fields for 8.8.8.8: geo, ASN, PTR (`dns.google`), open ports, announced prefix, RIR, RDAP org/abuse contact/CIDR, per-source coordinates, per-field provenance |
+| **Domain** | RDAP, DNS (MX/A/AAAA/NS/SOA/CAA/TXT, SPF, DMARC, DKIM, DNSSEC), Cert Spotter (CT), HTTP headers, urlscan.io, Wayback | registration dates + age, registrar, nameservers, CT subdomains, scan history, first/last archive capture, security headers, robots.txt |
 | **Email** | DNS posture, disposable check, OpenPGP, domain RDAP, Gravatar, pattern analysis + keyed HIBP/Hunter | 30+ fields: MX hosts, SPF/DMARC/DKIM/DNSSEC, registrar, domain age, breach exposure |
 | **Phone** | Google libphonenumber metadata + derived hints (+ optional numverify) | 19 fields: E.164/international/RFC3966, carrier, type flags, toll-free/VoIP hints |
 | **Username** | 26 HTML platforms + 7 JSON API platforms, honest 3-state verdicts | confirmed / ruled-out / inconclusive — JS-shell pages are never claimed as hits |
@@ -72,6 +68,18 @@ obscuralens cache clear
 obscuralens config
 ```
 
+Investigate anything and watch it for changes:
+
+```powershell
+obscuralens investigate example.com               # domain + A-record pivots
+obscuralens investigate alice@example.com -f json # email -> domain
+obscuralens investigate 8.8.8.8 -f mermaid --graph ip.mmd
+obscuralens watch add example.com --label "corp site"
+obscuralens watch check --format json             # diff vs last snapshot
+obscuralens watch list
+obscuralens plugins list                          # drop-in sources
+```
+
 Output goes to stdout, progress to stderr, so results pipe cleanly:
 
 ```powershell
@@ -107,9 +115,24 @@ app:
   cache_ttl: 900
   max_workers: 12
   proxy: ''                   # e.g. http://127.0.0.1:8080
+  enable_plugins: true        # load extra sources from plugins/ folders
   disabled_sources: []        # e.g. [rdap, gravatar] to skip slow sources
   deep_username_scan: true
 ```
+
+### Plugins
+
+Drop a Python file into `<project>/plugins/` or `<config dir>/plugins`:
+
+```python
+def lookup(target):
+    return {'my_field': f'value for {target}'}
+
+SOURCES = {'ip': {'MySource': lookup}}
+```
+
+Its fields appear in results with `plugin:<file>:<name>` provenance. See
+[docs/plugins.md](docs/plugins.md) for the full contract and error handling.
 
 ## Verify
 
@@ -119,7 +142,7 @@ Unit tests (no network, fast):
 pytest
 ```
 
-Live integration suite (hits real sources, 80+ checks):
+Live integration suite (hits real sources, 100+ checks):
 
 ```powershell
 python test_core.py
@@ -141,12 +164,17 @@ ObscuraLens/
 │   ├── commands.py          # non-interactive CLI (argparse)
 │   ├── config.py            # 4-layer configuration
 │   ├── database.py          # SQLite history (with pruning)
+│   ├── investigate.py       # universal investigate + Mermaid graph
+│   ├── watchlist.py         # target snapshots and change detection
+│   ├── plugins/             # drop-in data-source loader
 │   ├── core/                # HTTP cache, rate limiter, metrics
 │   ├── trackers/            # ip / phone / username / email / domain (+ per-source readers)
 │   ├── reporting/           # html / json / md / csv / pdf + shared sections
 │   ├── visualization/       # matplotlib charts
 │   └── utils/               # validators, HTTP client, formatting, console output
 ├── config/                  # config.yaml + secrets.yaml (git-ignored)
+├── docs/                    # plugins.md and other guides
+├── plugins/                 # project-level drop-in sources (optional)
 ├── tests/                   # pytest unit suite (mocked network)
 ├── reports/                 # generated reports and charts
 ├── data/                    # sqlite database + HTTP cache
@@ -161,5 +189,6 @@ For educational and authorised research only. Only investigate targets you are p
 
 See [CHANGELOG.md](CHANGELOG.md). Highlights:
 
+- **v3.0.0** — universal investigate with pivots + Mermaid graph, watchlist with change detection, plugin system, RIPEstat/urlscan.io/Wayback sources, interactive menu entries.
 - **v2.0.0** — non-interactive CLI, Domain tracker, field provenance, response cache/rate limiting/proxy, new sources (InternetDB, IPinfo, AbuseIPDB, API username platforms), DNS/DKIM/DNSSEC posture, pytest suite + CI, interactive rendering fixes.
 - **v1.0.0** — Initial packaged release. Multi-source IP aggregation, enriched email tracker, honest 3-state username detection, batch lookups, 5-format reports, charts, history, 4-layer config.

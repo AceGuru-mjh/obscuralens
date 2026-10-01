@@ -163,3 +163,94 @@ def test_history_command(tmp_env, capsys):
 def test_history_missing_record_returns_1(capsys):
     assert commands.run(['history', '--id', '999999999']) == 1
     assert 'not found' in capsys.readouterr().err
+
+
+INVESTIGATION_PAYLOAD = {
+    'target': 'example.com',
+    'kind': 'domain',
+    'order': ['domain'],
+    'results': {'domain': {
+        'domain': 'example.com',
+        'info': {'domain': 'example.com'},
+        'sources_ok': ['dns'], 'sources_failed': {}, 'field_count': 1,
+        'success': True, 'errors': [],
+    }},
+    'entities': [{'id': 'domain:example.com', 'type': 'domain',
+                  'value': 'example.com', 'role': 'target',
+                  'label': 'example.com'}],
+    'links': [{'from': 'domain:example.com', 'to': 'ip:1.2.3.4',
+               'label': 'a_record'}],
+    'errors': [],
+}
+
+
+def test_investigate_json(monkeypatch, capsys):
+    monkeypatch.setattr(commands, 'investigate',
+                        lambda target, **kwargs: INVESTIGATION_PAYLOAD)
+    assert commands.run(['investigate', 'example.com', '-f', 'json']) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload['kind'] == 'domain'
+    assert payload['links'][0]['label'] == 'a_record'
+
+
+def test_investigate_table_and_mermaid(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(commands, 'investigate',
+                        lambda target, **kwargs: INVESTIGATION_PAYLOAD)
+    assert commands.run(['investigate', 'example.com']) == 0
+    out = capsys.readouterr().out
+    assert 'INVESTIGATION SUMMARY' in out.upper()
+
+    graph = tmp_path / 'graph.mmd'
+    assert commands.run(['investigate', 'example.com', '-f', 'mermaid',
+                         '--graph', str(graph)]) == 0
+    assert capsys.readouterr().out.startswith('graph LR')
+    assert 'a_record' in graph.read_text(encoding='utf-8')
+
+
+def test_investigate_unknown_target_returns_2(capsys):
+    assert commands.run(['investigate', 'not a target!']) == 2
+    assert 'cannot determine target type' in capsys.readouterr().err
+
+
+def test_watch_add_list_remove(tmp_env, capsys):
+    from obscuralens.watchlist import watchlist
+    for entry in watchlist.list():
+        watchlist.remove(entry.id)
+
+    assert commands.run(['watch', 'add', '8.8.8.8', '--label', 'dns']) == 0
+    assert 'Watching #' in capsys.readouterr().out
+
+    assert commands.run(['watch', 'list', '-f', 'json']) == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert rows[0]['target'] == '8.8.8.8'
+    assert rows[0]['kind'] == 'ip'
+
+    assert commands.run(['watch', 'remove', str(rows[0]['id'])]) == 0
+    assert 'Removed 1' in capsys.readouterr().out
+    assert commands.run(['watch', 'remove', 'nope']) == 1
+
+
+def test_watch_check_json(monkeypatch, capsys):
+    from obscuralens.watchlist import WatchDiff
+    diff = WatchDiff(watch_id=1, target='8.8.8.8', kind='ip',
+                     checked_at='2026-10-01T00:00:00', is_first=False,
+                     added={'ports': '[53, 443, 853]'}, removed={},
+                     changed={'country': {'from': 'US', 'to': 'NL'}},
+                     success=True, error='')
+    monkeypatch.setattr(commands.watchlist, 'check',
+                        lambda identifier=None: [diff])
+    assert commands.run(['watch', 'check', '-f', 'json']) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload[0]['changed']['country']['to'] == 'NL'
+    assert payload[0]['added']['ports'] == '[53, 443, 853]'
+
+
+def test_plugins_list_json(monkeypatch, capsys):
+    from obscuralens.plugins import PluginInfo
+    infos = [PluginInfo(name='demo', path='C:/plugins/demo.py',
+                        kinds=['ip'], sources={'ip': ['Demo']}, error='')]
+    monkeypatch.setattr(commands, 'loaded_plugins', lambda: infos)
+    assert commands.run(['plugins', 'list', '-f', 'json']) == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert rows[0]['name'] == 'demo'
+    assert rows[0]['kinds'] == 'ip'

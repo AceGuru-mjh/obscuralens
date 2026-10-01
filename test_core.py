@@ -143,6 +143,9 @@ def test_ip_tracker():
         check("InternetDB consulted", 'internetdb' in result['sources_ok']
               or 'internetdb' in result['sources_failed'],
               f"status={'ok' if 'internetdb' in result['sources_ok'] else 'unavailable'}")
+        check("RIPEstat consulted", 'ripestat' in result['sources_ok']
+              or 'ripestat' in result['sources_failed'],
+              f"prefix={info.get('prefix')} rir={info.get('rir')}")
 
         own = tracker.get_own_ip()
         check("own IP", bool(own) and own.count('.') == 3, own)
@@ -378,6 +381,11 @@ def test_domain_tracker():
               f"dnssec={info.get('dnssec')} spf={(info.get('spf_record') or '')[:30]}")
         check("HTTP probe", bool(info.get('http_status') or info.get('http_final_url')),
               f"status={info.get('http_status')} title={info.get('http_title')}")
+        check("urlscan/Wayback consulted",
+              any(s in result['sources_ok'] or s in result['sources_failed']
+                  for s in ('urlscan', 'wayback')),
+              f"urlscan={info.get('urlscan_scans')} "
+              f"wayback={info.get('wayback_first')}")
         check("field provenance", bool(result.get('field_sources')),
               f"{len(result.get('field_sources') or {})} fields traced")
         check("field volume > 10", count_fields(result) > 10,
@@ -448,10 +456,51 @@ def test_cli_commands():
         code, out = capture(['cache', 'stats', '-f', 'json'])
         check("cache command", code == 0 and 'enabled' in out, "cache stats JSON")
 
+        code, out = capture(['plugins', 'list'])
+        check("plugins command", code == 0, out.strip()[:60] or "no plugins")
+
+        code, out = capture(['watch', 'list'])
+        check("watch list command", code == 0, "watchlist rendered")
+
+        code, out = capture(['investigate', 'not a target!'])
+        check("investigate invalid input", code == 2, f"exit={code}")
+
         code, out = capture(['ip', 'not-an-ip'])
         check("invalid input exit code", code == 2, f"exit={code}")
     except Exception as e:
         check("CLI commands", False, f"{type(e).__name__}: {e}")
+
+
+def test_investigate_and_watch():
+    print_section("Universal Investigate & Watchlist")
+    try:
+        from obscuralens.investigate import detect_kind, investigate, to_mermaid
+        from obscuralens.watchlist import watchlist
+
+        check("target detection",
+              detect_kind('alice@example.com') == 'email'
+              and detect_kind('8.8.8.8') == 'ip'
+              and detect_kind('example.com') == 'domain',
+              "email/ip/domain detected")
+
+        payload = investigate('example.com', pivot=False)
+        check("investigate runs", bool(payload.get('results')),
+              f"{len(payload.get('entities', []))} entities, "
+              f"{len(payload.get('links', []))} links")
+        check("mermaid graph", to_mermaid(payload).startswith('graph LR'),
+              "Mermaid rendered")
+
+        for entry in watchlist.list():
+            watchlist.remove(entry.id)
+        watch_id = watchlist.add('example.com', label='integration')
+        check("watch add", watch_id > 0, f"id={watch_id}")
+        diffs = watchlist.check(watch_id)
+        check("watch first check", len(diffs) == 1 and diffs[0].is_first,
+              f"first={diffs[0].is_first if diffs else '?'}")
+        removed = watchlist.remove(watch_id)
+        check("watch remove", removed == 1, "entry removed")
+    except Exception as e:
+        check("investigate/watch", False, f"{type(e).__name__}: {e}")
 
 
 def main():
@@ -468,6 +517,7 @@ def main():
     test_email_tracker()
     test_username_tracker()
     test_domain_tracker()
+    test_investigate_and_watch()
     test_reporting()
     test_visualization()
     test_cache_and_helpers()

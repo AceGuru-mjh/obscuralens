@@ -80,6 +80,7 @@ class AppConfig:
     cache_ttl: int = 900              # seconds a cached response stays fresh
     cache_path: str = "data/http_cache.db"
     proxy: str = ""                   # optional proxy URL for all requests
+    enable_plugins: bool = True       # load user plugins from plugins/ folders
     disabled_sources: List[str] = field(default_factory=list)
     report_dir: str = "reports"
     chart_dir: str = "reports/charts"

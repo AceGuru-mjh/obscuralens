@@ -19,6 +19,16 @@ def _keep(value: Any) -> bool:
     return value is not None and value != '' and value != [] and value != {}
 
 
+def _plugin_sources(kind: str) -> Dict[str, Any]:
+    """Extra sources contributed by user plugins (lazy import avoids cycles)."""
+    try:
+        from .. import plugins
+    except ImportError:
+        return {}
+    getter = getattr(plugins, 'plugin_sources_named', None) or plugins.plugin_sources
+    return getter(kind)
+
+
 class EmailTracker:
     """Email Tracker with multi-source aggregation"""
 
@@ -52,6 +62,11 @@ class EmailTracker:
             tasks['gravatar'] = lambda: FREE_SOURCES['gravatar'](email)
         if config.is_source_enabled('patterns'):
             tasks['patterns'] = lambda: _pattern_analysis(email, local_part, domain)
+
+        for name, fn in _plugin_sources('email').items():
+            source_name = f"plugin:{name}"
+            if config.is_source_enabled(source_name):
+                tasks[source_name] = (lambda f=fn: f(email))
 
         if config.is_configured('haveibeenpwned'):
             key = config.get_api_key('haveibeenpwned')

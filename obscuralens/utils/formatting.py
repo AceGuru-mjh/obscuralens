@@ -83,7 +83,10 @@ LABELS: Dict[str, str] = {
     'network': 'Network',
     'as_owner': 'AS Owner',
     'prefixes': 'Announced Prefixes',
+    'prefix': 'Announced Prefix',
+    'ip_block': 'IP Block Registry',
     'rir': 'RIR',
+    'announced_by_count': 'Announced By (ASN count)',
     'bgp_description': 'BGP Description',
     'company': 'Company',
     'company_type': 'Company Type',
@@ -184,6 +187,13 @@ LABELS: Dict[str, str] = {
     'robots_txt': 'robots.txt',
     'favicon_hash': 'Favicon Hash',
     'webtech': 'Detected Technologies',
+    'urlscan_scans': 'urlscan.io Scans',
+    'urlscan_last': 'Last urlscan.io Scan',
+    'urlscan_ips': 'Scan IPs (urlscan.io)',
+    'urlscan_servers': 'Scan Servers (urlscan.io)',
+    'wayback_first': 'Wayback First Capture',
+    'wayback_first_url': 'Wayback First URL',
+    'wayback_last': 'Wayback Last Capture',
     # Username
     'profile_url': 'Profile URL',
     'verified': 'Verified',
@@ -221,7 +231,8 @@ LIST_FIELDS = {
     'ports', 'vulns', 'hostnames', 'domains', 'tags', 'currencies',
     'languages', 'rdap_status', 'timelines', 'cpes', 'prefixes',
     'security_headers', 'missing_security_headers', 'ct_subdomains',
-    'ct_issuers', 'dkim_selectors', 'webtech', 'links',
+    'ct_issuers', 'dkim_selectors', 'webtech', 'links', 'urlscan_ips',
+    'urlscan_servers',
 }
 
 # Keys that are plumbing rather than collected intelligence.

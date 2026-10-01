@@ -29,6 +29,13 @@ from .config import SERVICES, config
 from .core.cache import cache
 from .core.metrics import metrics
 from .database import db
+from .investigate import (
+    detect_kind,
+    investigate,
+    investigate_sections,
+    to_mermaid,
+)
+from .plugins import loaded_plugins, reload_plugins
 from .reporting import ReportGenerator, batch_sections, sections_for
 from .trackers import (
     DomainTracker,
@@ -46,9 +53,10 @@ from .utils.validators import (
     validate_phone,
     validate_username,
 )
+from .watchlist import watchlist
 
 KINDS = ('ip', 'phone', 'username', 'email', 'domain')
-FORMATS = ('table', 'json', 'markdown', 'html', 'csv')
+FORMATS = ('table', 'json', 'markdown', 'html', 'csv', 'mermaid')
 
 _TRACKERS: Dict[str, Any] = {}
 
@@ -125,6 +133,41 @@ def build_parser() -> argparse.ArgumentParser:
     p_domain = sub.add_parser('domain', help='look up a domain')
     p_domain.add_argument('target', help='domain name')
     add_common(p_domain)
+
+    p_inv = sub.add_parser(
+        'investigate',
+        help='auto-detect a target and follow related pivots')
+    p_inv.add_argument('target', help='IP / domain / email / phone / username')
+    p_inv.add_argument('--no-pivot', action='store_false', dest='pivot',
+                       help='do not follow related targets')
+    p_inv.add_argument('--max-pivots', type=int, default=3,
+                       help='maximum related lookups per kind (default: 3)')
+    p_inv.add_argument('--graph', metavar='FILE',
+                       help='also write a Mermaid graph to FILE')
+    add_common(p_inv)
+
+    p_watch = sub.add_parser('watch', help='watch targets and detect changes')
+    watch_sub = p_watch.add_subparsers(dest='action', metavar='<action>')
+    p_watch_add = watch_sub.add_parser('add', help='start watching a target')
+    p_watch_add.add_argument('target')
+    p_watch_add.add_argument('--kind', choices=KINDS)
+    p_watch_add.add_argument('--label', default='')
+    add_common(p_watch_add)
+    p_watch_list = watch_sub.add_parser('list', help='list watched targets')
+    add_common(p_watch_list)
+    p_watch_rm = watch_sub.add_parser('remove', help='stop watching')
+    p_watch_rm.add_argument('identifier', help='watch id or target')
+    add_common(p_watch_rm)
+    p_watch_check = watch_sub.add_parser('check', help='run and diff watched targets')
+    p_watch_check.add_argument('identifier', nargs='?',
+                               help='watch id or target (default: all)')
+    add_common(p_watch_check)
+
+    p_plugins = sub.add_parser('plugins', help='list or reload data-source plugins')
+    plugins_sub = p_plugins.add_subparsers(dest='action', metavar='<action>')
+    add_common(plugins_sub.add_parser('list', help='show loaded plugins'))
+    add_common(plugins_sub.add_parser('reload', help='rescan plugin directories'))
+    add_common(p_plugins)
 
     p_batch = sub.add_parser('batch', help='look up many targets from a file')
     p_batch.add_argument('kind', choices=KINDS, help='target type')
@@ -538,6 +581,168 @@ def _cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def _watch_sections(diffs: List[Any]) -> List[Dict[str, Any]]:
+    summary_rows = []
+    detail_rows = []
+    for diff in diffs:
+        summary_rows.append([
+            diff.watch_id, diff.target, diff.kind,
+            'yes' if diff.is_first else 'no',
+            len(diff.added), len(diff.removed), len(diff.changed),
+            'ok' if diff.success else f"error: {diff.error}",
+        ])
+        for field, value in diff.added.items():
+            detail_rows.append([diff.target, 'added', field, '', value])
+        for field, value in diff.removed.items():
+            detail_rows.append([diff.target, 'removed', field, value, ''])
+        for field, change in diff.changed.items():
+            detail_rows.append([diff.target, 'changed', field,
+                                change.get('from'), change.get('to')])
+
+    sections: List[Dict[str, Any]] = [{
+        'title': 'Watch Check', 'type': 'table',
+        'columns': ['ID', 'Target', 'Kind', 'First check', 'Added',
+                    'Removed', 'Changed', 'Status'],
+        'rows': summary_rows,
+    }]
+    if detail_rows:
+        sections.append({
+            'title': 'Changes', 'type': 'table',
+            'columns': ['Target', 'Change', 'Field', 'From', 'To'],
+            'rows': detail_rows,
+        })
+    return sections
+
+
+def _identifier(value: Optional[str]) -> Any:
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return value
+
+
+def _cmd_investigate(args: argparse.Namespace) -> int:
+    if detect_kind(args.target) is None:
+        _err(f"cannot determine target type: {args.target!r}")
+        return 2
+
+    _info(f"Investigating {args.target} (pivot={args.pivot})...")
+    payload = investigate(args.target, pivot=args.pivot,
+                          max_pivots=args.max_pivots)
+    fmt = args.format or 'table'
+    title = f"Investigation - {payload['target']}"
+
+    if fmt == 'json':
+        _emit(json.dumps(payload, indent=2, ensure_ascii=False, default=str),
+              args.output)
+    elif fmt == 'mermaid':
+        _emit(to_mermaid(payload), args.output)
+    elif fmt == 'csv':
+        rows = [{'type': e['type'], 'value': e['value'], 'role': e['role']}
+                for e in payload.get('entities', [])]
+        buffer = io.StringIO()
+        if rows:
+            writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        _emit(buffer.getvalue().rstrip('\n'), args.output)
+    elif fmt in ('markdown', 'html'):
+        generator = ReportGenerator()
+        data = {'sections': investigate_sections(payload)}
+        text = (generator.render_markdown(data, title) if fmt == 'markdown'
+                else generator.render_html(data, title))
+        _emit(text, args.output)
+    else:
+        _emit(_render_sections_text(investigate_sections(payload)), args.output)
+
+    if args.graph:
+        Path(args.graph).write_text(to_mermaid(payload), encoding='utf-8')
+        _info(f"Graph saved: {args.graph}")
+    if payload.get('errors'):
+        _info(f"{len(payload['errors'])} pivot(s) failed")
+    return 0 if payload.get('results') else 1
+
+
+def _cmd_watch(args: argparse.Namespace) -> int:
+    action = getattr(args, 'action', None)
+    if action is None:
+        _err('usage: obscuralens watch add|list|remove|check')
+        return 2
+    try:
+        if action == 'add':
+            watch_id = watchlist.add(args.target, kind=args.kind,
+                                     label=args.label)
+            suffix = f" ({args.label})" if args.label else ''
+            _emit(f"Watching #{watch_id}: {args.target}{suffix}", args.output)
+            return 0
+        if action == 'list':
+            entries = watchlist.list()
+            rows = [{'id': e.id, 'target': e.target, 'kind': e.kind,
+                     'label': e.label, 'snapshots': e.snapshots,
+                     'last_checked': e.last_checked or ''}
+                    for e in entries]
+            if (args.format or 'table') == 'json':
+                _emit(json.dumps(rows, indent=2, ensure_ascii=False,
+                                 default=str), args.output)
+            else:
+                _emit(render_table(rows) if rows else 'No watched targets.',
+                      args.output)
+            return 0
+        if action == 'remove':
+            removed = watchlist.remove(_identifier(args.identifier))
+            if not removed:
+                _err(f"not watching {args.identifier!r}")
+                return 1
+            _emit(f"Removed {removed} watch entry", args.output)
+            return 0
+        if action == 'check':
+            diffs = watchlist.check(_identifier(args.identifier))
+            if not diffs:
+                _err('no matching watch entries')
+                return 1
+            if (args.format or 'table') == 'json':
+                from dataclasses import asdict
+                _emit(json.dumps([asdict(d) for d in diffs], indent=2,
+                                 ensure_ascii=False, default=str),
+                      args.output)
+            else:
+                _emit(_render_sections_text(_watch_sections(diffs)),
+                      args.output)
+            return 0 if all(d.success for d in diffs) else 1
+    except ValueError as e:
+        _err(str(e))
+        return 2
+    return 2
+
+
+def _cmd_plugins(args: argparse.Namespace) -> int:
+    action = getattr(args, 'action', None)
+    if action == 'reload':
+        infos = reload_plugins()
+    elif action in (None, 'list'):
+        infos = loaded_plugins()
+    else:
+        _err('usage: obscuralens plugins list|reload')
+        return 2
+
+    rows = [{
+        'name': info.name,
+        'kinds': ', '.join(info.kinds),
+        'sources': '; '.join(
+            f"{kind}: {', '.join(names)}"
+            for kind, names in info.sources.items()),
+        'error': info.error or '',
+        'path': info.path,
+    } for info in infos]
+
+    if (args.format or 'table') == 'json':
+        _emit(json.dumps(rows, indent=2, ensure_ascii=False), args.output)
+    elif rows:
+        _emit(render_table(rows), args.output)
+    else:
+        _emit('No plugins loaded.', args.output)
+    return 0
+
+
 _HANDLERS = {
     'ip': _cmd_ip,
     'phone': _cmd_phone,
@@ -551,6 +756,9 @@ _HANDLERS = {
     'keys': _cmd_keys,
     'cache': _cmd_cache,
     'config': _cmd_config,
+    'investigate': _cmd_investigate,
+    'watch': _cmd_watch,
+    'plugins': _cmd_plugins,
 }
 
 

@@ -17,6 +17,7 @@ report can show exactly where a fact came from.
 import concurrent.futures as futures
 import re
 from typing import Any, Dict, List
+from urllib.parse import quote
 
 import requests
 
@@ -137,6 +138,79 @@ def _http_probe(domain: str) -> Dict[str, Any]:
     return out
 
 
+def _urlscan(domain: str) -> Dict[str, Any]:
+    """urlscan.io (keyless): public scan history, observed IPs and servers."""
+    ok, data, _ = http.get_json(
+        f"https://urlscan.io/api/v1/search/?q=domain%3A{quote(domain, safe='')}"
+        f"&size=100")
+    if not ok or not isinstance(data, dict):
+        return {}
+    results = data.get('results')
+    if not isinstance(results, list) or not results:
+        return {}
+
+    ips: List[str] = []
+    servers: List[str] = []
+    times: List[str] = []
+    for record in results:
+        if not isinstance(record, dict):
+            continue
+        page = record.get('page') or {}
+        task = record.get('task') or {}
+        if page.get('ip'):
+            ips.append(str(page['ip']))
+        if page.get('server'):
+            servers.append(str(page['server']))
+        if task.get('time'):
+            times.append(str(task['time']))
+
+    out: Dict[str, Any] = {'urlscan_scans': len(results)}
+    if times:
+        out['urlscan_last'] = max(times)
+    if ips:
+        out['urlscan_ips'] = sorted(set(ips))[:10]
+    if servers:
+        out['urlscan_servers'] = sorted(set(servers))[:10]
+    return out
+
+
+def _wayback_timestamp(raw: str) -> str:
+    """YYYYMMDDhhmmss -> YYYY-MM-DD hh:mm."""
+    try:
+        return (f"{raw[0:4]}-{raw[4:6]}-{raw[6:8]} "
+                f"{raw[8:10]}:{raw[10:12]}")
+    except (TypeError, IndexError):
+        return str(raw)
+
+
+def _wayback(domain: str) -> Dict[str, Any]:
+    """Wayback Machine: first and last archived capture (keyless CDX API)."""
+    def capture(sort: str) -> Dict[str, str]:
+        ok, data, _ = http.get_json(
+            f"http://web.archive.org/cdx/search/cdx?url={quote(domain, safe='')}"
+            f"&output=json&limit=1&sort={sort}")
+        if not ok or not isinstance(data, list) or len(data) < 2:
+            return {}
+        row = data[1]
+        if not isinstance(row, list) or len(row) < 3:
+            return {}
+        return {
+            'timestamp': str(row[1]),
+            'url': str(row[2]),
+            'status': str(row[4]) if len(row) > 4 else '',
+        }
+
+    out: Dict[str, Any] = {}
+    first = capture('asc')
+    if first:
+        out['wayback_first'] = _wayback_timestamp(first['timestamp'])
+        out['wayback_first_url'] = first['url']
+    last = capture('desc')
+    if last:
+        out['wayback_last'] = _wayback_timestamp(last['timestamp'])
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -146,6 +220,8 @@ FREE_SOURCES: Dict[str, Any] = {
     'dns': _dns,
     'certspotter': _certspotter,
     'http': _http_probe,
+    'urlscan': _urlscan,
+    'wayback': _wayback,
 }
 
 # Human-readable metadata used by `obscuralens sources` and the README.
@@ -154,12 +230,24 @@ SOURCE_CATALOG = {
     'dns': 'MX/A/AAAA/NS/SOA/CAA/TXT, SPF, DMARC, DKIM, DNSSEC (keyless)',
     'certspotter': 'Certificate Transparency history and subdomains (keyless)',
     'http': 'Status, title, server/security headers, robots.txt (keyless)',
+    'urlscan': 'Public urlscan.io scan history, observed IPs and servers (keyless)',
+    'wayback': 'First and last Wayback Machine captures (keyless)',
 }
 
 
 def _keep(value: Any) -> bool:
     # Explicit False is a real answer (no DNSSEC, no robots.txt, ...).
     return value is not None and value != '' and value != [] and value != {}
+
+
+def _plugin_sources(kind: str) -> Dict[str, Any]:
+    """Extra sources contributed by user plugins (lazy import avoids cycles)."""
+    try:
+        from .. import plugins
+    except ImportError:
+        return {}
+    getter = getattr(plugins, 'plugin_sources_named', None) or plugins.plugin_sources
+    return getter(kind)
 
 
 def gather_all(domain: str) -> Dict[str, Any]:
@@ -181,6 +269,11 @@ def gather_all(domain: str) -> Dict[str, Any]:
     for name, fn in FREE_SOURCES.items():
         if config.is_source_enabled(name):
             tasks[name] = (lambda f=fn: f(domain))
+
+    for name, fn in _plugin_sources('domain').items():
+        source_name = f"plugin:{name}"
+        if config.is_source_enabled(source_name):
+            tasks[source_name] = (lambda f=fn: f(domain))
 
     results: Dict[str, Dict[str, Any]] = {}
     status: Dict[str, Dict[str, Any]] = {}

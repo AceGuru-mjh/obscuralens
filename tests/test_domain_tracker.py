@@ -35,6 +35,44 @@ def test_http_probe_extracts_headers(fake_http, fake_response):
     assert 'content-security-policy' in out['missing_security_headers']
 
 
+def test_urlscan_parses(fake_http):
+    fake_http.json = lambda url, **kw: (True, {'results': [
+        {'page': {'ip': '172.66.147.243', 'server': 'cloudflare'},
+         'task': {'time': '2026-10-01T11:18:49.508Z'}},
+        {'page': {'ip': '172.66.147.243', 'server': 'cloudflare'},
+         'task': {'time': '2026-09-30T10:00:00.000Z'}},
+    ]}, '')
+    out = ds._urlscan('example.com')
+    assert out['urlscan_scans'] == 2
+    assert out['urlscan_last'] == '2026-10-01T11:18:49.508Z'
+    assert out['urlscan_ips'] == ['172.66.147.243']
+    assert out['urlscan_servers'] == ['cloudflare']
+
+
+def test_urlscan_empty_results(fake_http):
+    fake_http.json = lambda url, **kw: (True, {'results': []}, '')
+    assert ds._urlscan('example.com') == {}
+
+
+def test_wayback_parses_first_and_last(fake_http):
+    def dispatch(url, **kwargs):
+        row = ['com,example)/', '20020120142510', 'http://example.com:80/',
+               'text/html', '200']
+        return True, [['urlkey', 'timestamp', 'original', 'mimetype',
+                       'statuscode'], row], ''
+
+    fake_http.json = dispatch
+    out = ds._wayback('example.com')
+    assert out['wayback_first'] == '2002-01-20 14:25'
+    assert out['wayback_first_url'] == 'http://example.com:80/'
+    assert out['wayback_last'] == '2002-01-20 14:25'
+
+
+def test_wayback_no_captures(fake_http):
+    fake_http.json = lambda url, **kw: (True, [], '')
+    assert ds._wayback('never-archived.example') == {}
+
+
 def test_gather_all_merges_and_tracks_provenance(monkeypatch):
     monkeypatch.setattr(ds, 'FREE_SOURCES', {
         'one': lambda domain: {'registrar': 'R1', 'dnssec': True},

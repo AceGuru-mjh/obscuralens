@@ -19,7 +19,7 @@ app:
   save_history: true
   max_history_entries: 1000
   request_timeout: 30
-  user_agent: ObscuraLens/2.0.0
+  user_agent: ObscuraLens/3.0.0
   deep_username_scan: true
   parallel_sources: true
   max_workers: 12
@@ -28,6 +28,7 @@ app:
   cache_ttl: 900              # seconds a cached response stays fresh
   cache_path: data/http_cache.db
   proxy: ''                   # e.g. http://127.0.0.1:8080
+  enable_plugins: true        # load extra sources from plugins/ folders
   disabled_sources: []        # e.g. [rdap, gravatar, internetdb]
   report_dir: reports
   chart_dir: reports/charts

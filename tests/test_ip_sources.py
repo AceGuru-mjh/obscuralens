@@ -47,6 +47,33 @@ def _fake_sources():
     }
 
 
+def test_ripestat_parses(fake_http):
+    def dispatch(url, **kwargs):
+        if 'prefix-overview' in url:
+            return True, {'data': {
+                'resource': '8.8.8.0/24',
+                'announced': True,
+                'asns': [{'asn': 15169, 'holder': 'GOOGLE - Google LLC'}],
+                'block': {'desc': 'Administered by ARIN'},
+            }}, ''
+        if '/rir/' in url:
+            return True, {'data': {'rirs': [{'rir': 'ARIN'}]}}, ''
+        return False, None, 'unexpected url'
+
+    fake_http.json = dispatch
+    out = ip_sources._ripestat('8.8.8.8')
+    assert out['prefix'] == '8.8.8.0/24'
+    assert out['asn'] == 15169
+    assert 'GOOGLE' in out['bgp_description']
+    assert out['ip_block'] == 'Administered by ARIN'
+    assert out['rir'] == 'ARIN'
+
+
+def test_ripestat_degrades_gracefully(fake_http):
+    fake_http.json = lambda url, **kw: (False, None, 'timeout')
+    assert ip_sources._ripestat('8.8.8.8') == {}
+
+
 def test_gather_all_merges_deterministically(monkeypatch):
     monkeypatch.setattr(ip_sources, 'FREE_SOURCES', _fake_sources())
     out = ip_sources.gather_all('1.2.3.4')
