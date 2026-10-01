@@ -42,3 +42,9 @@ reports/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Scratch / one-off scripts and any transient credentials
+_*.py
+_*.json
+_*.txt
+_token.txt
