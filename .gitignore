@@ -38,7 +38,7 @@ ENV/
 .coverage
 htmlcov/
 
-# GhostTrack specific
+# Local data and generated artefacts
 config/secrets.yaml
 data/*.db
 reports/*

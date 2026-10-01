@@ -1,5 +1,7 @@
 # ObscuraLens v2.0
 
+> **Founder & maintainer:** MJH
+
 Multi-source OSINT console for IP addresses, phone numbers, usernames, email addresses and domains. Every lookup fans out to all available data sources in parallel, merges the fields, tracks **which source supplied each fact**, and tells you exactly what answered — no silent single-source lookups, no false-positive "hits".
 
 > **Origin:** rebranded and rewritten from `HunxByts/GhostTrack` v2.2 (a 315-line single-file script, preserved at `GhostTR.py` for reference). Credits to the original author.
@@ -33,7 +35,7 @@ Keyed sources (Shodan, VirusTotal, HaveIBeenPwned, Hunter.io, numverify, IPinfo,
 Requires Python 3.9+.
 
 ```powershell
-git clone https://github.com/AceGuru-mjh/ObscuraLens.git
+git clone https://github.com/MJH/ObscuraLens.git
 cd ObscuraLens
 pip install -r requirements.txt
 python -m obscuralens

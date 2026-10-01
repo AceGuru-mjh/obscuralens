@@ -9,7 +9,7 @@ description = "Multi-source OSINT console for IPs, phone numbers, usernames, ema
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "AceGuru-mjh" }]
+authors = [{ name = "MJH", email = "MJH@users.noreply.github.com" }]
 keywords = ["osint", "security", "reconnaissance", "ip", "email", "username", "domain"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -47,8 +47,8 @@ dev = [
 obscuralens = "obscuralens.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/AceGuru-mjh/ObscuraLens"
-Repository = "https://github.com/AceGuru-mjh/ObscuraLens"
+Homepage = "https://github.com/MJH/ObscuraLens"
+Repository = "https://github.com/MJH/ObscuraLens"
 
 [tool.setuptools.packages.find]
 include = ["obscuralens*"]

@@ -6,5 +6,5 @@ email addresses and domains.
 """
 
 __version__ = "2.0.0"
-__author__ = "AceGuru-mjh"
+__author__ = "MJH"
 __license__ = "MIT"
