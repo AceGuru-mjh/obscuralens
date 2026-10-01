@@ -167,6 +167,19 @@ def build_parser() -> argparse.ArgumentParser:
     plugins_sub = p_plugins.add_subparsers(dest='action', metavar='<action>')
     add_common(plugins_sub.add_parser('list', help='show loaded plugins'))
     add_common(plugins_sub.add_parser('reload', help='rescan plugin directories'))
+
+    p_serve = sub.add_parser('serve', help='web UI + REST API (needs [web] extra)')
+    p_serve.add_argument('--host', default='127.0.0.1')
+    p_serve.add_argument('--port', type=int, default=8000)
+    p_serve.add_argument('--reload', action='store_true',
+                         help='auto-reload on code changes (development)')
+    add_common(p_serve)
+
+    p_tui = sub.add_parser('tui', help='terminal UI (needs [tui] extra)')
+    add_common(p_tui)
+
+    p_mcp = sub.add_parser('mcp', help='MCP stdio server for AI assistants')
+    add_common(p_mcp)
     add_common(p_plugins)
 
     p_batch = sub.add_parser('batch', help='look up many targets from a file')
@@ -743,6 +756,31 @@ def _cmd_plugins(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_serve(args: argparse.Namespace) -> int:
+    try:
+        from .web import serve
+    except ImportError as e:
+        _err(str(e))
+        return 2
+    serve(host=args.host, port=args.port, reload=args.reload)
+    return 0
+
+
+def _cmd_tui(args: argparse.Namespace) -> int:
+    try:
+        from .tui import run_tui
+    except ImportError as e:
+        _err(str(e))
+        return 2
+    run_tui()
+    return 0
+
+
+def _cmd_mcp(args: argparse.Namespace) -> int:
+    from .mcp_server import main as mcp_main
+    return mcp_main([])
+
+
 _HANDLERS = {
     'ip': _cmd_ip,
     'phone': _cmd_phone,
@@ -759,6 +797,9 @@ _HANDLERS = {
     'investigate': _cmd_investigate,
     'watch': _cmd_watch,
     'plugins': _cmd_plugins,
+    'serve': _cmd_serve,
+    'tui': _cmd_tui,
+    'mcp': _cmd_mcp,
 }
 
 

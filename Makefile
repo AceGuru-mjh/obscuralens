@@ -1,0 +1,47 @@
+# ObscuraLens developer Makefile.
+# Thin wrappers around the project's standard commands. Run `make help`.
+
+.DEFAULT_GOAL := help
+
+PYTHON ?= python
+PIP ?= $(PYTHON) -m pip
+
+.PHONY: help install test integration lint fmt run serve tui mcp build clean
+
+help: ## Show this help
+	@echo "ObscuraLens targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+
+install: ## Install the package in editable mode with dev extras
+	$(PIP) install -e ".[dev]"
+
+test: ## Run the unit tests (excludes integration)
+	$(PYTHON) -m pytest -m "not integration" --no-color
+
+integration: ## Run the live integration script (hits real network services)
+	$(PYTHON) test_core.py
+
+lint: ## Lint with ruff
+	$(PYTHON) -m ruff check .
+
+fmt: ## Auto-fix lint issues with ruff
+	$(PYTHON) -m ruff check --fix .
+
+run: ## Launch the interactive console
+	$(PYTHON) -m obscuralens
+
+serve: ## Start the web UI
+	$(PYTHON) -m obscuralens serve
+
+tui: ## Start the terminal UI
+	$(PYTHON) -m obscuralens tui
+
+mcp: ## Start the MCP stdio server
+	$(PYTHON) -m obscuralens mcp
+
+build: ## Build sdist and wheel
+	$(PYTHON) -m build
+
+clean: ## Remove caches and build artefacts
+	rm -rf build dist *.egg-info .pytest_cache .ruff_cache
+	find . -type d -name __pycache__ -prune -exec rm -rf {} +

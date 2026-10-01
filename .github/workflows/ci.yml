@@ -47,10 +47,85 @@ jobs:
         run: python -m compileall -q obscuralens tests test_core.py
       - name: Import smoke test
         run: |
-          python -c "import obscuralens, obscuralens.commands, obscuralens.cli, obscuralens.investigate, obscuralens.watchlist, obscuralens.plugins"
+          python -c "import obscuralens, obscuralens.commands, obscuralens.cli, obscuralens.investigate, obscuralens.watchlist, obscuralens.plugins, obscuralens.mcp_server"
           python -m obscuralens --version
       - name: Dependency consistency
         run: pip check
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with web extra
+        run: pip install -e ".[dev,web]"
+      - name: Web API tests
+        run: pytest tests/test_web.py
+
+  tui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with tui extra
+        run: pip install -e ".[dev,tui]"
+      - name: TUI tests
+        run: pytest tests/test_tui.py
+
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lowercase the image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build (and push on main)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  exe:
+    # Best-effort standalone Windows executable; the artifact is uploaded even
+    # if a future PyInstaller/hook regression breaks the build.
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with exe extra
+        run: pip install ".[exe]"
+      - name: Build single-file executable
+        run: pyinstaller scripts/obscuralens.spec --noconfirm
+      - name: Smoke-test the executable
+        run: dist/obscuralens.exe --version
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obscuralens-windows-exe
+          path: dist/obscuralens.exe
 
   package:
     runs-on: ubuntu-latest
