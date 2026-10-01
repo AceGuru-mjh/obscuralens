@@ -5,12 +5,17 @@ Build with:  pyinstaller scripts/obscuralens.spec --noconfirm
 Output:      dist/obscuralens(.exe)
 """
 
+import os
+
 from PyInstaller.utils.hooks import collect_submodules
 
+# SPECPATH points at the directory containing this spec file, so the entry
+# script resolves correctly no matter the current working directory.
+entry_script = os.path.join(SPECPATH, 'pyinstaller_entry.py')
 hiddenimports = collect_submodules('obscuralens')
 
 a = Analysis(
-    ['scripts/pyinstaller_entry.py'],
+    [entry_script],
     pathex=[],
     binaries=[],
     datas=[],
