@@ -308,9 +308,11 @@ class UsernameTracker:
             return 'unknown', 'low', f'http {code} bot-wall, cannot determine'
 
         # Cloudflare / captcha interstitials.
-        if code == 403 or 'just a moment' in low[:3000] and 'cloudflare' in low[:6000]:
-            if 'cf-chl' in low or 'challenge-platform' in low:
-                return 'unknown', 'low', 'captcha wall, cannot determine'
+        if (code == 403
+                or ('just a moment' in low[:3000]
+                    and 'cloudflare' in low[:6000])) \
+                and ('cf-chl' in low or 'challenge-platform' in low):
+            return 'unknown', 'low', 'captcha wall, cannot determine'
 
         # Explicit not-found pages.
         if code == 404:
@@ -353,7 +355,7 @@ class UsernameTracker:
             data = extract(platform, body)
         except Exception:
             return []
-        return [k for k in data.keys() if k in EVIDENCE_FIELDS and data[k]]
+        return [k for k in data if k in EVIDENCE_FIELDS and data[k]]
 
     # ------------------------------------------------------------------
     # Platform-specific rules (return None to fall through to generic rule)

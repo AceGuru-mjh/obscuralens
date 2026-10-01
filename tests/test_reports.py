@@ -1,6 +1,7 @@
 """Report sections and multi-format rendering tests."""
 
 import json
+from pathlib import Path
 
 from obscuralens.reporting import ReportGenerator, sections_for
 
@@ -95,16 +96,16 @@ def test_generate_files(tmp_path):
     data = {'sections': sections_for('ip', IP_RESULT)}
 
     json_path = gen.generate_json_report(data, 'Test')
-    payload = json.loads(open(json_path, encoding='utf-8').read())
+    payload = json.loads(Path(json_path).read_text(encoding='utf-8'))
     assert payload['title'] == 'Test'
 
-    assert open(gen.generate_markdown_report(data, 'Test'),
-                encoding='utf-8').read().startswith('# Test')
-    assert '<html' in open(gen.generate_html_report(data, 'Test'),
-                           encoding='utf-8').read()
+    assert Path(gen.generate_markdown_report(data, 'Test')).read_text(
+        encoding='utf-8').startswith('# Test')
+    assert '<html' in Path(gen.generate_html_report(data, 'Test')).read_text(
+        encoding='utf-8')
     csv_path = gen.generate_csv_report(
         [{'a': 1, 'b': 'x,y'}], 'test.csv')
-    assert 'a,b' in open(csv_path, encoding='utf-8').read()
+    assert 'a,b' in Path(csv_path).read_text(encoding='utf-8')
 
     pdf_path = gen.generate_pdf_report(data, 'Test')
     assert pdf_path.endswith('.pdf')

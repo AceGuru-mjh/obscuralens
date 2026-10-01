@@ -12,10 +12,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - name: Install dev dependencies
+          python-version: "3.13"
+      - name: Install ruff
         run: pip install ruff
-      - name: Lint
+      - name: Ruff (E, F, W, I, B, C4, SIM)
         run: ruff check .
 
   test:
@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,5 +31,43 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install package
         run: pip install -e ".[dev]"
-      - name: Run unit tests (no network)
+      - name: Unit tests (no network)
         run: pytest -m "not integration"
+
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: pip install -e ".[dev]"
+      - name: Byte-compile all sources
+        run: python -m compileall -q obscuralens tests test_core.py
+      - name: Import smoke test
+        run: |
+          python -c "import obscuralens, obscuralens.commands, obscuralens.cli, obscuralens.investigate, obscuralens.watchlist, obscuralens.plugins"
+          python -m obscuralens --version
+      - name: Dependency consistency
+        run: pip check
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: pip install build twine
+      - name: Build sdist and wheel
+        run: python -m build
+      - name: Validate package metadata
+        run: twine check dist/*
+      - name: Install the wheel and smoke-test the CLI
+        run: |
+          pip install dist/*.whl
+          obscuralens --version
+          obscuralens plugins list
+          obscuralens sources domain

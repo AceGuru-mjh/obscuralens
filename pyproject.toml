@@ -41,6 +41,8 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "ruff>=0.4",
+    "build>=1.0",
+    "twine>=5.0",
 ]
 
 [project.scripts]
@@ -66,5 +68,5 @@ target-version = "py39"
 extend-exclude = ["_*.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
+select = ["E", "F", "W", "I", "B", "C4", "SIM"]
 ignore = ["E501"]

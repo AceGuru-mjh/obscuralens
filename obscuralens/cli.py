@@ -862,11 +862,10 @@ class ObscuraLensCLI:
             self.view_recent_queries()
         elif choice == '2':
             self.search_history()
-        elif choice == '3':
-            if confirm_action("Clear all query history?"):
-                count = db.clear_history()
-                print_success(f"Cleared {count} records")
-                input("\nPress Enter to continue...")
+        elif choice == '3' and confirm_action("Clear all query history?"):
+            count = db.clear_history()
+            print_success(f"Cleared {count} records")
+            input("\nPress Enter to continue...")
 
     def view_recent_queries(self) -> None:
         history = db.get_history(limit=25)

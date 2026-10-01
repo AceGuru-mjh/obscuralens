@@ -146,14 +146,14 @@ class ChartGenerator:
             (70, 100, '#ff4757', 'Dangerous')
         ]
 
-        for start, end, color, label in zones:
+        for start, end, color, _label in zones:
             mask = (theta >= np.pi * (1 - end/100)) & (theta <= np.pi * (1 - start/100))
             ax.fill_between(theta[mask], 0, r[mask], color=color, alpha=0.3)
 
         # Needle
         needle_angle = np.pi * (1 - score/100)
         ax.annotate('', xy=(needle_angle, 0.9), xytext=(needle_angle, 0),
-                   arrowprops=dict(arrowstyle='->', color='white', lw=3))
+                   arrowprops={'arrowstyle': '->', 'color': 'white', 'lw': 3})
 
         # Score text
         ax.text(np.pi/2, 0.3, f'{score}', ha='center', va='center',

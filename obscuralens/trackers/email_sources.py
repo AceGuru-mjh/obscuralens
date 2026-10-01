@@ -26,7 +26,7 @@ WEBMAIL_DOMAINS = {
     'comcast.net', 'verizon.net', 'att.net', 'sbcglobal.net', 'bellsouth.net',
     'btinternet.com', 'sky.com', 'orange.fr', 'wanadoo.fr', 'laposte.net',
     'free.fr', 'web.de', 'libero.it', 'virgilio.it', 'terra.com.br',
-    'uol.com.br', 'bol.com.br', 'seznam.cz',
+    'uol.com.br', 'bol.com.br',
 }
 
 FREEMAIL_PATTERNS = (

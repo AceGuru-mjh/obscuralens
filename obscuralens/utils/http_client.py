@@ -10,6 +10,7 @@ controlled globally by ``app.cache_enabled``. Only HTTP 200 responses are
 stored; failures are never cached.
 """
 
+import contextlib
 import hashlib
 import logging
 import random
@@ -79,10 +80,8 @@ class HttpClient:
         metrics.record_request(url)
         kwargs.setdefault('timeout', self.timeout)
         response = self.session.get(url, **kwargs)
-        try:
+        with contextlib.suppress(AttributeError, TypeError):
             metrics.record_bytes(len(response.content or b''))
-        except (AttributeError, TypeError):
-            pass
         return response
 
     @staticmethod
