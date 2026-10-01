@@ -1,13 +1,19 @@
 """
 Shared HTTP client for all OSINT data sources.
 
-Centralises timeouts, retries, User-Agent handling and error capture so every
-tracker behaves the same way and no single data source can crash a scan.
+Centralises timeouts, retries, rate limiting, optional proxy support, a TTL
+response cache and metrics so every tracker behaves the same way and no single
+data source can crash a scan.
+
+Cache usage is opt-in per call (``use_cache=True`` for get_json/get_text) and
+controlled globally by ``app.cache_enabled``. Only HTTP 200 responses are
+stored; failures are never cached.
 """
 
+import hashlib
 import logging
 import random
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -18,8 +24,14 @@ except ImportError:  # pragma: no cover
     Retry = None  # type: ignore
 
 from ..config import config
+from ..core.cache import cache
+from ..core.metrics import metrics
+from ..core.ratelimit import acquire as rate_acquire
 
 logger = logging.getLogger(__name__)
+
+# Response bodies larger than this are not stored in the cache.
+MAX_CACHED_TEXT = 400_000
 
 
 class HttpClient:
@@ -44,49 +56,149 @@ class HttpClient:
                                   pool_maxsize=20)
             self.session.mount('https://', adapter)
             self.session.mount('http://', adapter)
+        self._proxy = None
+        self._apply_proxy()
+
+    # -- transport --------------------------------------------------------
+
+    def _apply_proxy(self) -> None:
+        """Keep the session proxies in sync with the live configuration."""
+        proxy = config.app_config.proxy or ''
+        if proxy == self._proxy:
+            return
+        self._proxy = proxy
+        if proxy:
+            self.session.proxies = {'http': proxy, 'https': proxy}
+        else:
+            self.session.proxies = {}
 
     def get(self, url: str, **kwargs) -> requests.Response:
-        """Perform a GET request with the configured timeout."""
+        """Perform a GET request with rate limiting, proxy and timeout."""
+        self._apply_proxy()
+        rate_acquire(url)
+        metrics.record_request(url)
         kwargs.setdefault('timeout', self.timeout)
-        return self.session.get(url, **kwargs)
+        response = self.session.get(url, **kwargs)
+        try:
+            metrics.record_bytes(len(response.content or b''))
+        except (AttributeError, TypeError):
+            pass
+        return response
 
-    def get_json(self, url: str, **kwargs) -> Tuple[bool, Any, str]:
+    @staticmethod
+    def _cache_key(url: str, headers: Optional[Dict[str, str]]) -> str:
+        if not headers:
+            return url
+        digest = hashlib.sha1(
+            repr(sorted(headers.items())).encode('utf-8')).hexdigest()[:12]
+        return f"{url}#{digest}"
+
+    # -- JSON -------------------------------------------------------------
+
+    def get_json(self, url: str, use_cache: bool = True,
+                 cache_ttl: Optional[int] = None,
+                 **kwargs) -> Tuple[bool, Any, str]:
         """
         GET a URL and parse JSON.
 
         Returns:
             (success, parsed_json_or_None, error_message)
         """
+        headers = kwargs.get('headers')
+        key = self._cache_key(url, headers)
+        if use_cache:
+            cached = cache.get('json', key)
+            if cached is not None:
+                metrics.record_cache(True)
+                return True, cached, ''
+
         response = None
         try:
             response = self.get(url, **kwargs)
             response.raise_for_status()
-            return True, response.json(), ''
+            data = response.json()
+            if use_cache:
+                cache.set('json', key, data, ttl=cache_ttl)
+            return True, data, ''
         except requests.exceptions.Timeout:
+            metrics.record_failure('timeout')
             return False, None, 'timeout'
         except requests.exceptions.SSLError:
+            metrics.record_failure('ssl')
             return False, None, 'ssl error (source unreachable from this network)'
         except requests.exceptions.ConnectionError:
+            metrics.record_failure('connection')
             return False, None, 'connection failed'
         except requests.exceptions.HTTPError:
             code = response.status_code if response is not None else '?'
+            metrics.record_failure(f'http {code}')
             if code == 404:
                 # Often a legitimate "nothing found" answer rather than a failure.
                 return False, None, 'not found'
             return False, None, f'http {code}'
         except ValueError:
+            metrics.record_failure('invalid json')
             return False, None, 'invalid json'
         except requests.exceptions.RequestException as e:
+            metrics.record_failure(type(e).__name__)
             return False, None, type(e).__name__
 
-    def get_text(self, url: str, **kwargs) -> Tuple[bool, str, str]:
+    # -- text -------------------------------------------------------------
+
+    def get_text(self, url: str, use_cache: bool = True,
+                 cache_ttl: Optional[int] = None,
+                 **kwargs) -> Tuple[bool, str, str]:
         """GET a URL and return plain text."""
+        headers = kwargs.get('headers')
+        key = self._cache_key(url, headers)
+        if use_cache:
+            cached = cache.get('text', key)
+            if cached is not None:
+                metrics.record_cache(True)
+                return True, cached, ''
+
         try:
             response = self.get(url, **kwargs)
             response.raise_for_status()
-            return True, response.text, ''
+            text = response.text
+            if use_cache and len(text) <= MAX_CACHED_TEXT:
+                cache.set('text', key, text, ttl=cache_ttl)
+            return True, text, ''
         except requests.exceptions.RequestException as e:
+            metrics.record_failure(type(e).__name__)
             return False, '', type(e).__name__
+
+    # -- raw response -----------------------------------------------------
+
+    def fetch(self, url: str, use_cache: bool = True,
+              cache_ttl: Optional[int] = None,
+              **kwargs) -> Tuple[int, str, str]:
+        """
+        GET a URL and return (status_code, text, error).
+
+        Designed for checks that care about status codes (OpenPGP keyserver,
+        Gravatar). Successful (200) bodies are cached; negative answers are
+        cheap enough to ask again.
+        """
+        headers = kwargs.get('headers')
+        key = self._cache_key(url, headers)
+        if use_cache:
+            cached = cache.get('fetch', key)
+            if cached is not None and cached.get('status') == 200:
+                metrics.record_cache(True)
+                return 200, cached.get('text', ''), ''
+
+        try:
+            response = self.get(url, **kwargs)
+            status = response.status_code
+            text = response.text or ''
+            if use_cache and status == 200 and len(text) <= MAX_CACHED_TEXT:
+                cache.set('fetch', key, {'status': status, 'text': text},
+                          ttl=cache_ttl)
+            return status, text, ''
+        except requests.exceptions.RequestException as e:
+            metrics.record_failure(type(e).__name__)
+            return 0, '', type(e).__name__
 
 
 # Shared client instance
@@ -96,3 +208,8 @@ http = HttpClient()
 def jitter(seconds: float) -> float:
     """Small randomised delay so parallel calls do not look robotic."""
     return seconds * (0.8 + random.random() * 0.4)
+
+
+def get_json(url: str, **kwargs) -> Tuple[bool, Any, str]:
+    """Module-level convenience wrapper used by source readers."""
+    return http.get_json(url, **kwargs)

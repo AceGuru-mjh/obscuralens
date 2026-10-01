@@ -3,182 +3,74 @@ ObscuraLens CLI Interface
 Menu-driven OSINT console with multi-source aggregation.
 """
 
+import json
 import os
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .config import SERVICES, config
+from .core.cache import cache
+from .core.metrics import metrics
 from .database import db
-from .trackers import IPTracker, PhoneTracker, UsernameTracker, EmailTracker
-from .visualization import ChartGenerator
-from .reporting import ReportGenerator
-from .utils import (
-    clear_screen, print_banner, print_success, print_error,
-    print_warning, print_info, print_table, print_json,
-    format_output, print_section, print_subsection,
-    confirm_action, get_input, validate_ip, validate_email,
-    validate_phone, validate_username, Colors,
-    SYM_OK, SYM_FAIL, SYM_WARN, SYM_INFO, SYM_ARROW,
-    BOX_H, BOX_V, BOX_TL, BOX_TR, BOX_BL, BOX_BR, BOX_DIV, BOX_RULE,
+from .reporting import (
+    ReportGenerator,
+    domain_sections,
+    email_sections,
+    ip_sections,
+    phone_sections,
+    username_sections,
 )
+from .trackers import (
+    DomainTracker,
+    EmailTracker,
+    IPTracker,
+    PhoneTracker,
+    UsernameTracker,
+)
+from .utils import (
+    BOX_BL,
+    BOX_BR,
+    BOX_DIV,
+    BOX_H,
+    BOX_TL,
+    BOX_TR,
+    BOX_V,
+    SYM_OK,
+    Colors,
+    clear_screen,
+    confirm_action,
+    get_input,
+    print_banner,
+    print_error,
+    print_info,
+    print_json,
+    print_section,
+    print_subsection,
+    print_success,
+    print_table,
+    print_warning,
+    validate_domain,
+    validate_email,
+    validate_ip,
+    validate_phone,
+    validate_username,
+)
+from .utils.formatting import (
+    LABELS as LABELS,  # noqa: F401 - re-exported for backwards compatibility
+)
+from .utils.formatting import (
+    fmt_value as _fmt_value,
+)
+from .utils.formatting import (
+    label as _label,  # noqa: F401 - re-exported for backwards compatibility
+)
+from .utils.formatting import (
+    rows_from_fields as _rows_from_fields,
+)
+from .visualization import ChartGenerator
 
-# Human-friendly labels for raw field names.
-LABELS: Dict[str, str] = {
-    'ip': 'IP Address',
-    'ip_version': 'IP Version',
-    'type': 'Type',
-    'continent': 'Continent',
-    'continent_code': 'Continent Code',
-    'country': 'Country',
-    'country_code': 'Country Code',
-    'region': 'Region',
-    'region_code': 'Region Code',
-    'region_name': 'Region Name',
-    'city': 'City',
-    'postal': 'Postal Code',
-    'latitude': 'Latitude',
-    'longitude': 'Longitude',
-    'is_eu': 'Is EU',
-    'calling_code': 'Calling Code',
-    'capital': 'Capital',
-    'borders': 'Border Countries',
-    'flag': 'Flag',
-    'asn': 'ASN',
-    'asn_full': 'ASN (full)',
-    'org': 'Organisation',
-    'isp': 'ISP',
-    'domain': 'Domain',
-    'reverse_dns': 'Reverse DNS (PTR)',
-    'timezone': 'Timezone',
-    'timezone_abbr': 'Timezone Abbr',
-    'timezone_offset': 'Timezone Offset',
-    'timezone_utc': 'Timezone UTC',
-    'current_time': 'Local Time There',
-    'currencies': 'Currencies',
-    'languages': 'Languages',
-    'is_proxy': 'Is Proxy',
-    'city_disagreement': 'City (sources disagree)',
-    'rdap_handle': 'Registry Handle',
-    'rdap_name': 'Netblock Name',
-    'rdap_org': 'Registered Org',
-    'rdap_contact': 'Contact',
-    'rdap_address': 'Org Address',
-    'rdap_country': 'Registry Country',
-    'rdap_cidr': 'CIDR Range',
-    'rdap_range': 'Address Range',
-    'rdap_status': 'Registry Status',
-    'rdap_registered': 'Registered On',
-    'rdap_last_changed': 'Last Changed',
-    'rdap_abuse_name': 'Abuse Contact Name',
-    'rdap_abuse_email': 'Abuse Email',
-    'rdap_abuse_phone': 'Abuse Phone',
-    'ports': 'Open Ports',
-    'vulns': 'Known Vulnerabilities',
-    'hostnames': 'Hostnames',
-    'os': 'Operating System',
-    'tags': 'Tags',
-    'reputation': 'Reputation',
-    'malicious': 'Malicious Detections',
-    'suspicious': 'Suspicious Detections',
-    'harmless': 'Harmless Detections',
-    'undetected': 'Undetected',
-    'malicious_score': 'Threat Score %',
-    'network': 'Network',
-    'as_owner': 'AS Owner',
-    'email': 'Email',
-    'domain_created': 'Domain Created',
-    'domain_expires': 'Domain Expires',
-    'domain_updated': 'Domain Updated',
-    'registrar': 'Registrar',
-    'nameservers': 'Name Servers',
-    'abuse_email': 'Domain Abuse Email',
-    'domain_status': 'Domain Status',
-    'mx_records': 'MX Records',
-    'mx_count': 'MX Record Count',
-    'a_records': 'A Records',
-    'spf_record': 'SPF Record',
-    'spf_third_party': 'SPF Uses 3rd Party',
-    'dmarc_record': 'DMARC Record',
-    'dmarc_policy': 'DMARC Policy',
-    'disposable': 'Disposable Email',
-    'openpgp': 'Has OpenPGP Key',
-    'gravatar': 'Gravatar Avatar',
-    'is_webmail': 'Webmail Provider',
-    'local_part': 'Local Part',
-    'local_length': 'Local Part Length',
-    'has_digits': 'Local Part Has Digits',
-    'digit_count': 'Digit Count',
-    'looks_generated': 'Looks Auto-Generated',
-    'valid_format': 'Valid Format',
-    'local_number': 'Local Number',
-    'national_number': 'National Number',
-    'country_code_phone': 'Country Code',
-    'number_length': 'Number Length',
-    'e164': 'E.164 Format',
-    'international': 'International Format',
-    'national_format': 'National Format',
-    'rfc3966': 'RFC3966 (URI)',
-    'possible': 'Plausible Number',
-    'is_mobile': 'Is Mobile',
-    'is_voip': 'Is VoIP',
-    'is_toll_free': 'Is Toll Free',
-    'timezone_count': 'Timezone Count',
-    'primary_timezone': 'Primary Timezone',
-    'hints': 'Analyst Notes',
-    'hibp_breach_count': 'Breach Count',
-    'hibp_classes': 'Exposed Data Types',
-    'paste_count': 'Paste Count',
-    'hunter_status': 'Hunter Status',
-    'hunter_result': 'Hunter Result',
-    'hunter_score': 'Hunter Score',
-    'hunter_smtp_server': 'SMTP Server',
-    'hunter_mx': 'Hunter MX Check',
-    'hunter_smtp_check': 'Hunter SMTP Check',
-    'hunter_accept_all': 'Accepts All Mail',
-    'hunter_blocked': 'Hunter Blocked',
-    'hunter_free': 'Free Provider',
-}
-
-# Fields rendered as a comma-joined list rather than a table.
-LIST_FIELDS = {
-    'timezones', 'coordinates_by_source', 'mx_records', 'a_records',
-    'hibp_breaches', 'hibp_classes', 'pastes', 'nameservers', 'domain_status',
-    'ports', 'vulns', 'hostnames', 'tags', 'currencies', 'languages',
-    'rdap_status', 'timelines',
-}
-
-
-def _label(key: str) -> str:
-    return LABELS.get(key, key.replace('_', ' ').title())
-
-
-def _fmt_value(key: str, value: Any) -> str:
-    """Render a single value as display text."""
-    if isinstance(value, bool):
-        return SYM_OK if value else SYM_FAIL
-    if isinstance(value, (list, tuple, set)):
-        items = list(value)
-        if key == 'coordinates_by_source':
-            return ', '.join(f"{c['source']}({c['lat']},{c['lon']})" for c in items)
-        return ', '.join(str(i) for i in items)
-    if isinstance(value, dict):
-        return json.dumps(value, ensure_ascii=False)
-    return str(value)
-
-
-def _rows_from_fields(fields: Dict[str, Any], skip: Optional[set] = None) -> List[List[str]]:
-    """Convert a flat field dict into table rows, hiding plumbing keys."""
-    skip = skip or set()
-    rows = []
-    for key, value in fields.items():
-        if key in skip:
-            continue
-        if key in ('coordinates_by_source',):
-            continue
-        if value in (None, '', [], {}, False):
-            continue
-        rows.append([_label(key), _fmt_value(key, value)])
-    return rows
+# Field rendering helpers (LABELS, _label, _fmt_value, _rows_from_fields)
+# are imported from obscuralens.utils.formatting above.
 
 
 class ObscuraLensCLI:
@@ -189,6 +81,7 @@ class ObscuraLensCLI:
         self.phone_tracker = PhoneTracker()
         self.username_tracker = UsernameTracker()
         self.email_tracker = EmailTracker()
+        self.domain_tracker = DomainTracker()
         self.chart_gen = ChartGenerator()
         self.report_gen = ReportGenerator()
 
@@ -209,11 +102,12 @@ class ObscuraLensCLI:
                 '2': self.phone_tracker_menu,
                 '3': self.username_tracker_menu,
                 '4': self.email_tracker_menu,
-                '5': self.batch_operations_menu,
-                '6': self.history_menu,
-                '7': self.statistics_menu,
-                '8': self.settings_menu,
-                '9': self.api_status_menu,
+                '5': self.domain_tracker_menu,
+                '6': self.batch_operations_menu,
+                '7': self.history_menu,
+                '8': self.statistics_menu,
+                '9': self.settings_menu,
+                '10': self.api_status_menu,
                 '0': self.exit_program,
             }
             action = handlers.get(choice)
@@ -231,11 +125,12 @@ class ObscuraLensCLI:
             ('2', 'Phone Number Tracker'),
             ('3', 'Username Tracker'),
             ('4', 'Email Tracker'),
-            ('5', 'Batch Operations'),
-            ('6', 'Query History'),
-            ('7', 'Statistics'),
-            ('8', 'Settings'),
-            ('9', 'API Key Status'),
+            ('5', 'Domain Tracker'),
+            ('6', 'Batch Operations'),
+            ('7', 'Query History'),
+            ('8', 'Statistics'),
+            ('9', 'Settings'),
+            ('10', 'API Key Status'),
             ('0', 'Exit'),
         ]
         width = 58
@@ -357,11 +252,12 @@ class ObscuraLensCLI:
     def offer_ip_extras(self, result: Dict[str, Any]) -> None:
         """Offer report export and charting for a completed IP lookup."""
         print_subsection("Export")
-        print(f"  [1] Save JSON report")
-        print(f"  [2] Save HTML report")
-        print(f"  [3] Save PDF report")
-        print(f"  [4] Plot coordinates by source")
-        print(f"  [0] Skip")
+        print("  [1] Save JSON report")
+        print("  [2] Save HTML report")
+        print("  [3] Save PDF report")
+        print("  [4] Plot coordinates by source")
+        print("  [5] Show field sources")
+        print("  [0] Skip")
 
         choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
         if choice == '0':
@@ -375,7 +271,6 @@ class ObscuraLensCLI:
                 method = {'1': self.report_gen.generate_json_report,
                           '2': self.report_gen.generate_html_report,
                           '3': self.report_gen.generate_pdf_report}[choice]
-                ext = {'1': 'json', '2': 'html', '3': 'pdf'}[choice]
                 path = method({'ip': ip, 'sections': sections},
                               f"IP Report - {ip}")
                 if os.path.exists(path):
@@ -392,43 +287,15 @@ class ObscuraLensCLI:
                         f"Latitude by source ({ip})",
                         "Source", "|latitude|", f"lat_{ip}.png")
                     print_success(f"Chart saved: {path}")
+            elif choice == '5':
+                self.show_field_sources(result)
         except Exception as e:
             print_error(f"Export failed: {type(e).__name__}: {e}")
 
     @staticmethod
     def _ip_report_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Shape an IP result into report sections."""
-        info = result.get('info', {})
-        sections: List[Dict[str, Any]] = []
-
-        def grid(title: str, data: Dict[str, Any]) -> None:
-            clean = {k: v for k, v in data.items()
-                     if v not in (None, '', [], {}, False)}
-            if clean:
-                sections.append({'title': title, 'type': 'grid', 'data': clean})
-
-        grid('Location', {k: info.get(k) for k in
-                          ('country', 'country_code', 'region', 'city', 'postal',
-                           'latitude', 'longitude', 'timezone', 'is_eu')})
-        grid('Network', {k: info.get(k) for k in
-                         ('asn', 'org', 'isp', 'domain', 'reverse_dns', 'is_proxy')})
-        grid('Registry (RDAP)', {k: info.get(k) for k in
-                                 ('rdap_name', 'rdap_org', 'rdap_cidr', 'rdap_range',
-                                  'rdap_registered', 'rdap_abuse_email', 'rdap_abuse_phone',
-                                  'rdap_address')})
-        grid('Threat Intelligence', {k: info.get(k) for k in
-                                     ('reputation', 'malicious', 'suspicious',
-                                      'harmless', 'undetected', 'malicious_score')})
-
-        if result.get('sources_ok'):
-            sections.append({
-                'title': 'Sources Queried',
-                'type': 'table',
-                'columns': ['Source', 'Status'],
-                'rows': [[s, 'OK'] for s in result['sources_ok']]
-                         + [[s, v] for s, v in result.get('sources_failed', {}).items()],
-            })
-        return sections
+        """Shape an IP result into report sections (shared builder)."""
+        return ip_sections(result)
 
     # ------------------------------------------------------------------
     # Phone
@@ -453,14 +320,10 @@ class ObscuraLensCLI:
         if result['success']:
             self.display_phone_results(result)
             if confirm_action("\nSave report?"):
-                sections = [{
-                    'title': 'Phone Details',
-                    'type': 'grid',
-                    'data': {k: _fmt_value(k, v) for k, v in result['info'].items()
-                             if v not in (None, '', [], {}, False)},
-                }]
+                sections = phone_sections(result)
                 path = self.report_gen.generate_json_report(
-                    {'phone': phone, 'sections': sections}, f"Phone Report - {phone}")
+                    {'phone': phone, 'info': result['info'], 'sections': sections},
+                    f"Phone Report - {phone}")
                 print_success(f"Report saved: {path}")
         else:
             print_error("Could not parse the number.")
@@ -517,7 +380,8 @@ class ObscuraLensCLI:
             self.display_username_results(result)
             if confirm_action("\nSave report?"):
                 path = self.report_gen.generate_json_report(
-                    {'username': username, 'results': result['results']},
+                    {'username': username, 'results': result['results'],
+                     'sections': username_sections(result)},
                     f"Username Report - {username}")
                 print_success(f"Report saved: {path}")
         else:
@@ -596,7 +460,9 @@ class ObscuraLensCLI:
             self.display_email_results(result)
             if confirm_action("\nSave report?"):
                 path = self.report_gen.generate_json_report(
-                    {'email': email, 'info': result['info']}, f"Email Report - {email}")
+                    {'email': email, 'info': result['info'],
+                     'sections': email_sections(result)},
+                    f"Email Report - {email}")
                 print_success(f"Report saved: {path}")
         else:
             print_error("All data sources failed.")
@@ -661,6 +527,123 @@ class ObscuraLensCLI:
             print_table(_rows_from_fields(rest))
 
     # ------------------------------------------------------------------
+    # Domain
+    # ------------------------------------------------------------------
+
+    def domain_tracker_menu(self) -> None:
+        clear_screen()
+        print_section("DOMAIN TRACKER")
+
+        domain = get_input("Enter domain (e.g., example.com)")
+        is_valid, error = validate_domain(domain)
+        if not is_valid:
+            print_error(error)
+            input("\nPress Enter to continue...")
+            return
+
+        print_info(f"Querying registration, DNS, CT and HTTP sources for {domain}...")
+        result = self.domain_tracker.track(domain)
+
+        if result['success']:
+            self.display_domain_results(result)
+            self.offer_domain_extras(result)
+        else:
+            print_error("Every data source failed.")
+            for name, err in result.get('sources_failed', {}).items():
+                print(f"  {Colors.RED}{name}:{Colors.RESET} {err}")
+
+        input("\nPress Enter to continue...")
+
+    def display_domain_results(self, result: Dict[str, Any]) -> None:
+        info = result.get('info', {})
+
+        print_subsection("Summary")
+        print(f"  {Colors.CYAN}Sources OK:{Colors.RESET}     {len(result['sources_ok'])}"
+              f"  {Colors.CYAN}Fields collected:{Colors.RESET} {result['field_count']}")
+        print(f"  {Colors.CYAN}Sources used:{Colors.RESET}    {', '.join(result['sources_ok'])}")
+
+        failed = result.get('sources_failed', {})
+        if failed:
+            print(f"  {Colors.YELLOW}Unavailable:{Colors.RESET}     "
+                  + ', '.join(f"{k} ({v})" for k, v in failed.items()))
+
+        headline = {}
+        for key in ('domain', 'registrar', 'domain_created', 'domain_age_days',
+                    'domain_expires', 'expires_in_days', 'nameservers', 'dnssec',
+                    'mx_count', 'spf_record', 'dmarc_policy', 'dkim_selectors',
+                    'http_status', 'server', 'http_title', 'ct_certificates',
+                    'robots_txt'):
+            if info.get(key) not in (None, '', [], {}, False):
+                headline[key] = info[key]
+        if headline:
+            print_subsection("Key Facts")
+            print_table(_rows_from_fields(headline))
+
+        subdomains = info.get('ct_subdomains')
+        if subdomains:
+            print_subsection(f"Subdomains From Certificate Transparency ({len(subdomains)})")
+            print_table([[name] for name in subdomains[:40]],
+                        headers=['Subdomain'])
+            if len(subdomains) > 40:
+                print_info(f"... and {len(subdomains) - 40} more")
+
+        missing = info.get('missing_security_headers')
+        if missing:
+            print_warning("Missing security headers: " + ', '.join(missing))
+
+        rest = {k: v for k, v in info.items()
+                if k not in headline
+                and k not in ('ct_subdomains', 'security_headers')}
+        if rest:
+            print_subsection("All Collected Fields")
+            print_table(_rows_from_fields(rest))
+
+    def offer_domain_extras(self, result: Dict[str, Any]) -> None:
+        """Offer report export, subdomain list and provenance for a domain."""
+        print_subsection("Export")
+        print("  [1] Save JSON report")
+        print("  [2] Save HTML report")
+        print("  [3] Save Markdown report")
+        print("  [4] Show field sources")
+        print("  [0] Skip")
+
+        choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
+        if choice == '0':
+            return
+
+        domain = result.get('domain', 'target')
+        sections = self._domain_report_sections(result)
+
+        try:
+            if choice in ('1', '2', '3'):
+                method = {'1': self.report_gen.generate_json_report,
+                          '2': self.report_gen.generate_html_report,
+                          '3': self.report_gen.generate_markdown_report}[choice]
+                path = method({'domain': domain, 'sections': sections},
+                              f"Domain Report - {domain}")
+                print_success(f"Report saved: {path}")
+            elif choice == '4':
+                self.show_field_sources(result)
+        except Exception as e:
+            print_error(f"Export failed: {type(e).__name__}: {e}")
+
+    @staticmethod
+    def _domain_report_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Shape a domain result into report sections (shared builder)."""
+        return domain_sections(result)
+
+    def show_field_sources(self, result: Dict[str, Any]) -> None:
+        """Print which source supplied each field."""
+        provenance = result.get('field_sources') or {}
+        if not provenance:
+            print_warning("No provenance data for this result.")
+            return
+        print_subsection("Field Sources")
+        print_table([[field, ', '.join(sources)]
+                     for field, sources in sorted(provenance.items())],
+                    headers=['Field', 'Source(s)'])
+
+    # ------------------------------------------------------------------
     # Batch
     # ------------------------------------------------------------------
 
@@ -672,6 +655,7 @@ class ObscuraLensCLI:
         print(f"  {Colors.CYAN}[2]{Colors.RESET} Batch phone lookup")
         print(f"  {Colors.CYAN}[3]{Colors.RESET} Batch username scan")
         print(f"  {Colors.CYAN}[4]{Colors.RESET} Batch email lookup")
+        print(f"  {Colors.CYAN}[5]{Colors.RESET} Batch domain lookup")
         print(f"  {Colors.CYAN}[0]{Colors.RESET} Back")
 
         choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
@@ -680,6 +664,7 @@ class ObscuraLensCLI:
             '2': self.batch_phone_tracking,
             '3': self.batch_username_tracking,
             '4': self.batch_email_tracking,
+            '5': self.batch_domain_tracking,
         }.get(choice)
         if runner:
             runner()
@@ -751,7 +736,8 @@ class ObscuraLensCLI:
         for name in usernames:
             result = self.username_tracker.track(name)
             results.append(result)
-            found = [r['platform'] for r in result['results'] if r['exists']]
+            found = [r['platform'] for r in result['results']
+                     if r.get('status') == 'found']
             print_success(f"{name}: found on {len(found)} platforms "
                           f"({', '.join(found[:6])}{'...' if len(found) > 6 else ''})")
 
@@ -779,6 +765,31 @@ class ObscuraLensCLI:
 
         self._maybe_export_batch('email', results)
 
+    def batch_domain_tracking(self) -> None:
+        domains = self._read_targets("Enter domains:")
+        if not domains:
+            print_warning("No domains entered.")
+            return
+
+        print_info(f"Looking up {len(domains)} domains across registration, "
+                   f"DNS, CT and HTTP sources...")
+        results = self.domain_tracker.batch_track(domains)
+
+        print_subsection("Results")
+        print_table([
+            [r['domain'],
+             len(r['sources_ok']),
+             r['field_count'],
+             r['info'].get('registrar', '-'),
+             r['info'].get('domain_age_days', '-'),
+             _fmt_value('dnssec', r['info'].get('dnssec', False)),
+             r['info'].get('http_status', '-')]
+            for r in results
+        ], headers=['Domain', 'Sources', 'Fields', 'Registrar', 'Age (days)',
+                    'DNSSEC', 'HTTP'])
+
+        self._maybe_export_batch('domain', results)
+
     def _maybe_chart_ips(self, results: List[Dict[str, Any]]) -> None:
         if not confirm_action("\nPlot country distribution?"):
             return
@@ -797,7 +808,7 @@ class ObscuraLensCLI:
     def _maybe_export_batch(self, kind: str, results: List[Dict[str, Any]]) -> None:
         if not confirm_action("\nSave batch results?"):
             return
-        print(f"  [1] JSON    [2] HTML    [3] Markdown    [4] CSV")
+        print("  [1] JSON    [2] HTML    [3] Markdown    [4] CSV")
         choice = input(f"{Colors.GREEN}Format: {Colors.RESET}").strip()
         method = {
             '1': self.report_gen.generate_json_report,
@@ -834,10 +845,10 @@ class ObscuraLensCLI:
     def history_menu(self) -> None:
         clear_screen()
         print_section("QUERY HISTORY")
-        print(f"  [1] Recent queries")
-        print(f"  [2] Search history")
-        print(f"  [3] Clear history")
-        print(f"  [0] Back")
+        print("  [1] Recent queries")
+        print("  [2] Search history")
+        print("  [3] Clear history")
+        print("  [0] Back")
 
         choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
         if choice == '1':
@@ -913,6 +924,26 @@ class ObscuraLensCLI:
                 path = self.chart_gen.create_statistics_dashboard(stats)
                 print_success(f"Dashboard saved: {path}")
 
+        cache_stats = cache.stats()
+        print_subsection("Response Cache")
+        print_table([
+            ['Enabled', _fmt_value('x', cache_stats['enabled'])],
+            ['Entries', cache_stats['entries']],
+            ['Fresh', cache_stats['fresh']],
+            ['Hits / misses', f"{cache_stats['hits']} / {cache_stats['misses']}"],
+            ['Default TTL', f"{cache_stats['default_ttl']}s"],
+            ['Location', cache_stats['path']],
+        ], headers=['Metric', 'Value'])
+
+        net = metrics.snapshot()
+        print_subsection("Network (this session)")
+        print_table([
+            ['HTTP requests', net['requests']],
+            ['Cache hit rate', f"{net['cache_hit_rate']}%"],
+            ['Failures / timeouts', f"{net['failures']} / {net['timeouts']}"],
+            ['Sources used / failed', f"{net['sources_used']} / {net['sources_failed']}"],
+        ], headers=['Metric', 'Value'])
+
         input("\nPress Enter to continue...")
 
     # ------------------------------------------------------------------
@@ -922,13 +953,17 @@ class ObscuraLensCLI:
     def settings_menu(self) -> None:
         clear_screen()
         print_section("SETTINGS")
-        print(f"  [1] View configuration")
-        print(f"  [2] Configure API keys")
-        print(f"  [3] Output format")
-        print(f"  [4] Toggle history saving")
-        print(f"  [5] Toggle deep username scan")
-        print(f"  [6] Request timeout")
-        print(f"  [0] Back")
+        print("  [1] View configuration")
+        print("  [2] Configure API keys")
+        print("  [3] Output format")
+        print("  [4] Toggle history saving")
+        print("  [5] Toggle deep username scan")
+        print("  [6] Request timeout")
+        print("  [7] Toggle response cache")
+        print("  [8] Per-host request rate")
+        print("  [9] Proxy URL")
+        print("  [10] Clear response cache")
+        print("  [0] Back")
 
         choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
         if choice == '1':
@@ -943,6 +978,14 @@ class ObscuraLensCLI:
             self.toggle_deep_scan()
         elif choice == '6':
             self.set_timeout()
+        elif choice == '7':
+            self.toggle_cache()
+        elif choice == '8':
+            self.set_rate_limit()
+        elif choice == '9':
+            self.set_proxy()
+        elif choice == '10':
+            self.clear_cache()
 
     def view_configuration(self) -> None:
         print_subsection("Application Settings")
@@ -955,6 +998,10 @@ class ObscuraLensCLI:
             ['Deep username scan', _fmt_value('x', app.deep_username_scan)],
             ['Parallel sources', _fmt_value('x', app.parallel_sources)],
             ['Request timeout', f"{app.request_timeout}s"],
+            ['Response cache', _fmt_value('x', app.cache_enabled)],
+            ['Cache TTL', f"{app.cache_ttl}s"],
+            ['Requests per second', app.requests_per_second],
+            ['Proxy', app.proxy or '(none)'],
             ['Max history entries', app.max_history_entries],
             ['User agent', app.user_agent],
             ['Database', config.db_config.sqlite_path],
@@ -1004,14 +1051,18 @@ class ObscuraLensCLI:
         print_table(rows, headers=['Service', 'Key Set', 'Status'])
 
         print_info("Keyless sources for IP: ipwhois.app, ipwho.is, freeipapi, "
-                   "ip-api.com, db-ip.com, iplocation.net, reverse DNS, RDAP")
-        print_info("Keyless sources for email: MX/A/SPF/DMARC, disposable check, "
-                   "OpenPGP, domain RDAP, Gravatar")
+                   "ip-api.com, db-ip.com, iplocation.net, Shodan InternetDB, "
+                   "reverse DNS, RDAP")
+        print_info("Keyless sources for email: MX/A/AAAA/NS/SOA/CAA/TXT, SPF, "
+                   "DMARC, DKIM, DNSSEC, disposable check, OpenPGP, domain RDAP, "
+                   "Gravatar")
+        print_info("Keyless sources for domain: RDAP, DNS, Cert Spotter "
+                   "(Certificate Transparency), HTTP headers")
         input("\nPress Enter to continue...")
 
     def set_output_format(self) -> None:
         print_subsection("Output Format")
-        print(f"  [1] Table    [2] JSON    [3] CSV")
+        print("  [1] Table    [2] JSON    [3] CSV")
         choice = input(f"{Colors.GREEN}Select: {Colors.RESET}").strip()
         fmt = {'1': 'table', '2': 'json', '3': 'csv'}.get(choice)
         if fmt:
@@ -1050,6 +1101,51 @@ class ObscuraLensCLI:
         print_success(f"Request timeout set to {value}s (applies to new runs)")
         input("\nPress Enter to continue...")
 
+    def toggle_cache(self) -> None:
+        config.app_config.cache_enabled = not config.app_config.cache_enabled
+        config.save_config()
+        state = "enabled" if config.app_config.cache_enabled else "disabled"
+        print_success(f"Response cache {state}")
+        input("\nPress Enter to continue...")
+
+    def set_rate_limit(self) -> None:
+        raw = get_input("Requests per second per host (0 disables, e.g. 8)",
+                        required=False)
+        if raw == '':
+            print_info("No change.")
+            input("\nPress Enter to continue...")
+            return
+        try:
+            value = float(raw)
+            if value < 0 or value > 100:
+                raise ValueError
+        except ValueError:
+            print_error("Enter a number between 0 and 100.")
+            input("\nPress Enter to continue...")
+            return
+        config.app_config.requests_per_second = value
+        config.save_config()
+        print_success(f"Rate limit set to {value}/s per host")
+        input("\nPress Enter to continue...")
+
+    def set_proxy(self) -> None:
+        raw = get_input("Proxy URL (e.g. http://127.0.0.1:8080, blank clears)",
+                        required=False)
+        config.app_config.proxy = raw.strip()
+        config.save_config()
+        if raw.strip():
+            print_success(f"Proxy set to {raw.strip()}")
+        else:
+            print_success("Proxy cleared")
+        input("\nPress Enter to continue...")
+
+    def clear_cache(self) -> None:
+        if not confirm_action("Delete all cached HTTP responses?"):
+            return
+        removed = cache.clear()
+        print_success(f"Removed {removed} cached responses")
+        input("\nPress Enter to continue...")
+
     def exit_program(self) -> None:
         print_info("Thank you for using ObscuraLens.")
         print_info("Stay ethical: only investigate targets you are authorised to research.")
@@ -1057,6 +1153,9 @@ class ObscuraLensCLI:
 
 
 def main() -> None:
+    if len(sys.argv) > 1:
+        from .commands import run
+        sys.exit(run(sys.argv[1:]))
     try:
         ObscuraLensCLI().run()
     except KeyboardInterrupt:

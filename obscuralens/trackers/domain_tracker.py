@@ -1,6 +1,6 @@
 """
-IP Tracker Module
-Aggregates every available data source for an IP address.
+Domain Tracker Module
+Aggregates registration, DNS, Certificate Transparency and HTTP data for a domain.
 """
 
 import concurrent.futures as futures
@@ -9,34 +9,27 @@ from typing import Any, Dict, List
 from ..config import config
 from ..core.metrics import metrics
 from ..database import db
-from ..utils.http_client import http
-from .ip_sources import gather_all
+from .domain_sources import gather_all
 
 
-class IPTracker:
-    """Enhanced IP Tracker with multi-source aggregation"""
+class DomainTracker:
+    """Domain Tracker with multi-source aggregation"""
 
     def __init__(self):
         self.timeout = config.app_config.request_timeout
-        self.headers = {'User-Agent': config.app_config.user_agent}
 
-    def _keys(self) -> Dict[str, str]:
-        return {
-            service: config.get_api_key(service) or ''
-            for service in ('shodan', 'virustotal', 'ipinfo', 'abuseipdb')
-        }
-
-    def track(self, ip: str) -> Dict[str, Any]:
+    def track(self, domain: str) -> Dict[str, Any]:
         """
-        Track an IP address across all data sources.
+        Track a domain across all data sources.
 
         Args:
-            ip: IP address to track
+            domain: Domain name to track
 
         Returns:
             Dictionary containing merged fields, per-source status and errors
         """
-        gathered = gather_all(ip, self._keys())
+        domain = domain.strip().lower()
+        gathered = gather_all(domain)
         fields = gathered['fields']
         sources = gathered['sources']
 
@@ -45,7 +38,7 @@ class IPTracker:
         metrics.record_sources(len(ok_sources), len(failed))
 
         result: Dict[str, Any] = {
-            'ip': ip,
+            'domain': domain,
             'info': fields,
             'field_sources': gathered.get('provenance', {}),
             'sources_ok': sorted(ok_sources),
@@ -61,50 +54,34 @@ class IPTracker:
         elif failed:
             result['errors'].append(f"{len(failed)} source(s) unavailable")
 
-        db.save_query('ip', ip, result, result['success'],
-                      '; '.join(result['errors']) if result['errors'] else "")
+        db.save_query('domain', domain, result, result['success'],
+                      '; '.join(result['errors']))
 
         return result
 
-    def get_own_ip(self) -> str:
-        """Get your own public IP address"""
-        response = http.get('https://api.ipify.org/')
-        response.raise_for_status()
-        return response.text.strip()
-
-    def own_info(self) -> Dict[str, Any]:
-        """Full report for the machine's own public IP."""
-        try:
-            ip = self.get_own_ip()
-        except Exception:
-            return {'success': False, 'error': 'could not determine public IP'}
-        result = self.track(ip)
-        result['is_self'] = True
-        return result
-
-    def batch_track(self, ips: List[str], workers: int = 5) -> List[Dict[str, Any]]:
+    def batch_track(self, domains: List[str], workers: int = 4) -> List[Dict[str, Any]]:
         """
-        Track multiple IP addresses concurrently.
+        Track multiple domains concurrently.
 
         Args:
-            ips: List of IP addresses
+            domains: List of domain names
             workers: Parallel worker count
 
         Returns:
             List of tracking results, in input order
         """
-        targets = [ip.strip() for ip in ips if ip.strip()]
+        targets = [d.strip() for d in domains if d.strip()]
         results: List[Dict[str, Any]] = [None] * len(targets)  # type: ignore[list-item]
 
         with futures.ThreadPoolExecutor(max_workers=workers) as ex:
-            future_map = {ex.submit(self.track, ip): i for i, ip in enumerate(targets)}
+            future_map = {ex.submit(self.track, d): i for i, d in enumerate(targets)}
             for future in futures.as_completed(future_map):
                 idx = future_map[future]
                 try:
                     results[idx] = future.result()
                 except Exception as e:
                     results[idx] = {
-                        'ip': targets[idx],
+                        'domain': targets[idx],
                         'info': {},
                         'field_sources': {},
                         'sources_ok': [],

@@ -1,14 +1,15 @@
 """
 Free email intelligence sources that work without an API key.
 
-Covers MX/A/SPF/DMARC records, disposable-mail detection, OpenPGP key presence
-and domain RDAP registration. Keyed sources (HIBP, Hunter) are layered on by
-EmailTracker when configured.
+Covers MX/A/AAAA/NS/SOA/CAA/TXT records, SPF/DMARC/DKIM/DNSSEC posture,
+disposable-mail detection, OpenPGP key presence and domain RDAP registration.
+Keyed sources (HIBP, Hunter) are layered on by EmailTracker when configured.
 """
 
-import base64
+import concurrent.futures as futures
 import hashlib
 import re
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ..utils.http_client import http
@@ -33,6 +34,10 @@ FREEMAIL_PATTERNS = (
     re.compile(r'^[a-z]{1,4}\d{3,}$', re.I),
 )
 
+# Selectors probed for DKIM public keys. Covers the common providers.
+DKIM_SELECTORS = ('default', 'google', 'selector1', 'selector2', 'k1',
+                  'mail', 'dkim')
+
 
 def _dns_query(domain: str, rtype: str) -> List[str]:
     """Query DNS-over-HTTPS and return the answer values."""
@@ -49,7 +54,7 @@ def _dns_query(domain: str, rtype: str) -> List[str]:
 
 
 def _mx_records(domain: str) -> List[str]:
-    """MX hosts sorted by priority."""
+    """MX hosts sorted by priority; '.' stands for a deliberate null MX."""
     ok, data, _ = http.get_json(
         f"https://dns.google/resolve?name={domain}&type=MX")
     if not ok or not data or data.get('Status') != 0:
@@ -64,50 +69,129 @@ def _mx_records(domain: str) -> List[str]:
                 priority = int(parts[0])
             except ValueError:
                 priority = 999
-            records.append((priority, parts[1].rstrip('.')))
+            host = parts[1].rstrip('.')
+            records.append((priority, host or '.'))
         elif raw:
-            records.append((999, raw.rstrip('.')))
+            records.append((999, raw.rstrip('.') or '.'))
     records.sort(key=lambda x: x[0])
     return [host for _prio, host in records]
 
 
+def _clean_txt(value: str) -> str:
+    """Strip the surrounding quotes DoH puts around TXT chunks."""
+    value = value.strip()
+    if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
+        value = value[1:-1]
+    return value.replace('" "', '')
+
+
 def _dns_records(domain: str) -> Dict[str, Any]:
-    """Collect MX, A, SPF and DMARC records for a domain."""
+    """Collect DNS records and mail-security posture for a domain."""
     out: Dict[str, Any] = {}
 
-    mx = _mx_records(domain)
-    if mx:
-        out['mx_records'] = mx
-        out['mx_count'] = len(mx)
+    # Run the independent DNS lookups concurrently.
+    lookups: Dict[str, Any] = {
+        'a': lambda: _dns_query(domain, 'A'),
+        'aaaa': lambda: _dns_query(domain, 'AAAA'),
+        'ns': lambda: _dns_query(domain, 'NS'),
+        'soa': lambda: _dns_query(domain, 'SOA'),
+        'caa': lambda: _dns_query(domain, 'CAA'),
+        'txt': lambda: _dns_query(domain, 'TXT'),
+        'dnskey': lambda: _dns_query(domain, 'DNSKEY'),
+        'mx': lambda: _mx_records(domain),
+    }
+    for selector in DKIM_SELECTORS:
+        lookups[f'dkim:{selector}'] = (
+            lambda s=selector: _dns_query(f"{s}._domainkey.{domain}", 'TXT'))
 
-    a_records = [v for v in _dns_query(domain, 'A') if _is_ipv4(v)]
+    results: Dict[str, Any] = {}
+    with futures.ThreadPoolExecutor(max_workers=8) as ex:
+        future_map = {ex.submit(fn): key for key, fn in lookups.items()}
+        for future in futures.as_completed(future_map):
+            key = future_map[future]
+            try:
+                results[key] = future.result() or []
+            except Exception:
+                results[key] = []
+
+    if results.get('mx'):
+        if '.' in results['mx']:
+            out['null_mx'] = True
+        usable = [host for host in results['mx'] if host and host != '.']
+        if usable:
+            out['mx_records'] = usable
+            out['mx_count'] = len(usable)
+
+    a_records = [v for v in results.get('a', []) if _is_ipv4(v)]
     if a_records:
         out['a_records'] = a_records
 
-    txt = _dns_query(domain, 'TXT')
+    aaaa = [v for v in results.get('aaaa', []) if ':' in v]
+    if aaaa:
+        out['aaaa_records'] = aaaa
+
+    ns = sorted(v.rstrip('.') for v in results.get('ns', []) if v)
+    if ns:
+        out['ns_records'] = ns
+
+    soa = results.get('soa', [])
+    if soa:
+        out['soa_record'] = soa[0]
+
+    caa = [_clean_txt(v) for v in results.get('caa', []) if v]
+    if caa:
+        out['caa_records'] = caa
+
+    txt = [_clean_txt(v) for v in results.get('txt', []) if v]
+    # Keep TXT useful: drop the SPF/DMARC entries that have dedicated fields.
+    other_txt = [v for v in txt if not v.lower().startswith(('v=spf1', 'v=dmarc1'))]
+    if other_txt:
+        out['txt_records'] = sorted(set(other_txt))[:10]
+
     spf = [v for v in txt if v.lower().startswith('v=spf1')]
     if spf:
         out['spf_record'] = spf[0]
-
-    dmarc = [v for v in _dns_query(f"_dmarc.{domain}", 'TXT')
-             if v.lower().startswith('v=dmarc1')]
-    if dmarc:
-        out['dmarc_record'] = dmarc[0]
-        if 'p=reject' in dmarc[0]:
-            out['dmarc_policy'] = 'reject'
-        elif 'p=quarantine' in dmarc[0]:
-            out['dmarc_policy'] = 'quarantine'
-        elif 'p=none' in dmarc[0]:
-            out['dmarc_policy'] = 'none'
-
-    # SPF mechanisms hint at third-party senders.
-    if out.get('spf_record'):
-        for token in ('include:', 'a:', 'mx', 'redirect='):
-            if token in out['spf_record']:
+        for token in ('include:', 'redirect=', 'a:', 'mx'):
+            if token in spf[0]:
                 out['spf_third_party'] = True
                 break
 
+    dmarc = [v for v in (_clean_txt(raw)
+                          for raw in _dns_query(f"_dmarc.{domain}", 'TXT'))
+             if v.lower().startswith('v=dmarc1')]
+    if dmarc:
+        out['dmarc_record'] = dmarc[0]
+        for policy in ('reject', 'quarantine', 'none'):
+            if f'p={policy}' in dmarc[0]:
+                out['dmarc_policy'] = policy
+                break
+
+    out['dnssec'] = bool(results.get('dnskey'))
+    found_selectors = [key.split(':', 1)[1] for key in lookups
+                       if key.startswith('dkim:')
+                       and _dkim_has_key(results.get(key, []))]
+    if found_selectors:
+        out['dkim_selectors'] = sorted(found_selectors)
+
     return out
+
+
+def _dkim_has_key(values: List[str]) -> bool:
+    """
+    True only for a DKIM record with a non-empty public key.
+
+    Domains often publish a wildcard ``*._domainkey`` with ``p=`` (revoked /
+    anti-subdomain-abuse). That is not a usable key and must not be reported
+    as one.
+    """
+    for value in values:
+        value = _clean_txt(value)
+        if 'v=dkim1' not in value.lower():
+            continue
+        match = re.search(r'\bp\s*=\s*([^;]+)', value, re.I)
+        if match and match.group(1).strip():
+            return True
+    return False
 
 
 def _is_ipv4(value: str) -> bool:
@@ -131,20 +215,29 @@ def _disposable_check(domain: str, email: str) -> Dict[str, Any]:
 
 def _openpgp(email: str) -> Dict[str, Any]:
     """Whether the address has a published OpenPGP key on keys.openpgp.org."""
-    try:
-        response = http.get(f"https://keys.openpgp.org/vks/v1/by-email/{email}")
-    except Exception:
-        return {}
+    status, text, _ = http.fetch(
+        f"https://keys.openpgp.org/vks/v1/by-email/{email}")
     # 404 from the keyserver means "no key for this address" - a real answer.
-    if response.status_code == 404:
+    if status == 404:
         return {'openpgp': False}
-    if response.status_code != 200:
+    if status != 200:
         return {}
-    text = response.text or ''
-    if 'no key found' in text.lower() or not text.strip():
+    if 'no key found' in (text or '').lower() or not (text or '').strip():
         return {'openpgp': False}
     fingerprints = re.findall(r'-----END PGP PUBLIC KEY BLOCK-----', text)
     return {'openpgp': True, 'openpgp_key_size': len(fingerprints)}
+
+
+def _parse_iso(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except (ValueError, TypeError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def _domain_rdap(domain: str) -> Dict[str, Any]:
@@ -178,6 +271,14 @@ def _domain_rdap(domain: str) -> Dict[str, Any]:
         elif action in ('last changed', 'last update'):
             out['domain_updated'] = event.get('eventDate')
 
+    now = datetime.now(timezone.utc)
+    created = _parse_iso(out.get('domain_created'))
+    if created:
+        out['domain_age_days'] = max(0, (now - created).days)
+    expires = _parse_iso(out.get('domain_expires'))
+    if expires:
+        out['expires_in_days'] = (expires - now).days
+
     for ent in data.get('entities') or []:
         roles = [str(r).lower() for r in (ent.get('roles') or [])]
         vcard = ent.get('vcardArray')
@@ -204,15 +305,13 @@ def _gravatar(email: str) -> Dict[str, Any]:
     reported as 'unknown' rather than 'no avatar'.
     """
     digest = hashlib.md5(email.strip().lower().encode('utf-8')).hexdigest()
-    try:
-        response = http.get(
-            f"https://www.gravatar.com/avatar/{digest}?d=404&s=80")
-    except Exception as e:
-        return {'gravatar': 'unknown', 'gravatar_error': type(e).__name__}
-
-    if response.status_code == 200:
+    status, _text, error = http.fetch(
+        f"https://www.gravatar.com/avatar/{digest}?d=404&s=80")
+    if error or status == 0:
+        return {'gravatar': 'unknown', 'gravatar_error': error or 'network'}
+    if status == 200:
         return {'gravatar': True}
-    if response.status_code == 404:
+    if status == 404:
         return {'gravatar': False}
     return {'gravatar': 'unknown'}
 
@@ -236,7 +335,7 @@ def _pattern_analysis(email: str, local_part: str, domain: str) -> Dict[str, Any
 def _hibp_breaches(email: str, api_key: str) -> Dict[str, Any]:
     ok, data, _ = http.get_json(
         f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
-        headers={'hibp-api-key': api_key})
+        headers={'hibp-api-key': api_key}, use_cache=False)
     if not ok:
         # 404 means "clean", which get_json reports as an HTTP error.
         return {}
@@ -268,7 +367,7 @@ def _hibp_breaches(email: str, api_key: str) -> Dict[str, Any]:
 def _hibp_pastes(email: str, api_key: str) -> Dict[str, Any]:
     ok, data, _ = http.get_json(
         f"https://haveibeenpwned.com/api/v3/pasteaccount/{email}",
-        headers={'hibp-api-key': api_key})
+        headers={'hibp-api-key': api_key}, use_cache=False)
     if not ok or not isinstance(data, list):
         return {}
     return {
@@ -287,7 +386,8 @@ def _hibp_pastes(email: str, api_key: str) -> Dict[str, Any]:
 
 def _hunter_verify(email: str, api_key: str) -> Dict[str, Any]:
     ok, data, _ = http.get_json(
-        f"https://api.hunter.io/v2/email-verifier?email={email}&api_key={api_key}")
+        f"https://api.hunter.io/v2/email-verifier?email={email}&api_key={api_key}",
+        use_cache=False)
     if not ok or not data:
         return {}
     result = data.get('data', {}) or {}
@@ -318,4 +418,16 @@ FREE_SOURCES = {
     'openpgp': _openpgp,
     'domain_rdap': _domain_rdap,
     'gravatar': _gravatar,
+}
+
+SOURCE_CATALOG = {
+    'dns': 'MX/A/AAAA/NS/SOA/CAA/TXT, SPF, DMARC, DKIM, DNSSEC (keyless)',
+    'disposable': 'Disposable-mail detection (keyless)',
+    'openpgp': 'OpenPGP key presence on keys.openpgp.org (keyless)',
+    'domain_rdap': 'Domain registration dates, registrar, abuse contact (keyless)',
+    'gravatar': 'Gravatar avatar existence (keyless)',
+    'patterns': 'Local-part heuristics (local)',
+    'haveibeenpwned': 'Breach exposure (keyed)',
+    'hibp_pastes': 'Paste exposure (keyed)',
+    'hunter': 'Deliverability verification (keyed)',
 }

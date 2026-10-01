@@ -32,7 +32,13 @@ ENV/
 *.swo
 *~
 
-# GhostTrack specific
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local data and generated artefacts
 config/secrets.yaml
 data/*.db
 reports/*
@@ -47,4 +53,5 @@ Thumbs.db
 _*.py
 _*.json
 _*.txt
+_*.ps1
 _token.txt

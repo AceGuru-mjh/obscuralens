@@ -3,25 +3,26 @@ Username Tracker Module
 
 Honest three-state detection: found / not_found / unknown.
 
-Many platforms serve an identical JavaScript shell for existing and missing
-accounts (verified empirically: Reddit, Instagram, TikTok, Medium, Spotify
-return byte-identical shells). Claiming those as "found" is a false positive,
-so a bare HTTP 200 is never enough - a hit requires positive profile evidence
-or a platform-specific signal. Bot walls (403/429/999) and network errors are
-reported as "unknown", never as a hit or a miss.
+Two classes of platform:
+  * JSON API platforms (Keybase, HackerNews, Lichess, Codeberg, DockerHub,
+    Dev.to, Chess.com) where the service itself confirms existence - these get
+    high confidence.
+  * HTML platforms where many sites serve an identical JavaScript shell for
+    existing and missing accounts. A bare HTTP 200 is never enough there: a hit
+    requires positive profile evidence or a platform-specific signal. Bot walls
+    (403/429/999) and network errors are "unknown", never a hit or a miss.
 """
 
 import re
 import time
-import requests
-from typing import Any, Dict, List, Optional, Tuple
-from dataclasses import dataclass, field, asdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import config
 from ..database import db
 from ..utils.http_client import http
-from .username_sources import extract
+from .username_sources import API_PLATFORMS, api_profile, extract
 
 
 @dataclass
@@ -75,57 +76,80 @@ EVIDENCE_FIELDS = {
     'verified',
 }
 
+# HTML platforms checked by scraping their public profile pages.
+HTML_PLATFORMS = [
+    {"name": "GitHub", "url": "https://github.com/{}"},
+    {"name": "Twitter", "url": "https://twitter.com/{}"},
+    {"name": "Instagram", "url": "https://www.instagram.com/{}/"},
+    {"name": "LinkedIn", "url": "https://www.linkedin.com/in/{}"},
+    {"name": "Facebook", "url": "https://www.facebook.com/{}"},
+    {"name": "YouTube", "url": "https://www.youtube.com/@{}"},
+    {"name": "TikTok", "url": "https://www.tiktok.com/@{}"},
+    {"name": "Snapchat", "url": "https://www.snapchat.com/add/{}"},
+    {"name": "Pinterest", "url": "https://www.pinterest.com/{}/"},
+    {"name": "Reddit", "url": "https://www.reddit.com/user/{}"},
+    {"name": "Twitch", "url": "https://www.twitch.tv/{}"},
+    {"name": "Medium", "url": "https://medium.com/@{}"},
+    {"name": "Quora", "url": "https://www.quora.com/profile/{}"},
+    {"name": "Flickr", "url": "https://www.flickr.com/people/{}"},
+    {"name": "Dribbble", "url": "https://dribbble.com/{}"},
+    {"name": "Behance", "url": "https://www.behance.net/{}"},
+    {"name": "SoundCloud", "url": "https://soundcloud.com/{}"},
+    {"name": "Spotify", "url": "https://open.spotify.com/user/{}"},
+    {"name": "Telegram", "url": "https://t.me/{}"},
+    {"name": "GitLab", "url": "https://gitlab.com/{}"},
+    {"name": "Bitbucket", "url": "https://bitbucket.org/{}"},
+    {"name": "DeviantArt", "url": "https://www.deviantart.com/{}"},
+    {"name": "Vimeo", "url": "https://vimeo.com/{}"},
+    {"name": "Tumblr", "url": "https://{}.tumblr.com"},
+    {"name": "WordPress", "url": "https://{}.wordpress.com"},
+    {"name": "Blogger", "url": "https://{}.blogspot.com"},
+]
+
+
+def _build_platforms() -> List[Dict[str, Any]]:
+    """Combine HTML and API platforms into one lookup table."""
+    platforms: List[Dict[str, Any]] = [
+        dict(platform, api=False) for platform in HTML_PLATFORMS
+    ]
+    for name, spec in API_PLATFORMS.items():
+        platforms.append({'name': name, 'url': spec['url'], 'api': True})
+    return platforms
+
 
 class UsernameTracker:
     """Username Tracker with honest three-state detection."""
 
     def __init__(self):
         self.timeout = config.app_config.request_timeout
-
-        self.platforms = [
-            {"name": "GitHub", "url": "https://github.com/{}"},
-            {"name": "Twitter", "url": "https://twitter.com/{}"},
-            {"name": "Instagram", "url": "https://www.instagram.com/{}/"},
-            {"name": "LinkedIn", "url": "https://www.linkedin.com/in/{}"},
-            {"name": "Facebook", "url": "https://www.facebook.com/{}"},
-            {"name": "YouTube", "url": "https://www.youtube.com/@{}"},
-            {"name": "TikTok", "url": "https://www.tiktok.com/@{}"},
-            {"name": "Snapchat", "url": "https://www.snapchat.com/add/{}"},
-            {"name": "Pinterest", "url": "https://www.pinterest.com/{}/"},
-            {"name": "Reddit", "url": "https://www.reddit.com/user/{}"},
-            {"name": "Twitch", "url": "https://www.twitch.tv/{}"},
-            {"name": "Medium", "url": "https://medium.com/@{}"},
-            {"name": "Quora", "url": "https://www.quora.com/profile/{}"},
-            {"name": "Flickr", "url": "https://www.flickr.com/people/{}"},
-            {"name": "Dribbble", "url": "https://dribbble.com/{}"},
-            {"name": "Behance", "url": "https://www.behance.net/{}"},
-            {"name": "SoundCloud", "url": "https://soundcloud.com/{}"},
-            {"name": "Spotify", "url": "https://open.spotify.com/user/{}"},
-            {"name": "Telegram", "url": "https://t.me/{}"},
-            {"name": "GitLab", "url": "https://gitlab.com/{}"},
-            {"name": "Bitbucket", "url": "https://bitbucket.org/{}"},
-            {"name": "DeviantArt", "url": "https://www.deviantart.com/{}"},
-            {"name": "Vimeo", "url": "https://vimeo.com/{}"},
-            {"name": "Tumblr", "url": "https://{}.tumblr.com"},
-            {"name": "WordPress", "url": "https://{}.wordpress.com"},
-            {"name": "Blogger", "url": "https://{}.blogspot.com"},
-        ]
+        self.platforms = _build_platforms()
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def track(self, username: str, deep: bool = True) -> Dict[str, Any]:
+    def track(self, username: str, deep: bool = True,
+              platforms: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Scan every platform for a username.
 
         Args:
             username: Username to track
             deep: Extract profile details on hits. False = fast sweep.
+            platforms: Optional list of platform names to restrict the scan.
 
         Returns:
             Results with found / not_found / unknown buckets.
         """
+        selected = self.platforms
+        if platforms:
+            wanted = [p.strip().lower() for p in platforms if p and p.strip()]
+            selected = [
+                p for p in self.platforms
+                if any(w == p['name'].lower() or w in p['name'].lower()
+                       for w in wanted)
+            ]
+
         result: Dict[str, Any] = {
             'username': username,
             'results': [],
@@ -135,14 +159,16 @@ class UsernameTracker:
             'total_checked': 0,
             'total_fields': 0,
             'deep': deep,
+            'platforms_checked': [p['name'] for p in selected],
             'success': True,
             'errors': [],
         }
 
-        with ThreadPoolExecutor(max_workers=12) as executor:
+        workers = min(12, max(1, config.app_config.max_workers))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
             future_map = {
                 executor.submit(self._check_platform, p, username, deep): p
-                for p in self.platforms
+                for p in selected
             }
             for future in as_completed(future_map):
                 platform = future_map[future]
@@ -175,15 +201,18 @@ class UsernameTracker:
     # Per-platform check
     # ------------------------------------------------------------------
 
-    def _check_platform(self, platform: Dict[str, str], username: str,
+    def _check_platform(self, platform: Dict[str, Any], username: str,
                         deep: bool) -> UsernameResult:
+        if platform.get('api'):
+            return self._check_api_platform(platform, username, deep)
+
         name = platform['name']
         url = platform['url'].format(username)
         started = time.time()
 
         try:
             response = http.get(url, allow_redirects=True)
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             return UsernameResult(
                 platform=name, url=url, exists=False, status='unknown',
                 confidence='low', reason='network error',
@@ -205,12 +234,66 @@ class UsernameTracker:
             profile=profile,
         )
 
+    def _check_api_platform(self, platform: Dict[str, Any], username: str,
+                            deep: bool) -> UsernameResult:
+        """Check a platform through its JSON API: high-confidence verdicts."""
+        name = platform['name']
+        profile_url = platform['url'].format(username)
+        spec = API_PLATFORMS[name]
+        api_url = spec['api_url'].format(username)
+        started = time.time()
+
+        ok, data, err = http.get_json(api_url)
+        elapsed = round(time.time() - started, 2)
+
+        if not ok:
+            if err == 'not found':
+                return UsernameResult(
+                    platform=name, url=profile_url, exists=False,
+                    status='not_found', confidence='high',
+                    reason='api returned 404 (no such account)',
+                    status_code=404, response_time=elapsed,
+                )
+            return UsernameResult(
+                platform=name, url=profile_url, exists=False,
+                status='unknown', confidence='low',
+                reason=f'api error: {err or "unknown"}',
+                status_code=0, response_time=elapsed, error=err,
+            )
+
+        try:
+            verdict = spec['verdict'](data)
+        except Exception:
+            verdict = None
+
+        if verdict is True:
+            profile = api_profile(name, data) if deep else {}
+            return UsernameResult(
+                platform=name, url=profile_url, exists=True,
+                status='found', confidence='high',
+                reason='api confirms the account exists',
+                status_code=200, response_time=elapsed, profile=profile,
+            )
+        if verdict is False:
+            return UsernameResult(
+                platform=name, url=profile_url, exists=False,
+                status='not_found', confidence='high',
+                reason='api reports no such account',
+                status_code=200, response_time=elapsed,
+            )
+        return UsernameResult(
+            platform=name, url=profile_url, exists=False,
+            status='unknown', confidence='low',
+            reason='unexpected api response',
+            status_code=200, response_time=elapsed,
+        )
+
     # ------------------------------------------------------------------
     # Verdict logic
     # ------------------------------------------------------------------
 
     def _verdict(self, platform: str, username: str,
-                 response: requests.Response) -> Tuple[str, str, str]:
+                 response: Any) -> Tuple[str, str, str]:
         """
         Decide found / not_found / unknown for one response.
 
@@ -277,22 +360,21 @@ class UsernameTracker:
     # ------------------------------------------------------------------
 
     def _rule_telegram(self, username: str, body: str, low: str,
-                       response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                       response: Any) -> Optional[Tuple[str, str, str]]:
         # Real channel/group : "Telegram: View @name" + tgme_page_extra block.
         # Missing            : "Telegram: Contact @name", no extra block.
         title = re.search(r'<title[^>]*>(.*?)</title>', body, re.I | re.S)
         title_text = (title.group(1).strip().lower() if title else '')
-        has_extra = 'tgme_page_extra' in low or 'tgme_page_title' in low
         if title_text.startswith('telegram: view @'):
             return 'found', 'high', 'channel page with member/subscriber block'
         if title_text.startswith('telegram: contact @'):
             return 'not_found', 'high', 'no such channel (contact prompt)'
-        if has_extra:
+        if 'tgme_page_extra' in low or 'tgme_page_title' in low:
             return 'found', 'medium', 'channel page structure present'
         return None
 
     def _rule_github(self, username: str, body: str, low: str,
-                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                     response: Any) -> Optional[Tuple[str, str, str]]:
         # Missing accounts 404; existing ones carry a profile avatar + vcard.
         if 'octocat' not in low and ("couldn't find" in low or 'page could not be found' in low):
             return 'not_found', 'high', 'github 404 page'
@@ -302,7 +384,7 @@ class UsernameTracker:
         return 'unknown', 'low', 'no github profile block found'
 
     def _rule_twitch(self, username: str, body: str, low: str,
-                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                     response: Any) -> Optional[Tuple[str, str, str]]:
         # Real channel : og:title "Ninja - Twitch" with channel bio.
         # Missing      : og:title exactly "Twitch" + generic homepage meta.
         from .username_sources import _meta
@@ -320,7 +402,7 @@ class UsernameTracker:
         return 'unknown', 'low', 'twitch shell ambiguous'
 
     def _rule_twitter(self, username: str, body: str, low: str,
-                      response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                      response: Any) -> Optional[Tuple[str, str, str]]:
         if 'user profile not found' in low or 'account doesn' in low:
             return 'not_found', 'high', 'x not-found page'
         evidence = self._evidence_keys(body, 'Twitter')
@@ -330,7 +412,7 @@ class UsernameTracker:
         return 'unknown', 'low', 'no profile evidence in x shell'
 
     def _rule_youtube(self, username: str, body: str, low: str,
-                      response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                      response: Any) -> Optional[Tuple[str, str, str]]:
         if '404 not found' in low[:5000]:
             return 'not_found', 'high', 'youtube 404 page'
         evidence = self._evidence_keys(body, 'YouTube')
@@ -339,7 +421,7 @@ class UsernameTracker:
         return None
 
     def _rule_gitlab(self, username: str, body: str, low: str,
-                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                     response: Any) -> Optional[Tuple[str, str, str]]:
         title = re.search(r'<title[^>]*>(.*?)</title>', body, re.I | re.S)
         title_text = (title.group(1).strip() if title else '')
         if 'gitlab' in title_text.lower() and username.lower() in title_text.lower():
@@ -347,16 +429,16 @@ class UsernameTracker:
         return None
 
     def _rule_reddit(self, username: str, body: str, low: str,
-                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                     response: Any) -> Optional[Tuple[str, str, str]]:
         # Old Reddit serves the same shell for everyone; never claim a hit.
         return 'unknown', 'low', 'reddit serves identical shell, use logged-in api'
 
     def _rule_instagram(self, username: str, body: str, low: str,
-                        response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                        response: Any) -> Optional[Tuple[str, str, str]]:
         return 'unknown', 'low', 'instagram requires login, shell is identical'
 
     def _rule_tiktok(self, username: str, body: str, low: str,
-                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                     response: Any) -> Optional[Tuple[str, str, str]]:
         evidence = self._evidence_keys(body, 'TikTok')
         # TikTok embeds the handle in every shell, so demand follower stats.
         if 'followers' in evidence or 'likes' in evidence:
@@ -364,19 +446,19 @@ class UsernameTracker:
         return 'unknown', 'low', 'tiktok shell identical without stats'
 
     def _rule_spotify(self, username: str, body: str, low: str,
-                      response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                      response: Any) -> Optional[Tuple[str, str, str]]:
         return 'unknown', 'low', 'spotify shell identical, use authenticated api'
 
     def _rule_medium(self, username: str, body: str, low: str,
-                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                     response: Any) -> Optional[Tuple[str, str, str]]:
         return 'unknown', 'low', 'medium bot-wall, cannot determine'
 
     def _rule_facebook(self, username: str, body: str, low: str,
-                       response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                       response: Any) -> Optional[Tuple[str, str, str]]:
         return 'unknown', 'low', 'facebook requires login, cannot determine'
 
     def _rule_linkedin(self, username: str, body: str, low: str,
-                       response: requests.Response) -> Optional[Tuple[str, str, str]]:
+                       response: Any) -> Optional[Tuple[str, str, str]]:
         evidence = self._evidence_keys(body, 'LinkedIn')
         if evidence:
             return 'found', 'medium', f"profile evidence: {', '.join(evidence[:4])}"
