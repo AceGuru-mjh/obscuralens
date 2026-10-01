@@ -35,7 +35,7 @@ Keyed sources (Shodan, VirusTotal, HaveIBeenPwned, Hunter.io, numverify, IPinfo,
 Requires Python 3.9+.
 
 ```powershell
-git clone https://github.com/MJH/ObscuraLens.git
+git clone <your-repository-url>   # or run from your local project folder
 cd ObscuraLens
 pip install -r requirements.txt
 python -m obscuralens
