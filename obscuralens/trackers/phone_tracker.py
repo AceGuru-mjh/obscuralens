@@ -9,7 +9,7 @@ key is configured.
 """
 
 import concurrent.futures as futures
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import phonenumbers
 from phonenumbers import carrier, geocoder, timezone

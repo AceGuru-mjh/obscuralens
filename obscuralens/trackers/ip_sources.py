@@ -2,14 +2,19 @@
 Multi-source IP intelligence aggregation.
 
 Every provider is queried independently; results are merged field-by-field so a
-single flaky source cannot blank out the whole report. All sources used here
-work without an API key. Keyed sources (Shodan, VirusTotal) layer on top.
+single flaky source cannot blank out the whole report. Sources marked keyless
+work without an API key; keyed sources (Shodan, VirusTotal, IPinfo, AbuseIPDB)
+layer on when a key is configured. ``app.disabled_sources`` can switch any
+source off.
+
+Field provenance is tracked: ``gather_all`` returns which source(s) supplied
+each value, so a report can show exactly where a fact came from.
 """
 
-import base64
 import concurrent.futures as futures
 from typing import Any, Dict, List, Optional
 
+from ..config import config
 from ..utils.http_client import http
 
 # ---------------------------------------------------------------------------
@@ -155,6 +160,20 @@ def _iplocation_net(ip: str) -> Dict[str, Any]:
     }
 
 
+def _shodan_internetdb(ip: str) -> Dict[str, Any]:
+    """Shodan InternetDB: keyless ports, CVEs, CPEs and hostnames."""
+    ok, d, _ = http.get_json(f"https://internetdb.shodan.io/{ip}")
+    if not ok or not d or d.get('detail'):
+        return {}
+    return {
+        'ports': d.get('ports'),
+        'vulns': d.get('vulns'),
+        'cpes': d.get('cpes'),
+        'hostnames': d.get('hostnames'),
+        'tags': d.get('tags'),
+    }
+
+
 def _reverse_dns(ip: str) -> Dict[str, Any]:
     """Reverse DNS (PTR) lookup via Google's DNS-over-HTTPS."""
     if '.' in ip:
@@ -274,7 +293,7 @@ def _shodan(ip: str, api_key: str) -> Dict[str, Any]:
 
 
 def _virustotal(ip: str, api_key: str) -> Dict[str, Any]:
-    ok, d, err = http.get_json(
+    ok, d, _ = http.get_json(
         f"https://www.virustotal.com/api/v3/ip_addresses/{ip}",
         headers={'x-apikey': api_key})
     if not ok or not d:
@@ -299,6 +318,51 @@ def _virustotal(ip: str, api_key: str) -> Dict[str, Any]:
     }
 
 
+def _ipinfo(ip: str, api_key: str) -> Dict[str, Any]:
+    ok, d, _ = http.get_json(f"https://ipinfo.io/{ip}/json?token={api_key}")
+    if not ok or not d or d.get('error'):
+        return {}
+    lat, lon = None, None
+    loc = d.get('loc')
+    if isinstance(loc, str) and ',' in loc:
+        lat, lon = loc.split(',', 1)
+    return {
+        'ipinfo_asn_name': (d.get('org') or '').split(' ', 1)[-1],
+        'ipinfo_hostname': d.get('hostname'),
+        'ipinfo_privacy': d.get('privacy'),
+        'postal': d.get('postal'),
+        'timezone': d.get('timezone'),
+        'city': d.get('city'),
+        'region': d.get('region'),
+        'country': d.get('country'),
+        'latitude': lat,
+        'longitude': lon,
+    }
+
+
+def _abuseipdb(ip: str, api_key: str) -> Dict[str, Any]:
+    ok, d, _ = http.get_json(
+        'https://api.abuseipdb.com/api/v2/check',
+        params={'ipAddress': ip, 'maxAgeInDays': 90},
+        headers={'Key': api_key, 'Accept': 'application/json'})
+    if not ok or not d:
+        return {}
+    data = d.get('data', {}) or {}
+    return {
+        'abuse_confidence': data.get('abuseConfidenceScore'),
+        'abuse_total_reports': data.get('totalReports'),
+        'abuse_last_reported': data.get('lastReportedAt'),
+        'abuse_usage_type': data.get('usageType'),
+        'abuse_domain': data.get('domain'),
+        'abuse_country': data.get('countryCode'),
+        'usage_type': data.get('usageType'),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
 FREE_SOURCES: Dict[str, Any] = {
     'ipwhois.app': _ipwhois_app,
     'ipwho.is': _ipwho_is,
@@ -306,59 +370,105 @@ FREE_SOURCES: Dict[str, Any] = {
     'ip-api.com': _ip_api,
     'db-ip.com': _db_ip,
     'iplocation.net': _iplocation_net,
+    'internetdb': _shodan_internetdb,
     'reverse_dns': _reverse_dns,
     'rdap': _rdap_registration,
 }
 
+KEYED_SOURCES: Dict[str, Any] = {
+    'shodan': _shodan,
+    'virustotal': _virustotal,
+    'ipinfo': _ipinfo,
+    'abuseipdb': _abuseipdb,
+}
 
-def gather_all(ip: str, shodan_key: str = '', vt_key: str = '') -> Dict[str, Any]:
+# Human-readable metadata used by `obscuralens sources` and the README.
+SOURCE_CATALOG = {
+    'ipwhois.app': 'Geolocation, ASN, ISP (keyless)',
+    'ipwho.is': 'Geolocation, ASN, timezone, flag (keyless)',
+    'freeipapi': 'Geolocation, ASN, currencies, proxy flag (keyless)',
+    'ip-api.com': 'Geolocation, ASN, ISP (keyless)',
+    'db-ip.com': 'Geolocation (keyless)',
+    'iplocation.net': 'Geolocation, ISP (keyless)',
+    'internetdb': 'Shodan InternetDB: open ports, CVEs, CPEs, hostnames (keyless)',
+    'reverse_dns': 'PTR record via DNS-over-HTTPS (keyless)',
+    'rdap': 'Registry registration and abuse contact (keyless)',
+    'shodan': 'Full Shodan host data (keyed)',
+    'virustotal': 'Reputation and detections (keyed)',
+    'ipinfo': 'Hostname, org, privacy hints (keyed)',
+    'abuseipdb': 'Abuse reports and confidence score (keyed)',
+}
+
+
+def _keep(value: Any) -> bool:
+    # Explicit False is a real answer (is_eu=False, is_proxy=False).
+    return value is not None and value != '' and value != [] and value != {}
+
+
+def gather_all(ip: str, keys: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """
     Query every applicable source in parallel and merge the results.
 
+    Args:
+        ip: target address
+        keys: optional {service: api_key} map for keyed sources
+
     Returns:
-        {'fields': merged_fields, 'sources': {name: {'ok':bool,'error':str}}}
+        {
+          'fields': merged_field_dict,
+          'sources': {name: {'ok': bool, 'error': str}},
+          'provenance': {field: [source, ...]},
+        }
     """
-    tasks = dict(FREE_SOURCES)
-    if shodan_key:
-        tasks['shodan'] = lambda: _shodan(ip, shodan_key)
-    if vt_key:
-        tasks['virustotal'] = lambda: _virustotal(ip, vt_key)
+    keys = keys or {}
+    tasks: Dict[str, Any] = {}
+
+    for name, fn in FREE_SOURCES.items():
+        if config.is_source_enabled(name):
+            tasks[name] = (lambda f=fn: f(ip))
+
+    key_map = {
+        'shodan': ('shodan', lambda k: _shodan(ip, k)),
+        'virustotal': ('virustotal', lambda k: _virustotal(ip, k)),
+        'ipinfo': ('ipinfo', lambda k: _ipinfo(ip, k)),
+        'abuseipdb': ('abuseipdb', lambda k: _abuseipdb(ip, k)),
+    }
+    for service, (source_name, factory) in key_map.items():
+        key = keys.get(service)
+        if key and config.is_source_enabled(source_name):
+            tasks[source_name] = (lambda f=factory, k=key: f(k))
 
     results: Dict[str, Dict[str, Any]] = {}
     status: Dict[str, Dict[str, Any]] = {}
 
-    with futures.ThreadPoolExecutor(max_workers=len(tasks)) as ex:
-        future_map = {
-            ex.submit(fn, ip): name for name, fn in tasks.items()
-        }
-        for future in futures.as_completed(future_map):
-            name = future_map[future]
-            try:
-                data = future.result() or {}
-                results[name] = data
-                status[name] = {'ok': bool(data), 'error': '' if data else 'no data'}
-            except Exception as e:  # a broken source must not kill the scan
-                results[name] = {}
-                status[name] = {'ok': False, 'error': type(e).__name__}
+    if tasks:
+        with futures.ThreadPoolExecutor(max_workers=min(len(tasks), 12)) as ex:
+            future_map = {ex.submit(fn): name for name, fn in tasks.items()}
+            for future in futures.as_completed(future_map):
+                name = future_map[future]
+                try:
+                    data = future.result() or {}
+                    results[name] = data
+                    status[name] = {'ok': bool(data), 'error': '' if data else 'no data'}
+                except Exception as e:  # a broken source must not kill the scan
+                    results[name] = {}
+                    status[name] = {'ok': False, 'error': type(e).__name__}
 
     merged: Dict[str, Any] = {}
-
-    def _keep(value: Any) -> bool:
-        # Explicit False is a real answer (is_eu=False, is_proxy=False).
-        return value is not None and value != '' and value != [] and value != {}
+    provenance: Dict[str, List[str]] = {}
 
     # Source order sets priority for conflicting values; earlier wins.
-    for name, data in results.items():
-        for key, value in data.items():
+    for name in tasks:
+        for key, value in (results.get(name) or {}).items():
             if not _keep(value):
                 continue
+            provenance.setdefault(key, []).append(name)
             merged.setdefault(key, value)
 
     # Free sources disagree on coordinates quite often; keep them all so the
     # caller can show the spread instead of silently picking one.
     coords = []
-    for name in ('ipwhois.app', 'ipwho.is', 'freeipapi', 'ip-api.com'):
-        data = results.get(name) or {}
+    for name, data in results.items():
         if data.get('latitude') and data.get('longitude'):
             coords.append({
                 'source': name,
@@ -368,9 +478,8 @@ def gather_all(ip: str, shodan_key: str = '', vt_key: str = '') -> Dict[str, Any
     if coords:
         merged['coordinates_by_source'] = coords
 
-    cities = [results[n].get('city') for n in FREE_SOURCES
-              if results.get(n, {}).get('city')]
+    cities = [data.get('city') for data in results.values() if data.get('city')]
     if len(set(cities)) > 1:
         merged['city_disagreement'] = sorted(set(cities))
 
-    return {'fields': merged, 'sources': status}
+    return {'fields': merged, 'sources': status, 'provenance': provenance}

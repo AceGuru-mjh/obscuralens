@@ -8,7 +8,24 @@ layout change degrades to "no data" instead of raising.
 
 import json
 import re
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+
+
+def _epoch_date(value: Any) -> Optional[str]:
+    """Convert an epoch (seconds or milliseconds) to an ISO date string."""
+    if value is None:
+        return None
+    try:
+        stamp = float(value)
+    except (TypeError, ValueError):
+        return None
+    if stamp > 1e12:  # milliseconds
+        stamp /= 1000.0
+    try:
+        return datetime.fromtimestamp(stamp, tz=timezone.utc).strftime('%Y-%m-%d')
+    except (OverflowError, OSError, ValueError):
+        return None
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -409,4 +426,223 @@ def extract(platform: str, html: str) -> Dict[str, Any]:
     except Exception:
         return {}
     return {k: v for k, v in data.items()
+            if v is not None and v != '' and v != [] and v != {}}
+
+
+# ---------------------------------------------------------------------------
+# JSON API platforms
+#
+# These return structured data, so existence can be decided with high
+# confidence instead of guessing from an HTML shell. Each entry provides:
+#   api_url  - request URL template
+#   url      - human-facing profile URL template
+#   verdict  - callable(data) -> True (exists) / False (missing) / None (unknown)
+#   extract  - callable(data) -> profile dict
+# ---------------------------------------------------------------------------
+
+def _keybase_verdict(data: Dict[str, Any]) -> Optional[bool]:
+    status = data.get('status') or {}
+    code = status.get('code')
+    if code == 205 or status.get('name') == 'NOT_FOUND':
+        return False
+    if code == 0 and data.get('them'):
+        return True
+    return None
+
+
+def _keybase_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    them = data.get('them') or []
+    if not them:
+        return {}
+    user = them[0] or {}
+    basics = user.get('basics') or {}
+    profile = user.get('profile') or {}
+    return {
+        'name': basics.get('username_cased') or basics.get('username'),
+        'full_name': profile.get('full_name'),
+        'bio': profile.get('bio'),
+        'location': profile.get('location'),
+        'created': _epoch_date(basics.get('ctime')),
+        'links': [profile['website']] if profile.get('website') else None,
+    }
+
+
+def _hn_verdict(data: Any) -> Optional[bool]:
+    if data is None:
+        return False
+    if isinstance(data, dict):
+        return bool(data.get('id'))
+    return None
+
+
+def _hn_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'name': data.get('id'),
+        'bio': data.get('about'),
+        'karma': data.get('karma'),
+        'created': _epoch_date(data.get('created')),
+        'posts': len(data.get('submitted') or []) or None,
+    }
+
+
+def _lichess_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    profile = data.get('profile') if isinstance(data.get('profile'), dict) else {}
+    count = data.get('count') if isinstance(data.get('count'), dict) else {}
+    perfs = data.get('perfs') if isinstance(data.get('perfs'), dict) else {}
+    best_name, best_rating = None, None
+    for game, perf in perfs.items():
+        if not isinstance(perf, dict):
+            continue
+        rating = perf.get('rating')
+        if rating and (best_rating is None or rating > best_rating):
+            best_name, best_rating = game, rating
+
+    # playTime is seconds in most responses but an object in some.
+    play_time = data.get('playTime')
+    if isinstance(play_time, dict):
+        play_time = play_time.get('total')
+    hours = round(play_time / 3600, 1) if isinstance(
+        play_time, (int, float)) and play_time else None
+
+    return {
+        'name': data.get('username') or data.get('id'),
+        'bio': profile.get('bio'),
+        'country': profile.get('country'),
+        'title': data.get('title'),
+        'joined': _epoch_date(data.get('createdAt')),
+        'patron': data.get('patron'),
+        'games_total': count.get('all'),
+        'wins': count.get('win'),
+        'losses': count.get('loss'),
+        'draws': count.get('draw'),
+        'best_rating': f"{best_name} {best_rating}" if best_name else None,
+        'play_time_hours': hours,
+        'links': profile.get('links') or None,
+    }
+
+
+def _codeberg_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'name': data.get('full_name') or data.get('login'),
+        'username': data.get('login'),
+        'bio': data.get('description'),
+        'location': data.get('location'),
+        'avatar': data.get('avatar_url'),
+        'joined': (data.get('created') or '')[:10] or None,
+        'followers': data.get('followers_count'),
+        'following': data.get('following_count'),
+        'starred_repos': data.get('starred_repos_count'),
+        'links': [data['website']] if data.get('website') else None,
+    }
+
+
+def _dockerhub_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'name': data.get('full_name') or data.get('orgname'),
+        'username': data.get('orgname') or data.get('username'),
+        'location': data.get('location'),
+        'company': data.get('company'),
+        'joined': (data.get('date_joined') or '')[:10] or None,
+        'avatar': data.get('gravatar_url'),
+        'links': [data['profile_url']] if data.get('profile_url') else None,
+    }
+
+
+def _devto_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'name': data.get('name'),
+        'username': data.get('username'),
+        'bio': data.get('summary'),
+        'location': data.get('location'),
+        'joined': data.get('joined_at'),
+        'twitter': data.get('twitter_username'),
+        'github': data.get('github_username'),
+        'links': [data['website_url']] if data.get('website_url') else None,
+        'avatar': data.get('profile_image'),
+    }
+
+
+def _chesscom_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    country = data.get('country') or ''
+    links = [link for link in (data.get('url'), data.get('twitch_url')) if link]
+    return {
+        'name': data.get('name') or data.get('username'),
+        'username': data.get('username'),
+        'title': data.get('title'),
+        'bio': data.get('status'),
+        'location': data.get('location'),
+        'country': country.rsplit('/', 1)[-1] or None,
+        'followers': data.get('followers'),
+        'joined': _epoch_date(data.get('joined')),
+        'last_online': _epoch_date(data.get('last_online')),
+        'is_streamer': data.get('is_streamer'),
+        'verified': data.get('verified'),
+        'avatar': data.get('avatar'),
+        'links': links or None,
+    }
+
+
+def _api_verdict(data: Any) -> Optional[bool]:
+    """Default: a valid JSON object from an endpoint that 404s for missing users."""
+    if isinstance(data, dict):
+        return True if data else None
+    return None
+
+
+API_PLATFORMS: Dict[str, Dict[str, Any]] = {
+    'Keybase': {
+        'api_url': 'https://keybase.io/_/api/1.0/user/lookup.json?username={}',
+        'url': 'https://keybase.io/{}',
+        'verdict': _keybase_verdict,
+        'extract': _keybase_profile,
+    },
+    'HackerNews': {
+        'api_url': 'https://hacker-news.firebaseio.com/v0/user/{}.json',
+        'url': 'https://news.ycombinator.com/user?id={}',
+        'verdict': _hn_verdict,
+        'extract': _hn_profile,
+    },
+    'Lichess': {
+        'api_url': 'https://lichess.org/api/user/{}',
+        'url': 'https://lichess.org/@/{}',
+        'verdict': _api_verdict,
+        'extract': _lichess_profile,
+    },
+    'Codeberg': {
+        'api_url': 'https://codeberg.org/api/v1/users/{}',
+        'url': 'https://codeberg.org/{}',
+        'verdict': _api_verdict,
+        'extract': _codeberg_profile,
+    },
+    'DockerHub': {
+        'api_url': 'https://hub.docker.com/v2/users/{}/',
+        'url': 'https://hub.docker.com/u/{}',
+        'verdict': _api_verdict,
+        'extract': _dockerhub_profile,
+    },
+    'Dev.to': {
+        'api_url': 'https://dev.to/api/users/by_username?url={}',
+        'url': 'https://dev.to/{}',
+        'verdict': _api_verdict,
+        'extract': _devto_profile,
+    },
+    'Chess.com': {
+        'api_url': 'https://api.chess.com/pub/player/{}',
+        'url': 'https://www.chess.com/member/{}',
+        'verdict': _api_verdict,
+        'extract': _chesscom_profile,
+    },
+}
+
+
+def api_profile(platform: str, data: Any) -> Dict[str, Any]:
+    """Extract profile facts from an API payload, never raising."""
+    spec = API_PLATFORMS.get(platform)
+    if spec is None or not isinstance(data, dict):
+        return {}
+    try:
+        profile = spec['extract'](data) or {}
+    except Exception:
+        return {}
+    return {k: v for k, v in profile.items()
             if v is not None and v != '' and v != [] and v != {}}
