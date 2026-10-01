@@ -46,9 +46,9 @@ dev = [
 [project.scripts]
 obscuralens = "obscuralens.cli:main"
 
-# [project.urls]
-# Homepage = "https://github.com/<your-username>/ObscuraLens"
-# Repository = "https://github.com/<your-username>/ObscuraLens"
+[project.urls]
+Homepage = "https://github.com/AceGuru-mjh/obscuralens"
+Repository = "https://github.com/AceGuru-mjh/obscuralens"
 
 [tool.setuptools.packages.find]
 include = ["obscuralens*"]
@@ -63,7 +63,7 @@ markers = [
 [tool.ruff]
 line-length = 110
 target-version = "py39"
-extend-exclude = ["GhostTR.py", "_*.py"]
+extend-exclude = ["_*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

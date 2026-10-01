@@ -61,13 +61,9 @@
 
 ## 1.0.0
 
-- Rebrand of GhostTrack v2.2 into a multi-module package.
+- Initial packaged, multi-module release.
 - Multi-source IP aggregation (8 keyless sources + RDAP + PTR), email tracker
   (MX/A/SPF/DMARC, disposable, OpenPGP, domain RDAP, Gravatar, pattern
   analysis), phone metadata, honest three-state username detection.
 - Concurrent batch lookups, HTML/JSON/Markdown/CSV/PDF reports, charts,
   SQLite history with search and statistics, 4-layer configuration.
-
-## 2.2 and earlier (GhostTrack)
-
-- Single-file script with basic IP/phone/username lookup.

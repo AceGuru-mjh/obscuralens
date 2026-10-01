@@ -4,8 +4,6 @@
 
 Multi-source OSINT console for IP addresses, phone numbers, usernames, email addresses and domains. Every lookup fans out to all available data sources in parallel, merges the fields, tracks **which source supplied each fact**, and tells you exactly what answered — no silent single-source lookups, no false-positive "hits".
 
-> **Origin:** rebranded and rewritten from `HunxByts/GhostTrack` v2.2 (a 315-line single-file script, preserved at `GhostTR.py` for reference). Credits to the original author.
-
 ## What's new in v2.0
 
 - **Non-interactive CLI** — `obscuralens ip 8.8.8.8 --format json` for scripting and pipelines; the interactive menu still opens when you run `obscuralens` with no arguments.
@@ -35,8 +33,8 @@ Keyed sources (Shodan, VirusTotal, HaveIBeenPwned, Hunter.io, numverify, IPinfo,
 Requires Python 3.9+.
 
 ```powershell
-git clone <your-repository-url>   # or run from your local project folder
-cd ObscuraLens
+git clone https://github.com/AceGuru-mjh/obscuralens.git
+cd obscuralens
 pip install -r requirements.txt
 python -m obscuralens
 ```
@@ -152,7 +150,6 @@ ObscuraLens/
 ├── tests/                   # pytest unit suite (mocked network)
 ├── reports/                 # generated reports and charts
 ├── data/                    # sqlite database + HTTP cache
-├── GhostTR.py               # legacy v2.2 single-file script (reference only)
 └── test_core.py             # live integration suite
 ```
 
@@ -165,5 +162,4 @@ For educational and authorised research only. Only investigate targets you are p
 See [CHANGELOG.md](CHANGELOG.md). Highlights:
 
 - **v2.0.0** — non-interactive CLI, Domain tracker, field provenance, response cache/rate limiting/proxy, new sources (InternetDB, IPinfo, AbuseIPDB, API username platforms), DNS/DKIM/DNSSEC posture, pytest suite + CI, interactive rendering fixes.
-- **v1.0.0** — Rebrand from GhostTrack. Multi-source IP aggregation, enriched email tracker, honest 3-state username detection, batch lookups, 5-format reports, charts, history, 4-layer config.
-- **v2.2 and earlier** (as GhostTrack) — single-file script with basic IP/phone/username lookup.
+- **v1.0.0** — Initial packaged release. Multi-source IP aggregation, enriched email tracker, honest 3-state username detection, batch lookups, 5-format reports, charts, history, 4-layer config.
