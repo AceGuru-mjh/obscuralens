@@ -1,0 +1,24 @@
+# ObscuraLens configuration (non-sensitive settings)
+# API keys go in secrets.yaml or OBSCURALENS_* environment variables.
+
+api: {}
+
+database:
+  db_type: sqlite
+  sqlite_path: data/obscuralens.db
+  db_host: localhost
+  db_port: 5432
+  db_name: obscuralens
+  db_user: ''
+  db_password: ''
+
+app:
+  debug: false
+  log_level: INFO
+  output_format: table
+  save_history: true
+  max_history_entries: 1000
+  request_timeout: 30
+  user_agent: ObscuraLens/1.0
+  deep_username_scan: true
+  parallel_sources: true

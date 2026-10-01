@@ -1,0 +1,383 @@
+"""
+Username Tracker Module
+
+Honest three-state detection: found / not_found / unknown.
+
+Many platforms serve an identical JavaScript shell for existing and missing
+accounts (verified empirically: Reddit, Instagram, TikTok, Medium, Spotify
+return byte-identical shells). Claiming those as "found" is a false positive,
+so a bare HTTP 200 is never enough - a hit requires positive profile evidence
+or a platform-specific signal. Bot walls (403/429/999) and network errors are
+reported as "unknown", never as a hit or a miss.
+"""
+
+import re
+import time
+import requests
+from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass, field, asdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from ..config import config
+from ..database import db
+from ..utils.http_client import http
+from .username_sources import extract
+
+
+@dataclass
+class UsernameResult:
+    """Username check result for one platform."""
+    platform: str = ""
+    url: str = ""
+    exists: bool = False          # True only on a confident hit
+    status: str = "unknown"       # found | not_found | unknown
+    confidence: str = "low"       # high | medium | low
+    reason: str = ""              # why this verdict was reached
+    status_code: int = 0
+    response_time: float = 0.0
+    profile: dict = field(default_factory=dict)
+    error: str = ""
+
+
+# Platforms where a plain 200-vs-404 status split was verified empirically.
+STATUS_RELIABLE = {
+    'Dribbble', 'Flickr', 'Snapchat', 'SoundCloud',
+    'Twitter', 'Vimeo', 'YouTube',
+}
+
+# Generic "this account does not exist" markers, matched case-insensitively.
+NOT_FOUND_MARKERS = (
+    "user profile not found",
+    "this account doesn't exist",
+    "this account does not exist",
+    "account doesn't exist",
+    "couldn't find this account",
+    "could not find this account",
+    "page not found",
+    "content isn't available",
+    "sorry, this page isn't available",
+    "nobody on reddit",
+    "user not found",
+    "profile not found",
+    "the page you were looking",
+    "does not exist",
+)
+
+# Bot-wall / rate-limit statuses: the response says nothing about the account.
+BLOCKED_STATUSES = {400, 401, 403, 429, 999}
+
+# Fields that count as positive profile evidence (a generic <title> alone
+# does not, because JS shells all carry one).
+EVIDENCE_FIELDS = {
+    'bio', 'followers', 'following', 'subscribers', 'likes', 'videos',
+    'shots', 'photos', 'projects', 'posts', 'connections', 'karma',
+    'avatar', 'location', 'company', 'links', 'joined', 'created',
+    'verified',
+}
+
+
+class UsernameTracker:
+    """Username Tracker with honest three-state detection."""
+
+    def __init__(self):
+        self.timeout = config.app_config.request_timeout
+
+        self.platforms = [
+            {"name": "GitHub", "url": "https://github.com/{}"},
+            {"name": "Twitter", "url": "https://twitter.com/{}"},
+            {"name": "Instagram", "url": "https://www.instagram.com/{}/"},
+            {"name": "LinkedIn", "url": "https://www.linkedin.com/in/{}"},
+            {"name": "Facebook", "url": "https://www.facebook.com/{}"},
+            {"name": "YouTube", "url": "https://www.youtube.com/@{}"},
+            {"name": "TikTok", "url": "https://www.tiktok.com/@{}"},
+            {"name": "Snapchat", "url": "https://www.snapchat.com/add/{}"},
+            {"name": "Pinterest", "url": "https://www.pinterest.com/{}/"},
+            {"name": "Reddit", "url": "https://www.reddit.com/user/{}"},
+            {"name": "Twitch", "url": "https://www.twitch.tv/{}"},
+            {"name": "Medium", "url": "https://medium.com/@{}"},
+            {"name": "Quora", "url": "https://www.quora.com/profile/{}"},
+            {"name": "Flickr", "url": "https://www.flickr.com/people/{}"},
+            {"name": "Dribbble", "url": "https://dribbble.com/{}"},
+            {"name": "Behance", "url": "https://www.behance.net/{}"},
+            {"name": "SoundCloud", "url": "https://soundcloud.com/{}"},
+            {"name": "Spotify", "url": "https://open.spotify.com/user/{}"},
+            {"name": "Telegram", "url": "https://t.me/{}"},
+            {"name": "GitLab", "url": "https://gitlab.com/{}"},
+            {"name": "Bitbucket", "url": "https://bitbucket.org/{}"},
+            {"name": "DeviantArt", "url": "https://www.deviantart.com/{}"},
+            {"name": "Vimeo", "url": "https://vimeo.com/{}"},
+            {"name": "Tumblr", "url": "https://{}.tumblr.com"},
+            {"name": "WordPress", "url": "https://{}.wordpress.com"},
+            {"name": "Blogger", "url": "https://{}.blogspot.com"},
+        ]
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def track(self, username: str, deep: bool = True) -> Dict[str, Any]:
+        """
+        Scan every platform for a username.
+
+        Args:
+            username: Username to track
+            deep: Extract profile details on hits. False = fast sweep.
+
+        Returns:
+            Results with found / not_found / unknown buckets.
+        """
+        result: Dict[str, Any] = {
+            'username': username,
+            'results': [],
+            'found_count': 0,
+            'not_found_count': 0,
+            'unknown_count': 0,
+            'total_checked': 0,
+            'total_fields': 0,
+            'deep': deep,
+            'success': True,
+            'errors': [],
+        }
+
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            future_map = {
+                executor.submit(self._check_platform, p, username, deep): p
+                for p in self.platforms
+            }
+            for future in as_completed(future_map):
+                platform = future_map[future]
+                try:
+                    check = future.result()
+                    result['results'].append(asdict(check))
+                    result['total_checked'] += 1
+                    result['total_fields'] += len(check.profile)
+                    if check.status == 'found':
+                        result['found_count'] += 1
+                    elif check.status == 'not_found':
+                        result['not_found_count'] += 1
+                    else:
+                        result['unknown_count'] += 1
+                except Exception as e:
+                    result['errors'].append(f"{platform['name']}: {type(e).__name__}")
+                    result['unknown_count'] += 1
+
+        result['results'].sort(key=lambda x: x['platform'])
+
+        db.save_query('username', username, result, result['success'],
+                      '; '.join(result['errors']) if result['errors'] else "")
+        return result
+
+    def batch_track(self, usernames: list, deep: bool = True) -> list:
+        """Scan multiple usernames (sequentially; each scan is parallel)."""
+        return [self.track(u.strip(), deep=deep) for u in usernames if u.strip()]
+
+    # ------------------------------------------------------------------
+    # Per-platform check
+    # ------------------------------------------------------------------
+
+    def _check_platform(self, platform: Dict[str, str], username: str,
+                        deep: bool) -> UsernameResult:
+        name = platform['name']
+        url = platform['url'].format(username)
+        started = time.time()
+
+        try:
+            response = http.get(url, allow_redirects=True)
+        except requests.exceptions.RequestException as e:
+            return UsernameResult(
+                platform=name, url=url, exists=False, status='unknown',
+                confidence='low', reason='network error',
+                status_code=0, response_time=round(time.time() - started, 2),
+                error=type(e).__name__,
+            )
+
+        elapsed = round(time.time() - started, 2)
+        status, confidence, reason = self._verdict(name, username, response)
+
+        profile: Dict[str, Any] = {}
+        if status == 'found' and deep and response.text:
+            profile = extract(name, response.text)
+
+        return UsernameResult(
+            platform=name, url=url, exists=(status == 'found'),
+            status=status, confidence=confidence, reason=reason,
+            status_code=response.status_code, response_time=elapsed,
+            profile=profile,
+        )
+
+    # ------------------------------------------------------------------
+    # Verdict logic
+    # ------------------------------------------------------------------
+
+    def _verdict(self, platform: str, username: str,
+                 response: requests.Response) -> Tuple[str, str, str]:
+        """
+        Decide found / not_found / unknown for one response.
+
+        Returns (status, confidence, reason).
+        """
+        code = response.status_code
+        body = response.text or ""
+        low = body.lower()
+
+        # Network-level blocks say nothing about the account.
+        if code in BLOCKED_STATUSES:
+            return 'unknown', 'low', f'http {code} bot-wall, cannot determine'
+
+        # Cloudflare / captcha interstitials.
+        if code == 403 or 'just a moment' in low[:3000] and 'cloudflare' in low[:6000]:
+            if 'cf-chl' in low or 'challenge-platform' in low:
+                return 'unknown', 'low', 'captcha wall, cannot determine'
+
+        # Explicit not-found pages.
+        if code == 404:
+            return 'not_found', 'high', 'http 404'
+
+        if code in (301, 302, 303, 307, 308):
+            final = (response.url or '').lower()
+            if any(t in final for t in ('login', 'signup', 'signin', 'register',
+                                        'error', '404', 'not-found')):
+                return 'not_found', 'medium', 'redirected to login/error page'
+            return 'unknown', 'low', 'redirect, ambiguous'
+
+        if code != 200:
+            return 'unknown', 'low', f'http {code}, ambiguous'
+
+        # --- HTTP 200 from here on --------------------------------------
+        if self._has_not_found_marker(low):
+            return 'not_found', 'high', 'not-found marker in page'
+
+        handler = getattr(self, f"_rule_{platform.lower()}", None)
+        if handler is not None:
+            verdict = handler(username, body, low, response)
+            if verdict is not None:
+                return verdict
+
+        # Generic rule: a 200 needs positive profile evidence, otherwise the
+        # page is indistinguishable from a JS shell.
+        evidence = self._evidence_keys(body, platform)
+        if evidence:
+            return 'found', 'medium', f"profile evidence: {', '.join(evidence[:4])}"
+        return 'unknown', 'low', 'http 200 but no profile evidence (JS shell?)'
+
+    @staticmethod
+    def _has_not_found_marker(low: str) -> bool:
+        return any(m in low for m in NOT_FOUND_MARKERS)
+
+    def _evidence_keys(self, body: str, platform: str) -> List[str]:
+        """Profile fields the extractor found, restricted to real evidence."""
+        try:
+            data = extract(platform, body)
+        except Exception:
+            return []
+        return [k for k in data.keys() if k in EVIDENCE_FIELDS and data[k]]
+
+    # ------------------------------------------------------------------
+    # Platform-specific rules (return None to fall through to generic rule)
+    # ------------------------------------------------------------------
+
+    def _rule_telegram(self, username: str, body: str, low: str,
+                       response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        # Real channel/group : "Telegram: View @name" + tgme_page_extra block.
+        # Missing            : "Telegram: Contact @name", no extra block.
+        title = re.search(r'<title[^>]*>(.*?)</title>', body, re.I | re.S)
+        title_text = (title.group(1).strip().lower() if title else '')
+        has_extra = 'tgme_page_extra' in low or 'tgme_page_title' in low
+        if title_text.startswith('telegram: view @'):
+            return 'found', 'high', 'channel page with member/subscriber block'
+        if title_text.startswith('telegram: contact @'):
+            return 'not_found', 'high', 'no such channel (contact prompt)'
+        if has_extra:
+            return 'found', 'medium', 'channel page structure present'
+        return None
+
+    def _rule_github(self, username: str, body: str, low: str,
+                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        # Missing accounts 404; existing ones carry a profile avatar + vcard.
+        if 'octocat' not in low and ("couldn't find" in low or 'page could not be found' in low):
+            return 'not_found', 'high', 'github 404 page'
+        evidence = self._evidence_keys(body, 'GitHub')
+        if evidence:
+            return 'found', 'high', f"profile evidence: {', '.join(evidence[:4])}"
+        return 'unknown', 'low', 'no github profile block found'
+
+    def _rule_twitch(self, username: str, body: str, low: str,
+                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        # Real channel : og:title "Ninja - Twitch" with channel bio.
+        # Missing      : og:title exactly "Twitch" + generic homepage meta.
+        from .username_sources import _meta
+        title = (_meta(body, 'title') or '').strip()
+        if title.lower() == 'twitch':
+            return 'not_found', 'high', 'twitch homepage shell, no such channel'
+        if username.lower() in title.lower() and 'twitch' in title.lower():
+            return 'found', 'high', f'channel title: {title[:60]}'
+        evidence = self._evidence_keys(body, 'Twitch')
+        # Generic homepage meta (name=Twitch + stock bio) is not evidence.
+        evidence = [e for e in evidence
+                    if not (e == 'bio' and 'leading video platform' in low)]
+        if evidence or (username.lower() in low and 'follower' in low):
+            return 'found', 'medium', f"channel evidence: {', '.join(evidence[:4])}"
+        return 'unknown', 'low', 'twitch shell ambiguous'
+
+    def _rule_twitter(self, username: str, body: str, low: str,
+                      response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        if 'user profile not found' in low or 'account doesn' in low:
+            return 'not_found', 'high', 'x not-found page'
+        evidence = self._evidence_keys(body, 'Twitter')
+        if evidence:
+            return 'found', 'medium', f"profile evidence: {', '.join(evidence[:4])}"
+        # X serves the same shell for suspended/missing accounts.
+        return 'unknown', 'low', 'no profile evidence in x shell'
+
+    def _rule_youtube(self, username: str, body: str, low: str,
+                      response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        if '404 not found' in low[:5000]:
+            return 'not_found', 'high', 'youtube 404 page'
+        evidence = self._evidence_keys(body, 'YouTube')
+        if evidence:
+            return 'found', 'medium', f"channel evidence: {', '.join(evidence[:4])}"
+        return None
+
+    def _rule_gitlab(self, username: str, body: str, low: str,
+                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        title = re.search(r'<title[^>]*>(.*?)</title>', body, re.I | re.S)
+        title_text = (title.group(1).strip() if title else '')
+        if 'gitlab' in title_text.lower() and username.lower() in title_text.lower():
+            return 'found', 'medium', 'gitlab user page title'
+        return None
+
+    def _rule_reddit(self, username: str, body: str, low: str,
+                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        # Old Reddit serves the same shell for everyone; never claim a hit.
+        return 'unknown', 'low', 'reddit serves identical shell, use logged-in api'
+
+    def _rule_instagram(self, username: str, body: str, low: str,
+                        response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        return 'unknown', 'low', 'instagram requires login, shell is identical'
+
+    def _rule_tiktok(self, username: str, body: str, low: str,
+                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        evidence = self._evidence_keys(body, 'TikTok')
+        # TikTok embeds the handle in every shell, so demand follower stats.
+        if 'followers' in evidence or 'likes' in evidence:
+            return 'found', 'medium', f"tiktok stats: {', '.join(evidence[:4])}"
+        return 'unknown', 'low', 'tiktok shell identical without stats'
+
+    def _rule_spotify(self, username: str, body: str, low: str,
+                      response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        return 'unknown', 'low', 'spotify shell identical, use authenticated api'
+
+    def _rule_medium(self, username: str, body: str, low: str,
+                     response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        return 'unknown', 'low', 'medium bot-wall, cannot determine'
+
+    def _rule_facebook(self, username: str, body: str, low: str,
+                       response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        return 'unknown', 'low', 'facebook requires login, cannot determine'
+
+    def _rule_linkedin(self, username: str, body: str, low: str,
+                       response: requests.Response) -> Optional[Tuple[str, str, str]]:
+        evidence = self._evidence_keys(body, 'LinkedIn')
+        if evidence:
+            return 'found', 'medium', f"profile evidence: {', '.join(evidence[:4])}"
+        return 'unknown', 'low', 'linkedin bot-wall, cannot determine'
