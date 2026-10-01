@@ -1,13 +1,19 @@
 """
-Helper utilities for output formatting and display
+Helper utilities for output formatting and display.
+
+Every rendering helper degrades gracefully: Unicode falls back to ASCII on
+legacy code pages, and ANSI colours are disabled automatically when the output
+is not a terminal, when NO_COLOR is set, or when OBSCURALENS_NO_COLOR is set.
 """
 
+import json
 import os
 import sys
-import json
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
+
 from tabulate import tabulate
 
+from .. import __version__
 
 _UNICODE_PROBE = '\u2713\u2717\u2550\u2551\u2500\u2022\u2192'
 
@@ -68,6 +74,13 @@ def _setup_console() -> bool:
     return switched and _encoding_supports(_UNICODE_PROBE)
 
 
+def _stdout_is_tty() -> bool:
+    try:
+        return bool(sys.stdout.isatty())
+    except (AttributeError, ValueError):
+        return False
+
+
 _UNICODE_OK = _setup_console()
 
 # Symbols used across the UI. Fall back to ASCII on legacy code pages.
@@ -103,9 +116,16 @@ else:
     BOX_RULE = '-'
 
 
+def _colors_requested() -> bool:
+    """Colour output unless disabled by env var or a non-interactive stream."""
+    if os.environ.get('NO_COLOR') or os.environ.get('OBSCURALENS_NO_COLOR'):
+        return False
+    return _stdout_is_tty()
+
+
 # Color codes
 class Colors:
-    """ANSI color codes"""
+    """ANSI color codes (blanked out when colours are disabled)."""
     BLACK = '\033[30m'
     RED = '\033[1;31m'
     GREEN = '\033[1;32m'
@@ -119,6 +139,34 @@ class Colors:
     UNDERLINE = '\033[4m'
 
 
+def set_colors(enabled: bool) -> None:
+    """Force colours on or off for this process (used by --color/--no-color)."""
+    for name in ('BLACK', 'RED', 'GREEN', 'YELLOW', 'BLUE', 'MAGENTA',
+                 'CYAN', 'WHITE', 'RESET', 'BOLD', 'UNDERLINE'):
+        if not enabled:
+            setattr(Colors, name, '')
+        else:
+            setattr(Colors, name, _COLOR_CODES[name])
+
+
+_COLOR_CODES = {
+    'BLACK': '\033[30m',
+    'RED': '\033[1;31m',
+    'GREEN': '\033[1;32m',
+    'YELLOW': '\033[1;33m',
+    'BLUE': '\033[1;34m',
+    'MAGENTA': '\033[1;35m',
+    'CYAN': '\033[1;36m',
+    'WHITE': '\033[1;37m',
+    'RESET': '\033[0m',
+    'BOLD': '\033[1m',
+    'UNDERLINE': '\033[4m',
+}
+
+if not _colors_requested():
+    set_colors(False)
+
+
 def clear_screen():
     """Clear the terminal screen"""
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -128,13 +176,13 @@ def print_banner():
     """Print the ObscuraLens banner"""
     banner = f"""
 {Colors.CYAN}
-   ________               __      ______                __  
+   ________               __      ______
   / ____/ /_  ____  _____/ /_    /_  __/________ ______/ /__
  / / __/ __ \\/ __ \\/ ___/ __/_____/ / / ___/ __ `/ ___/ //_/
-/ /_/ / / / / /_/ (__  ) /_/_____/ / / /  / /_/ / /__/ ,<   
-\\____/_/ /_/\\____/____/\\__/     /_/ /_/   \\__,_/\\___/_/|_| 
+/ /_/ / / / / /_/ (__  ) /_/_____/ / / /  / /_/ / /__/ ,<
+\\____/_/ /_/\\____/____/\\__/     /_/ /_/   \\__,_/\\___/_/|_|
 {Colors.RESET}
-{Colors.GREEN}[ + ]  O B S C U R A L E N S  v1.0  [ + ]{Colors.RESET}
+{Colors.GREEN}[ + ]  O B S C U R A L E N S  v{__version__}  [ + ]{Colors.RESET}
 {Colors.YELLOW}[ + ]  Advanced OSINT Tool  [ + ]{Colors.RESET}
     """
     print(banner)
@@ -160,33 +208,62 @@ def print_info(message: str):
     print(f"{Colors.CYAN}{SYM_INFO} {message}{Colors.RESET}")
 
 
-def print_table(data: List[Dict[str, Any]], headers: List[str] = None):
+def render_table(data: Any, headers: Optional[List[str]] = None) -> str:
+    """Render tabular data to a grid table string (same rules as print_table)."""
+    if not data:
+        return ""
+
+    table_data: List[List[Any]] = []
+
+    if isinstance(data, dict):
+        headers = headers or ['Key', 'Value']
+        table_data = [[key, value] for key, value in data.items()]
+    else:
+        rows = list(data)
+        if not rows:
+            return ""
+        if isinstance(rows[0], dict):
+            headers = headers or list(rows[0].keys())
+            table_data = [[item.get(header, '') for header in headers]
+                          for item in rows]
+        else:
+            table_data = [list(row) for row in rows]
+            if headers is None:
+                headers = [str(i) for i in range(1, len(table_data[0]) + 1)]
+
+    if not headers:
+        return ""
+
+    cleaned = [
+        ['' if cell is None else str(cell) for cell in row]
+        for row in table_data
+    ]
+    return tabulate(cleaned, headers=headers, tablefmt='grid')
+
+
+def print_table(data: Any, headers: Optional[List[str]] = None):
     """
-    Print data as a formatted table
-    
-    Args:
-        data: List of dictionaries
-        headers: List of column headers
+    Print tabular data.
+
+    Accepts:
+      * a list of mappings (headers default to the first mapping's keys),
+      * a list/tuple of row sequences (e.g. [['Country', 'US'], ...]), or
+      * a plain mapping (rendered as a two-column Key/Value table).
     """
     if not data:
         print_warning("No data to display")
         return
-    
-    if headers is None:
-        headers = list(data[0].keys())
-    
-    table_data = []
-    for item in data:
-        row = [str(item.get(header, '')) for header in headers]
-        table_data.append(row)
-    
-    print(tabulate(table_data, headers=headers, tablefmt='grid'))
+    rendered = render_table(data, headers)
+    if not rendered:
+        print_warning("No data to display")
+        return
+    print(rendered)
 
 
 def print_json(data: Dict[str, Any], indent: int = 2):
     """
     Print data as formatted JSON
-    
+
     Args:
         data: Dictionary to print
         indent: Indentation level
@@ -196,45 +273,45 @@ def print_json(data: Dict[str, Any], indent: int = 2):
 
 def format_output(data: Dict[str, Any], output_format: str = 'table') -> str:
     """
-    Format output data
-    
+    Format output data as a string.
+
     Args:
         data: Data to format
         output_format: Output format (table, json, csv)
-        
+
     Returns:
         Formatted string
     """
     if output_format == 'json':
         return json.dumps(data, indent=2, ensure_ascii=False)
-    
-    elif output_format == 'csv':
-        # Simple CSV formatting for list data
+
+    if output_format == 'csv':
+        import csv as _csv
+        import io
+
         if isinstance(data, list) and data:
-            headers = list(data[0].keys())
-            lines = [','.join(headers)]
-            for item in data:
-                lines.append(','.join(str(item.get(h, '')) for h in headers))
-            return '\n'.join(lines)
+            buffer = io.StringIO()
+            writer = _csv.DictWriter(buffer, fieldnames=list(data[0].keys()))
+            writer.writeheader()
+            writer.writerows(data)
+            return buffer.getvalue().rstrip('\n')
         return "No data"
-    
-    else:  # table format
-        if isinstance(data, list):
-            if data:
-                headers = list(data[0].keys())
-                table_data = [[str(item.get(h, '')) for h in headers] for item in data]
-                return tabulate(table_data, headers=headers, tablefmt='grid')
-            return "No data"
-        else:
-            # Convert dict to table
-            table_data = [[k, str(v)] for k, v in data.items()]
-            return tabulate(table_data, headers=['Key', 'Value'], tablefmt='grid')
+
+    # table format
+    if isinstance(data, list):
+        if data:
+            headers = list(data[0].keys()) if isinstance(data[0], dict) else None
+            return tabulate(data, headers=headers, tablefmt='grid')
+        return "No data"
+
+    return tabulate([[k, str(v)] for k, v in data.items()],
+                    headers=['Key', 'Value'], tablefmt='grid')
 
 
 def print_progress(message: str, current: int, total: int):
     """
     Print a progress bar
-    
+
     Args:
         message: Progress message
         current: Current progress
@@ -244,10 +321,10 @@ def print_progress(message: str, current: int, total: int):
     bar_length = 40
     filled = int(bar_length * current // total)
     bar = '█' * filled + '░' * (bar_length - filled)
-    
+
     sys.stdout.write(f'\r{Colors.CYAN}[{bar}] {percent:.1f}% {message}{Colors.RESET}')
     sys.stdout.flush()
-    
+
     if current == total:
         print()
 
@@ -269,10 +346,10 @@ def print_subsection(title: str):
 def confirm_action(message: str) -> bool:
     """
     Ask for user confirmation
-    
+
     Args:
         message: Confirmation message
-        
+
     Returns:
         True if confirmed, False otherwise
     """
@@ -283,11 +360,11 @@ def confirm_action(message: str) -> bool:
 def get_input(prompt: str, required: bool = True) -> str:
     """
     Get user input with validation
-    
+
     Args:
         prompt: Input prompt
         required: Whether input is required
-        
+
     Returns:
         User input
     """

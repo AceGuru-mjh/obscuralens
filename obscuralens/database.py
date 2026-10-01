@@ -1,15 +1,15 @@
 """
 Database Module for storing query history and results
-Supports: SQLite, PostgreSQL, MySQL
+
+Currently SQLite-backed; PostgreSQL/MySQL are reserved for a future release
+and rejected with a clear message instead of a bare NotImplementedError.
 """
 
-import sqlite3
 import json
-from datetime import datetime
-from pathlib import Path
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, asdict
+import sqlite3
 from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 from .config import config
 
@@ -18,7 +18,7 @@ from .config import config
 class QueryRecord:
     """Query history record"""
     id: Optional[int] = None
-    query_type: str = ""  # ip, phone, username, email
+    query_type: str = ""  # ip, phone, username, email, domain, batch
     query_value: str = ""
     result_data: str = ""  # JSON string
     created_at: Optional[str] = None
@@ -31,60 +31,69 @@ class DatabaseManager:
 
     def __init__(self):
         self.db_type = config.db_config.db_type
-        self.db_path = Path(config.db_config.sqlite_path)
+        self.db_path = config.db_config.sqlite_path
         self._init_database()
+
+    @property
+    def path(self):
+        from pathlib import Path
+        return Path(self.db_path)
 
     def _init_database(self):
         """Initialize database tables"""
-        if self.db_type == "sqlite":
-            self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                
-                # Query history table
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS query_history (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        query_type TEXT NOT NULL,
-                        query_value TEXT NOT NULL,
-                        result_data TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        success BOOLEAN DEFAULT 1,
-                        error_message TEXT
-                    )
-                ''')
-                
-                # Create indexes
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_query_type ON query_history(query_type)
-                ''')
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_query_value ON query_history(query_value)
-                ''')
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_created_at ON query_history(created_at)
-                ''')
-                
-                conn.commit()
+        self._require_supported()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Query history table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS query_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    query_type TEXT NOT NULL,
+                    query_value TEXT NOT NULL,
+                    result_data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    success BOOLEAN DEFAULT 1,
+                    error_message TEXT
+                )
+            ''')
+
+            # Create indexes
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_query_type ON query_history(query_type)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_query_value ON query_history(query_value)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_created_at ON query_history(created_at)
+            ''')
+
+            conn.commit()
+
+    def _require_supported(self) -> None:
+        if self.db_type != 'sqlite':
+            raise ValueError(
+                f"Unsupported database type '{self.db_type}'. "
+                "This release supports sqlite only "
+                "(set database.db_type to 'sqlite').")
 
     @contextmanager
     def _get_connection(self):
         """Get database connection"""
-        if self.db_type == "sqlite":
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            try:
-                yield conn
-            finally:
-                conn.close()
-        else:
-            # TODO: Implement PostgreSQL/MySQL support
-            raise NotImplementedError(f"Database type {self.db_type} not yet implemented")
+        self._require_supported()
+        conn = sqlite3.connect(str(self.path), timeout=15)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
 
-    def save_query(self, query_type: str, query_value: str, 
+    def save_query(self, query_type: str, query_value: str,
                    result_data: Dict[str, Any], success: bool = True,
                    error_message: str = "") -> int:
-        """Save a query to history"""
+        """Save a query to history (and prune old rows beyond the cap)."""
         if not config.app_config.save_history:
             return -1
 
@@ -94,29 +103,52 @@ class DatabaseManager:
                 INSERT INTO query_history (query_type, query_value, result_data, success, error_message)
                 VALUES (?, ?, ?, ?, ?)
             ''', (query_type, query_value, json.dumps(result_data), success, error_message))
+            inserted = cursor.lastrowid
             conn.commit()
-            return cursor.lastrowid
 
-    def get_history(self, query_type: Optional[str] = None, 
+        self._prune_history()
+        return inserted
+
+    def _prune_history(self) -> int:
+        """Keep only the newest max_history_entries rows."""
+        limit = int(config.app_config.max_history_entries or 0)
+        if limit <= 0:
+            return 0
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM query_history')
+            total = cursor.fetchone()[0]
+            if total <= limit:
+                return 0
+            cursor.execute('''
+                DELETE FROM query_history WHERE id NOT IN (
+                    SELECT id FROM query_history ORDER BY id DESC LIMIT ?
+                )
+            ''', (limit,))
+            # Also make sure the AUTOINCREMENT counter cannot overflow forever.
+            conn.commit()
+            return cursor.rowcount
+
+    def get_history(self, query_type: Optional[str] = None,
                     limit: int = 100) -> List[QueryRecord]:
         """Get query history"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            
+
             if query_type:
                 cursor.execute('''
-                    SELECT * FROM query_history 
-                    WHERE query_type = ? 
-                    ORDER BY created_at DESC 
+                    SELECT * FROM query_history
+                    WHERE query_type = ?
+                    ORDER BY created_at DESC, id DESC
                     LIMIT ?
                 ''', (query_type, limit))
             else:
                 cursor.execute('''
-                    SELECT * FROM query_history 
-                    ORDER BY created_at DESC 
+                    SELECT * FROM query_history
+                    ORDER BY created_at DESC, id DESC
                     LIMIT ?
                 ''', (limit,))
-            
+
             rows = cursor.fetchall()
             return [QueryRecord(
                 id=row['id'],
@@ -134,7 +166,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM query_history WHERE id = ?', (query_id,))
             row = cursor.fetchone()
-            
+
             if row:
                 return QueryRecord(
                     id=row['id'],
@@ -147,16 +179,18 @@ class DatabaseManager:
                 )
             return None
 
-    def search_history(self, search_term: str) -> List[QueryRecord]:
+    def search_history(self, search_term: str,
+                       limit: int = 100) -> List[QueryRecord]:
         """Search query history"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT * FROM query_history 
-                WHERE query_value LIKE ? 
-                ORDER BY created_at DESC
-            ''', (f'%{search_term}%',))
-            
+                SELECT * FROM query_history
+                WHERE query_value LIKE ? OR query_type LIKE ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            ''', (f'%{search_term}%', f'%{search_term}%', limit))
+
             rows = cursor.fetchall()
             return [QueryRecord(
                 id=row['id'],
@@ -180,12 +214,12 @@ class DatabaseManager:
         """Clear all history or history of specific type"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            
+
             if query_type:
                 cursor.execute('DELETE FROM query_history WHERE query_type = ?', (query_type,))
             else:
                 cursor.execute('DELETE FROM query_history')
-            
+
             conn.commit()
             return cursor.rowcount
 
@@ -229,37 +263,37 @@ class DatabaseManager:
         """Get query statistics"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Total queries
             cursor.execute('SELECT COUNT(*) as total FROM query_history')
             total = cursor.fetchone()['total']
-            
+
             # Queries by type
             cursor.execute('''
-                SELECT query_type, COUNT(*) as count 
-                FROM query_history 
+                SELECT query_type, COUNT(*) as count
+                FROM query_history
                 GROUP BY query_type
             ''')
             by_type = {row['query_type']: row['count'] for row in cursor.fetchall()}
-            
+
             # Success rate
             cursor.execute('''
-                SELECT 
+                SELECT
                     SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
                     COUNT(*) as total
                 FROM query_history
             ''')
             row = cursor.fetchone()
             success_rate = (row['success_count'] / row['total'] * 100) if row['total'] > 0 else 0
-            
+
             # Recent queries (last 7 days)
             cursor.execute('''
-                SELECT COUNT(*) as count 
-                FROM query_history 
+                SELECT COUNT(*) as count
+                FROM query_history
                 WHERE created_at >= datetime('now', '-7 days')
             ''')
             recent = cursor.fetchone()['count']
-            
+
             return {
                 'total_queries': total,
                 'queries_by_type': by_type,
