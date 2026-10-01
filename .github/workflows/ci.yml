@@ -116,7 +116,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install with exe extra
-        run: pip install -e ".[exe]"
+        run: pip install ".[exe]"
       - name: Build single-file executable
         run: pyinstaller scripts/obscuralens.spec --noconfirm
       - name: Smoke-test the executable

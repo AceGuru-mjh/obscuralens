@@ -9,14 +9,16 @@ import os
 
 from PyInstaller.utils.hooks import collect_submodules
 
-# SPECPATH points at the directory containing this spec file, so the entry
-# script resolves correctly no matter the current working directory.
+# SPECPATH points at the directory containing this spec file; the repository
+# root is its parent. Adding it to pathex lets Analysis locate the package even
+# when it is not importable through the active interpreter's editable install.
+repo_root = os.path.dirname(SPECPATH)
 entry_script = os.path.join(SPECPATH, 'pyinstaller_entry.py')
 hiddenimports = collect_submodules('obscuralens')
 
 a = Analysis(
     [entry_script],
-    pathex=[],
+    pathex=[repo_root],
     binaries=[],
     datas=[],
     hiddenimports=hiddenimports,
