@@ -1,16 +1,14 @@
-# ObscuraLens v3.0
+# ObscuraLens v3.1
 
 > **Founder & maintainer:** MJH
 
 Multi-source OSINT console for IP addresses, phone numbers, usernames, email addresses and domains. Every lookup fans out to all available data sources in parallel, merges the fields, tracks **which source supplied each fact**, and tells you exactly what answered — no silent single-source lookups, no false-positive "hits".
 
-## What's new in v3.0
+## What's new in v3.1
 
-- **Universal investigate** — `obscuralens investigate <anything>` auto-detects the target type and follows bounded pivots (email → domain, domain → A records, ip → PTR), then exports a relationship graph as **Mermaid**.
-- **Watchlist & change detection** — `watch add/list/check/remove` stores snapshots in SQLite and reports exactly what changed between runs (new ports, new subdomains, new breaches, username status…), ignoring timestamps and ages.
-- **Plugin system** — drop a `*.py` file with a `SOURCES` dict into `plugins/` (project) or `<config dir>/plugins` (user) and its sources join the relevant trackers as `plugin:<file>:<name>`; broken plugins are isolated, and `app.enable_plugins: false` switches the whole mechanism off. See `docs/plugins.md`.
-- **New keyless sources** — RIPEstat (announced prefix, origin ASN/holder, RIR), urlscan.io (public scan history, observed IPs/servers) and the Wayback Machine (first/last capture).
-- v2.0 (previous release): non-interactive CLI, Domain tracker, field provenance, HTTP cache/rate limiting/proxy, Shodan InternetDB + IPinfo + AbuseIPDB, 7 JSON API username platforms, DNS/DKIM/DNSSEC posture, pytest suite + CI. See CHANGELOG.md.
+- **More ways to launch** (see [Ways to run](#ways-to-run)): local web UI + REST API (`serve`), a Textual terminal UI (`tui`), an MCP stdio server for AI assistants (`mcp`), Docker/GHCR, a standalone Windows executable, one-command `run.ps1` / `run.sh`, pipx/uv, scheduled monitoring, and a dev container / VS Code / make setup.
+- **v3.0**: universal `investigate` with pivots + Mermaid graph, `watch` snapshots with change detection, a plugin system, and new sources RIPEstat / urlscan.io / Wayback.
+- **v2.0**: non-interactive CLI, Domain tracker, field provenance, HTTP cache/rate limiting/proxy, Shodan InternetDB + IPinfo + AbuseIPDB, 7 JSON API username platforms, DNS/DKIM/DNSSEC posture, pytest suite + CI.
 
 ## What it does
 
@@ -43,6 +41,58 @@ python -m venv venv
 pip install -e ".[dev]"
 obscuralens
 ```
+
+Optional extras: `pip install -e ".[web]"` (web UI/API), `".[tui]"` (terminal UI), `".[exe]"` (build the standalone executable).
+
+## Ways to run
+
+| Method | Command | Notes |
+|---|---|---|
+| **Interactive console** | `obscuralens` | menu-driven; no arguments |
+| **Non-interactive CLI** | `obscuralens ip 8.8.8.8 -f json` | scriptable, pipes cleanly |
+| **One-command launcher** | `.\run.ps1 ip 8.8.8.8` / `./run.sh ip 8.8.8.8` | creates `.venv`, installs deps, runs |
+| **pipx / uv (no clone)** | `pipx install obscuralens` · `uvx obscuralens ip 8.8.8.8` | once published to PyPI |
+| **Web UI + REST API** | `pip install -e ".[web]"` then `obscuralens serve` | http://127.0.0.1:8000 (OpenAPI at `/docs`) |
+| **Terminal UI (TUI)** | `pip install -e ".[tui]"` then `obscuralens tui` | Textual rich interface |
+| **MCP server (AI agents)** | `obscuralens mcp` | JSON-RPC over stdio; 8 tools |
+| **Docker** | `docker run --rm ghcr.io/aceguru-mjh/obscuralens ip 8.8.8.8` | published to GHCR on `main` |
+| **Docker Compose (web)** | `docker compose up` | serves the web UI on :8000 |
+| **Standalone executable** | `pyinstaller scripts/obscuralens.spec --noconfirm` | CI uploads `obscuralens-windows-exe` |
+| **Scheduled monitoring** | see [docs/scheduling.md](docs/scheduling.md) | cron / Task Scheduler / GitHub Actions |
+| **Dev container** | open the folder in VS Code → *Reopen in Container* | `.devcontainer/` ships with the repo |
+| **Task runner** | `make help` / `just` | install, test, lint, run, serve, build… |
+
+### Web UI / REST API
+
+```powershell
+pip install -e ".[web]"
+obscuralens serve --host 127.0.0.1 --port 8000
+# dashboard:      http://127.0.0.1:8000
+# OpenAPI docs:   http://127.0.0.1:8000/docs
+```
+
+Key endpoints: `/api/lookup/{kind}/{target}`, `/api/investigate?target=…`,
+`/api/sources`, `/api/stats`, `/api/watch` (GET/POST/DELETE) and
+`/api/watch/check`.
+
+### MCP server
+
+`obscuralens mcp` speaks the Model Context Protocol over stdio and exposes
+`ip_lookup`, `phone_lookup`, `username_lookup`, `email_lookup`,
+`domain_lookup`, `investigate`, `watch_list` and `watch_check` to MCP clients
+(Claude Desktop, Cursor, …). Register it as a stdio server whose command is
+`obscuralens` with argument `mcp`.
+
+### Docker
+
+```powershell
+docker build -t obscuralens .
+docker run --rm obscuralens ip 8.8.8.8
+docker compose up            # web UI on http://localhost:8000
+```
+
+State lives in the `/data` volume. Images are published to
+`ghcr.io/<owner>/obscuralens` on every push to `main`.
 
 ## Usage
 
@@ -166,6 +216,9 @@ ObscuraLens/
 │   ├── database.py          # SQLite history (with pruning)
 │   ├── investigate.py       # universal investigate + Mermaid graph
 │   ├── watchlist.py         # target snapshots and change detection
+│   ├── mcp_server.py        # MCP stdio server for AI assistants
+│   ├── tui.py               # Textual terminal UI (optional)
+│   ├── web/                 # FastAPI web UI + REST API (optional)
 │   ├── plugins/             # drop-in data-source loader
 │   ├── core/                # HTTP cache, rate limiter, metrics
 │   ├── trackers/            # ip / phone / username / email / domain (+ per-source readers)
@@ -173,9 +226,14 @@ ObscuraLens/
 │   ├── visualization/       # matplotlib charts
 │   └── utils/               # validators, HTTP client, formatting, console output
 ├── config/                  # config.yaml + secrets.yaml (git-ignored)
-├── docs/                    # plugins.md and other guides
+├── docs/                    # plugins.md, scheduling.md and other guides
 ├── plugins/                 # project-level drop-in sources (optional)
+├── scripts/                 # scheduled_check.py, PyInstaller spec + entry
 ├── tests/                   # pytest unit suite (mocked network)
+├── .devcontainer/           # VS Code dev container
+├── .vscode/                 # tasks, launch configs, extensions
+├── Dockerfile / docker-compose.yml
+├── Makefile / justfile / run.ps1 / run.sh
 ├── reports/                 # generated reports and charts
 ├── data/                    # sqlite database + HTTP cache
 └── test_core.py             # live integration suite
@@ -189,6 +247,7 @@ For educational and authorised research only. Only investigate targets you are p
 
 See [CHANGELOG.md](CHANGELOG.md). Highlights:
 
+- **v3.1.0** — launch methods: web UI + REST API, Textual TUI, MCP server, Docker/GHCR, standalone exe, run scripts, scheduled monitoring, dev container and task runners.
 - **v3.0.0** — universal investigate with pivots + Mermaid graph, watchlist with change detection, plugin system, RIPEstat/urlscan.io/Wayback sources, interactive menu entries.
 - **v2.0.0** — non-interactive CLI, Domain tracker, field provenance, response cache/rate limiting/proxy, new sources (InternetDB, IPinfo, AbuseIPDB, API username platforms), DNS/DKIM/DNSSEC posture, pytest suite + CI, interactive rendering fixes.
 - **v1.0.0** — Initial packaged release. Multi-source IP aggregation, enriched email tracker, honest 3-state username detection, batch lookups, 5-format reports, charts, history, 4-layer config.

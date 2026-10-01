@@ -2,6 +2,33 @@
 
 ## Changelog
 
+## 3.1.0 — 2026-10-01
+
+### Added
+
+- **Launch methods**:
+  - `obscuralens serve` — FastAPI web UI (self-contained dashboard) + REST API
+    with OpenAPI docs; optional `[web]` extra.
+  - `obscuralens tui` — Textual terminal UI; optional `[tui]` extra.
+  - `obscuralens mcp` — dependency-free MCP stdio server exposing eight tools
+    (`ip_lookup`, `phone_lookup`, `username_lookup`, `email_lookup`,
+    `domain_lookup`, `investigate`, `watch_list`, `watch_check`).
+  - `Dockerfile`, `docker-compose.yml` and GHCR publishing from CI.
+  - PyInstaller single-file executable (`scripts/obscuralens.spec`), built and
+    uploaded as a CI artifact.
+  - `run.ps1` / `run.sh` one-command launchers and pipx/uv instructions.
+  - `scripts/scheduled_check.py`, `docs/scheduling.md` and a daily
+    `.github/workflows/watch.yml` for cron/Task Scheduler/GitHub Actions.
+  - Dev container, VS Code tasks/launch configs, `Makefile` and `justfile`.
+- **CI**: new `web`, `tui`, `docker` and `exe` jobs; the sanity job now also
+  imports the MCP server.
+
+### Changed
+
+- Version bump to 3.1.0 across package metadata, banner and user agent.
+- New optional extras `web`, `tui`, `exe`; dev extras gain `httpx`.
+- `.gitignore` un-ignores the committed `.vscode/*.json` configs.
+
 ## 3.0.0 — 2026-10-01
 
 ### Added

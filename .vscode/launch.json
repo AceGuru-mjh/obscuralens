@@ -1,0 +1,64 @@
+{
+  // Shared VS Code debug configurations for ObscuraLens.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Console (interactive)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "obscuralens.cli",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "CLI: ip 8.8.8.8",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "obscuralens",
+      "args": ["ip", "8.8.8.8"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Serve (web)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "obscuralens",
+      "args": ["serve"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "MCP server (stdio)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "obscuralens",
+      "args": ["mcp"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "pytest current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-m", "not integration", "-v", "--no-color"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ],
+  "inputs": [
+    {
+      "id": "debugConfiguration",
+      "type": "pickString",
+      "description": "Select a debug configuration",
+      "options": [
+        "Console (interactive)",
+        "CLI: ip 8.8.8.8",
+        "Serve (web)",
+        "MCP server (stdio)",
+        "pytest current file"
+      ]
+    }
+  ]
+}

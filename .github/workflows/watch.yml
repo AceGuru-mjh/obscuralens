@@ -1,0 +1,51 @@
+name: Watchlist check
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: pip install -e .
+      - name: Restore watch state
+        uses: actions/cache@v4
+        with:
+          path: .watch-state.json
+          key: watch-state-${{ github.run_id }}
+          restore-keys: watch-state-
+      - name: Run scheduled check
+        id: check
+        continue-on-error: true
+        run: >
+          python scripts/scheduled_check.py
+          --targets watch_targets.txt
+          --state .watch-state.json
+          --report watch-report.json
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: watch-report
+          path: watch-report.json
+          if-no-files-found: ignore
+      - name: Open an issue when something changed
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Watchlist changes detected ($(date -u +%Y-%m-%d))"
+          body="The scheduled ObscuraLens watchlist check detected changes to a watched target. Download the \`watch-report\` artifact from this run for the full diff."
+          gh issue create --title "$title" --body "$body" --label watchlist || \
+            gh issue create --title "$title" --body "$body"

@@ -1,0 +1,6 @@
+# Targets checked by .github/workflows/watch.yml (and scripts/scheduled_check.py).
+# One target per line. Blank lines and # comments are ignored.
+# Edit this list to monitor your own IPs, domains, emails or usernames.
+
+example.com
+1.1.1.1
