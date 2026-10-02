@@ -8,7 +8,7 @@ name: ip-triage
 description: Triage a suspicious IP and flag it when abuse reports pile up
 
 # The IP under investigation; override per run, e.g.
-#   obscuralens pipeline run ip-triage --var target=45.148.10.99
+#   obscuralens pipeline run ip-triage --set target=45.148.10.99
 variables:
   target: 8.8.8.8
 

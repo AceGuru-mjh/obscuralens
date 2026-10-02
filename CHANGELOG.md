@@ -2,6 +2,122 @@
 
 ## Changelog
 
+## 4.0.0 — 2026-10-01
+
+ObscuraLens grows from a lookup console into an investigation platform: 10
+target kinds, correlation and timelines across stored history, explainable
+risk scoring, case management, YAML pipelines and graph exports.
+
+### Added
+
+- **Five new trackers**:
+  - `obscuralens url <url>` — manual redirect walk (chain, count, final URL,
+    status, title, server), urlscan.io scan history and malicious verdicts,
+    Wayback Machine captures via the CDX API, plus keyed Google Safe
+    Browsing (`gsb_malicious`, clean responses count as a verdict) and
+    VirusTotal URL detections.
+  - `obscuralens crypto <address>` — BTC/ETH/LTC/DOGE (XMR/XRP/ADA detected
+    but unsourced): blockchain.info and Blockstream Esplora balances and
+    activity, Blockchair address stats across four chains, keyed Etherscan
+    balance and transaction timestamps. Chain routing: an ETH address never
+    hits the BTC explorers.
+  - `obscuralens hash <hash>` — MalwareBazaar (family, file names, tags;
+    optional Auth-Key), CIRCL hashlookup known-file corpus, AlienVault OTX
+    pulses and keyed VirusTotal file reports (detections, reputation, threat
+    label). MD5/SHA-1/SHA-256 routed per algorithm.
+  - `obscuralens cve <id>` — NVD 2.0 (CVSS V3.1 > V3.0 > V2 preference,
+    CWE, references, CPEs; optional API key), Google OSV.dev (affected
+    packages, severity vector), the raw cvelistV2 CNA record and FIRST.org
+    EPSS exploitation probability.
+  - `obscuralens asn <num>` — RIPEstat overview + announced prefixes and
+    BGPView record, prefixes and peers.
+- **New sources for existing trackers**:
+  - IP: ipapi.co, AlienVault OTX (pulses, malware samples, passive DNS),
+    hackertarget reverse IP, a `threat_feeds` source (Tor exit list,
+    Spamhaus DROP, Feodo Tracker, FireHOL level-1) and keyed GreyNoise
+    community context.
+  - Domain: crt.sh certificate transparency, hackertarget hostsearch and
+    RFC 9116 security.txt disclosure contacts.
+  - Email: EmailRep.io reputation, GitHub commit authorship search and a
+    disposable-domain check backed by an offline pack of 3,000+ domains.
+  - Username: 8 new HTML platforms — Steam, Mastodon, Wattpad, SlideShare,
+    Redbubble, Hackaday.io, Last.fm and Kaggle (41 platforms total:
+    34 HTML + 7 JSON API).
+  - Phone: offline geo enrichment from a full ISO 3166-1 country table
+    (country name, flag emoji, continent).
+- **Correlation package** (`obscuralens/correlation/`): entity extraction
+  from every tracker payload, a cross-record entity graph with
+  case-insensitive dedupe, BFS **clusters**, **bridge entities** (degree ≥ 3)
+  and `correlate(a, b)` shared-infrastructure comparison over stored history
+  (`obscuralens correlate --all` / pair mode).
+- **Timeline builder**: chronological events from dated fields across all
+  kinds (registration dates, certificate sightings, first/last-seen stamps,
+  breach dates, CVE publication, on-chain activity), sorted oldest → newest
+  with a configurable cap (`obscuralens timeline`).
+- **Heuristic risk scoring**: per-kind explainable signals
+  (`{'score', 'verdict', 'signals', 'summary'}`) — technical indicators only,
+  never verdicts about people; every signal carries a weight and a detail
+  string naming the observed values. `obscuralens risk`, the `--risk` flag
+  on every lookup, and `attach_risk()` for reports.
+- **Case management** (`obscuralens/cases/`, 14 CLI subactions): SQLite
+  cases with items (auto kind detection), notes, tags, close/reopen/archive,
+  `find` by value and markdown/JSON export.
+- **YAML pipelines** (`obscuralens/pipelines/`): `lookup`, `risk`,
+  `timeline`, `correlate`, `assert` (==/!=/</>/in/contains/exists over
+  dotted result fields) and `output` (table/json/markdown) steps with
+  `$variable` interpolation; `pipeline list|run|init` and three commented
+  examples in `pipelines/examples/` (domain-review, ip-triage, brand-abuse).
+- **Experimental features** (`obscuralens/experimental/`, gated by
+  `app.experimental_features`): OpenAI-compatible LLM narrative summaries,
+  username permutation generation + bounded platform sweeps, a robots-aware
+  same-domain web crawler and a phishing heuristic score over offline packs.
+- **Graph exports** (`obscuralens/export/`): GraphML, GEXF 1.3, Graphviz
+  DOT (stable per-type node colours), JSONL and CSV edge lists via
+  `obscuralens export`, `investigate --export` and `correlate --export`.
+- **Source health + circuit breaker** (`obscuralens/health/`): persisted
+  per-source success/failure statistics with reliability percentages;
+  sources failing `source_failure_threshold` times in a row are tripped for
+  `source_cooldown_seconds`. `obscuralens sources health [--reset SOURCE]`.
+- **Threat-intel package** (`obscuralens/intel/`): Tor bulk exit list and
+  Onionoo relay details (nickname, fingerprint, flags, bandwidth), plus the
+  Spamhaus DROP / Feodo / FireHOL level-1 blocklist feeds — all cached for
+  6 hours (`obscuralens intel ip|tor|feeds`).
+- **Offline data packs** (`obscuralens/data/`, shipped via package-data):
+  disposable_email_domains (3,000+), popular_domains (335) and
+  phishing_keywords (629), loaded through a caching loader
+  (`utils/data_packs.py`); `utils/geo.py` adds the full ISO 3166-1 country
+  table, flag emoji, haversine distance and coordinate-spread helpers.
+- **14 new CLI commands** — `url`, `crypto`, `hash`, `cve`, `asn`, `risk`,
+  `timeline`, `correlate`, `diff` (field-by-field comparison of stored
+  results), `export`, `case`, `pipeline`, `intel`, `experimental` — plus
+  `sources health`, a `--risk` flag on all lookups and
+  `investigate --export/--timeline/--llm`.
+- **MCP server: 18 tools** — new `url_lookup`, `crypto_lookup`,
+  `hash_lookup`, `cve_lookup`, `asn_lookup`, `risk_report`, `correlate`,
+  `timeline`, `threat_intel` and `source_health` alongside the original 8.
+- **Web API**: new `/api/risk/{kind}/{target}`, `/api/timeline`,
+  `/api/correlate` (+ `/api/correlate/pair`), `/api/intel/{ip}`,
+  `/api/cases` (GET/POST, GET by id) and `/api/export/{fmt}/{target}`
+  endpoints; `/api/stats` now includes source-health rows.
+- **New keyed services**: `etherscan`, `greynoise`, `otx`,
+  `google_safe_browsing`, `github`, `nvd`, `malwarebazaar`, `securitytrails`
+  and `llm` (experimental summaries).
+
+### Changed
+
+- Version bump to 4.0.0 across package metadata, banner and user agent.
+- `investigate` follows new v4 pivots: URL → host domain, IP → InternetDB
+  vulnerabilities as CVEs, domain → first A record's ASN; target detection
+  now recognises URLs, CVEs, hashes and AS numbers.
+- `batch` and `history` accept the five new kinds; `sources` lists the
+  per-kind catalogs (or `health` reliability rows) and `keys` shows all 17
+  services.
+- pyproject ships `obscuralens/data/*.txt` as package-data so the offline
+  packs work from wheels and the standalone executable.
+- Unit suite grew from ~160 to 738 tests (correlation, cases, pipelines,
+  experimental, export, health, intel, geo and the five new trackers), all
+  fully offline.
+
 ## 3.1.0 — 2026-10-01
 
 ### Added

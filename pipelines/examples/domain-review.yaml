@@ -6,7 +6,7 @@
 # against the local query history.
 #
 # Run it with:
-#   obscuralens pipeline run domain-review --var target=acme.example
+#   obscuralens pipeline run domain-review --set target=acme.example
 
 name: domain-review
 description: Enrich a domain and pivot to its infrastructure

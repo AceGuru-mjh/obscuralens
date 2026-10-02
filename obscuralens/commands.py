@@ -1491,7 +1491,7 @@ def _cmd_case(args: argparse.Namespace) -> int:
         if result.get('error'):
             _err(str(result['error']))
             return 1
-        _emit(f"Added item #{result['item_id']} ({result['kind']}) "
+        _emit(f"Added item #{result.get('id')} ({result.get('kind')}) "
               f"to case #{args.id}", args.output)
         return 0
 
@@ -1508,7 +1508,7 @@ def _cmd_case(args: argparse.Namespace) -> int:
         if result.get('error'):
             _err(str(result['error']))
             return 1
-        _emit(f"Note #{result['note_id']} added to case #{args.id}", args.output)
+        _emit(f"Note #{result.get('id')} added to case #{args.id}", args.output)
         return 0
 
     if action == 'tag':
