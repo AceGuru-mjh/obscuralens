@@ -199,6 +199,52 @@ class HttpClient:
             metrics.record_failure(type(e).__name__)
             return 0, '', type(e).__name__
 
+    # -- JSON POST (v4.0) --------------------------------------------------
+
+    def post_json(self, url: str, payload: Optional[Dict[str, Any]] = None,
+                  **kwargs) -> Tuple[bool, Any, str]:
+        """
+        POST a JSON body and parse the JSON response.
+
+        Used by APIs that only accept POST (MalwareBazaar, ThreatFox,
+        OpenAI-compatible LLM endpoints). POST responses are never cached.
+
+        Returns:
+            (success, parsed_json_or_None, error_message)
+        """
+        self._apply_proxy()
+        rate_acquire(url)
+        metrics.record_request(url)
+        kwargs.setdefault('timeout', self.timeout)
+        response = None
+        try:
+            response = self.session.post(url, json=payload, **kwargs)
+            with contextlib.suppress(AttributeError, TypeError):
+                metrics.record_bytes(len(response.content or b''))
+            response.raise_for_status()
+            return True, response.json(), ''
+        except requests.exceptions.Timeout:
+            metrics.record_failure('timeout')
+            return False, None, 'timeout'
+        except requests.exceptions.SSLError:
+            metrics.record_failure('ssl')
+            return False, None, 'ssl error (source unreachable from this network)'
+        except requests.exceptions.ConnectionError:
+            metrics.record_failure('connection')
+            return False, None, 'connection failed'
+        except requests.exceptions.HTTPError:
+            code = response.status_code if response is not None else '?'
+            metrics.record_failure(f'http {code}')
+            if code == 404:
+                return False, None, 'not found'
+            return False, None, f'http {code}'
+        except ValueError:
+            metrics.record_failure('invalid json')
+            return False, None, 'invalid json'
+        except requests.exceptions.RequestException as e:
+            metrics.record_failure(type(e).__name__)
+            return False, None, type(e).__name__
+
 
 # Shared client instance
 http = HttpClient()
