@@ -134,7 +134,7 @@ def test_stats_has_all_sections(client):
     resp = client.get('/api/stats')
     assert resp.status_code == 200
     payload = resp.json()
-    assert set(payload) == {'database', 'cache', 'network'}
+    assert set(payload) == {'database', 'cache', 'network', 'source_health'}
     assert 'total_queries' in payload['database']
     assert 'entries' in payload['cache']
 

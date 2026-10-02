@@ -216,8 +216,60 @@ class ChartGenerator:
 
         return str(output_path)
 
+# ------------------------------------------------------------------
+    # v4.0 adapters for correlation payloads
+    # ------------------------------------------------------------------
+
+    def create_risk_gauge(self, risk: Dict[str, Any],
+                          filename: str = "risk_gauge.png") -> str:
+        """
+        Render the correlation package's heuristic risk block as a gauge.
+
+        Args:
+            risk: {'score': 0-100, 'verdict': str, ...} from correlation.score
+            filename: Output filename
+
+        Returns:
+            Path to the saved chart ('' when the risk block is unusable)
+        """
+        try:
+            score = int(risk.get('score') or 0)
+        except (TypeError, ValueError):
+            return ''
+        verdict = str(risk.get('verdict') or '')
+        path = self.create_threat_gauge(score, filename=filename)
+        if verdict:
+            print(f"Risk verdict: {verdict}")
+        return path
+
+    def create_correlation_timeline(self, timeline: Dict[str, Any],
+                                    title: str = 'Investigation Timeline',
+                                    filename: str = 'timeline.png') -> str:
+        """
+        Render the correlation package's timeline payload as a chart.
+
+        Args:
+            timeline: {'events': [{'date', 'label', 'kind', ...}]} from
+                correlation.build_timeline
+            title: Chart title
+            filename: Output filename
+
+        Returns:
+            Path to the saved chart ('' when the timeline has no events)
+        """
+        events = [
+            {'date': event.get('date'),
+             'description': f"{event.get('kind', '?')}: {event.get('label', '')}"}
+            for event in (timeline or {}).get('events', [])
+            if event.get('date')
+        ]
+        if not events:
+            return ''
+        return self.create_timeline_chart(events, title, filename)
+
     def create_word_cloud(self, text_data: str, title: str,
                          filename: str) -> str:
+
         """
         Create a word cloud
 

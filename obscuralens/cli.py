@@ -3,6 +3,7 @@ ObscuraLens CLI Interface
 Menu-driven OSINT console with multi-source aggregation.
 """
 
+import contextlib
 import json
 import os
 import re
@@ -113,6 +114,7 @@ class ObscuraLensCLI:
                 '10': self.api_status_menu,
                 '11': self.watchlist_menu,
                 '12': self.investigate_menu,
+                '13': self.v4_tools_menu,
                 '0': self.exit_program,
             }
             action = handlers.get(choice)
@@ -138,6 +140,7 @@ class ObscuraLensCLI:
             ('10', 'API Key Status'),
             ('11', 'Watchlist'),
             ('12', 'Universal Investigate'),
+            ('13', 'Investigation Tools (v4)'),
             ('0', 'Exit'),
         ]
         width = 58
@@ -1219,6 +1222,137 @@ class ObscuraLensCLI:
                 print_warning("No matching watch entry.")
 
         input("\nPress Enter to continue...")
+
+    # ------------------------------------------------------------------
+    # v4.0 investigation tools
+    # ------------------------------------------------------------------
+
+    def _run_command(self, argv: list) -> None:
+        """Dispatch to the non-interactive CLI and keep the console usable."""
+        from . import commands
+        with contextlib.suppress(SystemExit):
+            commands.run(argv)
+        input("\nPress Enter to continue...")
+
+    def v4_tools_menu(self) -> None:
+        clear_screen()
+        print_section("INVESTIGATION TOOLS (v4)")
+
+        items = [
+            ('1', 'URL Tracker'),
+            ('2', 'Crypto Address Tracker'),
+            ('3', 'File Hash Tracker'),
+            ('4', 'CVE Lookup'),
+            ('5', 'ASN Lookup'),
+            ('6', 'Risk Scoring'),
+            ('7', 'Timeline Builder'),
+            ('8', 'Correlation Engine'),
+            ('9', 'Result Diff'),
+            ('10', 'Graph Export'),
+            ('11', 'Threat Intel (Tor / feeds)'),
+            ('12', 'Case Management'),
+            ('13', 'Pipelines'),
+            ('14', 'Experimental (LLM / permute / crawl / phish)'),
+            ('0', 'Back'),
+        ]
+        for num, text in items:
+            print(f"  {Colors.CYAN}[{num}]{Colors.RESET} {text}")
+
+        choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
+
+        if choice == '0':
+            return
+        if choice == '6':
+            kind = get_input('Kind (ip/domain/email/url/crypto/hash/cve/asn)')
+            target = get_input('Target')
+            if kind and target:
+                self._run_command(['risk', kind, target])
+            return
+        if choice == '9':
+            left = get_input('LEFT history id or target')
+            right = get_input('RIGHT history id or target')
+            if left and right:
+                self._run_command(['diff', left, right])
+            return
+        if choice == '14':
+            self.experimental_menu()
+            return
+
+        simple = {
+            '1': ('url', 'Enter URL'),
+            '2': ('crypto', 'Enter crypto address'),
+            '3': ('hash', 'Enter file hash (md5/sha1/sha256)'),
+            '4': ('cve', 'Enter CVE id (e.g. CVE-2021-44228)'),
+            '5': ('asn', 'Enter AS number (e.g. AS15169)'),
+        }
+        if choice in simple:
+            command, prompt = simple[choice]
+            target = get_input(prompt)
+            if target:
+                self._run_command([command, target])
+            return
+        if choice == '7':
+            target = get_input('Target filter (blank for all)')
+            self._run_command(['timeline'] + ([target] if target else []))
+            return
+        if choice == '8':
+            self._run_command(['correlate', '--all'])
+            return
+        if choice == '10':
+            target = get_input('Target to export')
+            fmt = get_input('Format (graphml/gexf/dot/jsonl/csv/mermaid)') or 'graphml'
+            if target:
+                self._run_command(['export', fmt, target])
+            return
+        if choice == '11':
+            target = get_input('IP address')
+            if target:
+                self._run_command(['intel', 'ip', target])
+            return
+        if choice == '12':
+            self._run_command(['case', 'list'])
+            return
+        if choice == '13':
+            self._run_command(['pipeline', 'list'])
+            return
+        print_error('Invalid option.')
+
+    def experimental_menu(self) -> None:
+        clear_screen()
+        print_section("EXPERIMENTAL FEATURES")
+
+        items = [
+            ('1', 'LLM narrative summary (needs configuration)'),
+            ('2', 'Username permutation generator'),
+            ('3', 'Bounded web crawler'),
+            ('4', 'Phishing heuristic score'),
+            ('0', 'Back'),
+        ]
+        for num, text in items:
+            print(f"  {Colors.CYAN}[{num}]{Colors.RESET} {text}")
+
+        choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
+        if choice == '1':
+            kind = get_input('Kind (auto/ip/domain/email/...)')
+            target = get_input('Target')
+            if target:
+                self._run_command(['experimental', 'llm', kind or 'auto', target])
+        elif choice == '2':
+            username = get_input('Username')
+            if not username:
+                return
+            argv = ['experimental', 'permute', username]
+            if confirm_action('Scan platforms for permutations?'):
+                argv.append('--scan')
+            self._run_command(argv)
+        elif choice == '3':
+            url = get_input('Start URL')
+            if url:
+                self._run_command(['experimental', 'crawl', url])
+        elif choice == '4':
+            target = get_input('URL or domain')
+            if target:
+                self._run_command(['experimental', 'phish', target])
 
     def investigate_menu(self) -> None:
         clear_screen()
