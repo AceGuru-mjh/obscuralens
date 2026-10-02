@@ -1,0 +1,54 @@
+# Domain review pipeline
+# ----------------------
+# Enrich a domain and pivot to its infrastructure: run the full multi-source
+# lookup on the target, then look up one of its resolved addresses, score
+# every gathered result, build the event timeline and correlate everything
+# against the local query history.
+#
+# Run it with:
+#   obscuralens pipeline run domain-review --set target=acme.example
+
+name: domain-review
+description: Enrich a domain and pivot to its infrastructure
+
+# Default values; every $target below is replaced at run time and callers
+# can override any variable from the CLI without editing this file.
+variables:
+  target: example.com
+
+steps:
+  # 1. Full multi-source lookup of the target. The kind is auto-detected
+  #    (a dotted, resolvable label is detected as a domain).
+  - lookup: $target
+
+  # 2. Infrastructure pivot: look up a resolved A record explicitly as an IP.
+  #    8.8.8.8 is a fixed example here - swap in a real A record of $target
+  #    (or use the domain's a_records field from step 1) when triaging.
+  - lookup:
+      kind: ip
+      target: 8.8.8.8
+
+  # 3. Attach heuristic risk scores to every result gathered so far.
+  - risk: true
+
+  # 4. Build an event timeline from dated fields (registration dates,
+  #    certificate sightings, last-seen stamps, ...).
+  - timeline: true
+
+  # 5. Correlate the results against each other and the local query history.
+  - correlate: true
+
+  # 6. Soft quality check: flag domains whose registrar is known. Failing
+  #    assertions never abort the run - they simply record no finding.
+  - assert:
+      field: registrar
+      op: exists
+      value: true
+      message: registrar is known
+
+  # 7. Print a compact summary table. An empty path means "do not write a
+  #    file"; a relative path like 'reports/domain-$target.md' would be
+  #    resolved under the configured report directory.
+  - output:
+      format: table
+      path: ''

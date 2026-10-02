@@ -15,7 +15,16 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .config import config
-from .utils.validators import validate_domain, validate_email, validate_ip, validate_phone, validate_username
+from .utils.validators import (
+    validate_cve,
+    validate_domain,
+    validate_email,
+    validate_hash,
+    validate_ip,
+    validate_phone,
+    validate_url,
+    validate_username,
+)
 
 # Fields that change on every lookup and would otherwise show up as noise.
 VOLATILE_KEYS = {
@@ -77,6 +86,13 @@ def _detect_kind(target: str) -> Optional[str]:
         return 'email'
     if validate_phone(target)[0]:
         return 'phone'
+    # v4.0 kinds: URLs, CVEs, hashes and AS numbers are unambiguous shapes.
+    if '://' in target and validate_url(target)[0]:
+        return 'url'
+    if validate_cve(target)[0]:
+        return 'cve'
+    if validate_hash(target)[0]:
+        return 'hash'
     # The validators are intentionally loose, so a single label can look like
     # both a username and a domain; a dot tips the balance towards domain.
     if '.' in target and validate_domain(target)[0]:
@@ -88,13 +104,29 @@ def _detect_kind(target: str) -> Optional[str]:
 
 def _default_checker(kind: str, target: str) -> Dict[str, Any]:
     """Run the tracker matching kind (imported lazily to avoid cycles)."""
-    from .trackers import DomainTracker, EmailTracker, IPTracker, PhoneTracker, UsernameTracker
+    from .trackers import (
+        ASNTracker,
+        CryptoTracker,
+        CVETracker,
+        DomainTracker,
+        EmailTracker,
+        HashTracker,
+        IPTracker,
+        PhoneTracker,
+        URLTracker,
+        UsernameTracker,
+    )
     trackers = {
         'ip': IPTracker,
         'phone': PhoneTracker,
         'username': UsernameTracker,
         'email': EmailTracker,
         'domain': DomainTracker,
+        'url': URLTracker,
+        'crypto': CryptoTracker,
+        'hash': HashTracker,
+        'cve': CVETracker,
+        'asn': ASNTracker,
     }
     tracker_class = trackers.get(kind)
     if tracker_class is None:
@@ -222,7 +254,7 @@ class WatchlistManager:
         detected = kind.strip().lower() if kind else _detect_kind(value)
         if not detected:
             raise ValueError('unrecognised target')
-        if detected in ('ip', 'email', 'domain'):
+        if detected in ('ip', 'email', 'domain', 'url', 'cve', 'hash'):
             value = value.lower()
 
         with self._get_connection() as conn:

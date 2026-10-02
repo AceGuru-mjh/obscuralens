@@ -33,6 +33,16 @@ SERVICES = (
     'numverify',
     'abuseipdb',
     'google_maps',
+    # v4.0 additions -------------------------------------------------------
+    'etherscan',        # Ethereum address/tx enrichment
+    'greynoise',        # GreyNoise community IP context
+    'otx',              # AlienVault OTX (optional; works keyless)
+    'google_safe_browsing',  # URL safety verdicts
+    'github',           # GitHub token: higher rate limits for search pivots
+    'nvd',              # NVD 2.0 API key: higher CVE rate limits
+    'malwarebazaar',    # abuse.ch Auth-Key for hash lookups
+    'securitytrails',   # Historical DNS / subdomain intelligence
+    'llm',              # OpenAI-compatible endpoint key (experimental)
 )
 
 ENV_PREFIX = 'OBSCURALENS_'
@@ -49,6 +59,16 @@ class APIConfig:
     numverify_api_key: str = ""
     abuseipdb_api_key: str = ""
     google_maps_api_key: str = ""
+    # v4.0 additions
+    etherscan_api_key: str = ""
+    greynoise_api_key: str = ""
+    otx_api_key: str = ""
+    google_safe_browsing_api_key: str = ""
+    github_api_key: str = ""
+    nvd_api_key: str = ""
+    malwarebazaar_api_key: str = ""
+    securitytrails_api_key: str = ""
+    llm_api_key: str = ""
 
 
 @dataclass
@@ -85,6 +105,33 @@ class AppConfig:
     disabled_sources: List[str] = field(default_factory=list)
     report_dir: str = "reports"
     chart_dir: str = "reports/charts"
+    # -- v4.0: investigation platform --------------------------------------
+    experimental_features: bool = True  # master switch for experimental modules
+    # Source health / circuit breaker
+    source_health_enabled: bool = True   # persist per-source success stats
+    source_failure_threshold: int = 4    # consecutive failures before tripping
+    source_cooldown_seconds: int = 600   # how long a tripped source stays off
+    # Threat-intel feeds (Tor exit list, blocklists)
+    feed_cache_ttl: int = 21600          # 6h freshness for downloaded feeds
+    feeds_enabled: bool = True           # check IPs against blocklist feeds
+    # Correlation / timeline / risk
+    correlation_max_history: int = 500   # history rows scanned by correlate()
+    timeline_max_events: int = 200       # events kept per timeline
+    risk_enabled: bool = True            # attach heuristic risk scores
+    # Case management
+    cases_enabled: bool = True
+    # Pipelines
+    pipeline_dir: str = "pipelines"     # folder scanned by `pipeline list`
+    # Experimental: LLM narrative summaries (OpenAI-compatible)
+    llm_base_url: str = ""              # e.g. https://api.openai.com/v1
+    llm_model: str = "gpt-4o-mini"
+    # Experimental: bounded web crawler
+    crawler_max_depth: int = 2
+    crawler_max_pages: int = 20
+    crawler_delay: float = 1.0           # polite delay between page fetches
+    # Experimental: username permutation scanning
+    permutation_max_candidates: int = 48
+    permutation_platforms: int = 5       # platforms checked per permutation run
 
 
 class ConfigManager:

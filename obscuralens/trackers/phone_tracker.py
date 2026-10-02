@@ -157,6 +157,21 @@ class PhoneTracker:
             fields['timezone_count'] = len(timezones)
             fields['primary_timezone'] = timezones[0]
 
+        # v4.0: offline geo enrichment for the resolved region code.
+        try:
+            from ..utils.geo import country_name, flag_emoji, region_of
+            name = country_name(region_code)
+            if name:
+                fields['country_name'] = name
+            flag = flag_emoji(region_code)
+            if flag:
+                fields['country_flag'] = flag
+            continent = region_of(region_code)
+            if continent:
+                fields['continent'] = continent
+        except Exception:
+            pass
+
         # Derived, best-effort signals.
         hints: List[str] = []
         for prefix in BUSINESS_PREFIX_HINTS.get(region_code, []):

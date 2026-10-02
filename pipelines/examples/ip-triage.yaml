@@ -1,0 +1,41 @@
+# IP triage pipeline
+# ------------------
+# Fast triage of a suspicious IP address: enrich it, attach a risk score and
+# flag it for escalation when AbuseIPDB confidence is high enough. The whole
+# run is exported as JSON so it can be fed into a SIEM or a ticket.
+
+name: ip-triage
+description: Triage a suspicious IP and flag it when abuse reports pile up
+
+# The IP under investigation; override per run, e.g.
+#   obscuralens pipeline run ip-triage --set target=45.148.10.99
+variables:
+  target: 8.8.8.8
+
+steps:
+  # 1. Full multi-source lookup; the kind is auto-detected as 'ip'.
+  - lookup: $target
+
+  # 2. Attach heuristic risk scores (abuse feed hits, Tor/proxy flags,
+  #    exposure on InternetDB) to the gathered result.
+  - risk: true
+
+  # 3. Escalation rule: only pass when the AbuseIPDB confidence score is at
+  #    least 50. The numeric comparison works for both numbers and numeric
+  #    strings; a passing assertion becomes a finding in the report.
+  - assert:
+      field: abuse_confidence
+      op: '>='
+      value: 50
+      message: address flagged by AbuseIPDB
+
+  # 4. Build an event timeline (first/last seen, report timestamps) for the
+  #    escalation ticket.
+  - timeline: true
+
+  # 5. Export the report as JSON. The $target token is interpolated into the
+  #    file name; relative paths are resolved under the configured report
+  #    directory (reports/ip-triage-<target>.json).
+  - output:
+      format: json
+      path: ip-triage-$target.json

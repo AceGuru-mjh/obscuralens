@@ -15,6 +15,7 @@ import concurrent.futures as futures
 from typing import Any, Dict, List, Optional
 
 from ..config import config
+from ..health import health
 from ..utils.http_client import http
 
 # ---------------------------------------------------------------------------
@@ -392,6 +393,174 @@ def _abuseipdb(ip: str, api_key: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v4.0 keyless additions
+# ---------------------------------------------------------------------------
+
+def _ipapi_co(ip: str) -> Dict[str, Any]:
+    """ipapi.co (keyless, rate-limited): geo, ASN, currency, languages."""
+    ok, d, _ = http.get_json(f"https://ipapi.co/{ip}/json/", cache_ttl=1800)
+    if not ok or not d or d.get('error'):
+        return {}
+    return {
+        'ip_version': d.get('version'),
+        'country': d.get('country_name'),
+        'country_code': d.get('country'),
+        'continent_code': d.get('continent_code'),
+        'city': d.get('city'),
+        'region': d.get('region'),
+        'region_code': d.get('region_code'),
+        'postal': d.get('postal'),
+        'latitude': d.get('latitude'),
+        'longitude': d.get('longitude'),
+        'asn': d.get('asn'),
+        'org': d.get('org'),
+        'timezone': d.get('timezone'),
+        'utc_offset': d.get('utc_offset'),
+        'calling_code': d.get('country_calling_code'),
+        'currency_code': d.get('currency'),
+        'currency_name': d.get('currency_name'),
+        'languages': d.get('languages'),
+        'in_eu': d.get('in_eu'),
+    }
+
+
+def _otx(ip: str) -> Dict[str, Any]:
+    """
+    AlienVault OTX (keyless, optional API key): pulse count, whitelist flag,
+    associated malware samples and passive-DNS hostnames.
+    """
+    headers = {}
+    key = config.get_api_key('otx')
+    if key:
+        headers['X-OTX-API-KEY'] = key
+
+    out: Dict[str, Any] = {}
+    ok, d, _ = http.get_json(
+        f"https://otx.alienvault.com/api/v1/indicators/IPv4/{ip}/general",
+        headers=headers)
+    if ok and isinstance(d, dict):
+        pulse_info = d.get('pulse_info') or {}
+        pulses = pulse_info.get('pulses') or []
+        count = pulse_info.get('count')
+        if count is None:
+            count = len(pulses)
+        out['otx_pulses'] = count
+        if pulses:
+            stamps = [p.get('created') or p.get('modified')
+                      for p in pulses if isinstance(p, dict)]
+            stamps = [s for s in stamps if s]
+            if stamps:
+                out['otx_last_pulse'] = max(stamps)
+            tags = []
+            for pulse in pulses:
+                for tag in (pulse.get('tags') or []):
+                    if isinstance(tag, str) and tag not in tags:
+                        tags.append(tag)
+            if tags:
+                out['otx_tags'] = tags[:10]
+        validation = d.get('validation') or {}
+        if 'whitelisted' in validation:
+            out['otx_whitelisted'] = bool(validation.get('whitelisted'))
+        malware = d.get('malware') or {}
+        samples = malware.get('samples') or []
+        if isinstance(samples, list) and samples:
+            out['otx_malware_samples'] = len(samples)
+
+    ok, d, _ = http.get_json(
+        f"https://otx.alienvault.com/api/v1/indicators/IPv4/{ip}/passive_dns",
+        headers=headers)
+    if ok and isinstance(d, dict):
+        records = d.get('passive_dns') or []
+        hostnames = []
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            hostname = str(record.get('hostname') or '').rstrip('.')
+            if hostname and hostname not in hostnames:
+                hostnames.append(hostname)
+        if hostnames:
+            out['passive_dns_hostnames'] = hostnames[:15]
+            out['passive_dns_count'] = len(records)
+    return out
+
+
+def _hackertarget(ip: str) -> Dict[str, Any]:
+    """hackertarget.com reverse IP lookup (keyless, limited daily quota)."""
+    ok, text, _ = http.get_text(
+        f"https://api.hackertarget.com/reverseiplookup/?q={ip}")
+    if not ok or not text:
+        return {}
+    low = text.strip().lower()
+    if low.startswith('error') or 'invalid' in low or 'quota' in low:
+        return {}
+    hostnames = [h.strip() for h in text.strip().splitlines() if h.strip()]
+    if not hostnames:
+        return {}
+    return {
+        'reverse_ip_hostnames': hostnames[:20],
+        'reverse_ip_count': len(hostnames),
+    }
+
+
+def _threat_feeds(ip: str) -> Dict[str, Any]:
+    """
+    Cross-check the address against threat intelligence:
+    Tor exit list + relay details and the Spamhaus DROP / Feodo / FireHOL
+    level-1 blocklists. Feeds are cached for ``app.feed_cache_ttl``.
+    """
+    if not config.app_config.feeds_enabled:
+        return {}
+    try:  # lazy import keeps the intel package optional at import time
+        from ..intel import feeds as intel_feeds
+    except ImportError:
+        return {}
+
+    try:
+        verdict = intel_feeds.check_ip(ip)
+    except Exception:
+        return {}
+    if not isinstance(verdict, dict) or verdict.get('disabled'):
+        return {}
+
+    out: Dict[str, Any] = {
+        'tor_exit': bool(verdict.get('tor')),
+        'spamhaus_drop': bool(verdict.get('spamhaus_drop')),
+        'feodo_tracker': bool(verdict.get('feodo')),
+        'firehol_level1': bool(verdict.get('firehol_level1')),
+        'threat_feeds_listed': verdict.get('listed_count', 0),
+    }
+    relay = verdict.get('relay') or {}
+    if isinstance(relay, dict) and relay.get('is_relay'):
+        out['tor_relay'] = True
+        if relay.get('nickname'):
+            out['tor_relay_nickname'] = relay.get('nickname')
+        if relay.get('first_seen'):
+            out['tor_relay_first_seen'] = relay.get('first_seen')
+    return out
+
+
+# ---------------------------------------------------------------------------
+# v4.0 keyed additions
+# ---------------------------------------------------------------------------
+
+def _greynoise(ip: str, api_key: str) -> Dict[str, Any]:
+    """GreyNoise community context (keyed): scanned/noise + Riot CDN flag."""
+    ok, d, _ = http.get_json(
+        f"https://api.greynoise.io/v3/community/{ip}",
+        headers={'key': api_key, 'Accept': 'application/json'})
+    if not ok or not d or d.get('error'):
+        return {}
+    return {
+        'gn_noise': d.get('noise'),
+        'gn_riot': d.get('riot'),
+        'gn_classification': d.get('classification'),
+        'gn_name': d.get('name'),
+        'gn_last_seen': d.get('last_seen'),
+        'gn_message': d.get('message'),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -406,6 +575,10 @@ FREE_SOURCES: Dict[str, Any] = {
     'ripestat': _ripestat,
     'reverse_dns': _reverse_dns,
     'rdap': _rdap_registration,
+    'ipapi.co': _ipapi_co,
+    'otx': _otx,
+    'hackertarget': _hackertarget,
+    'threat_feeds': _threat_feeds,
 }
 
 KEYED_SOURCES: Dict[str, Any] = {
@@ -413,6 +586,7 @@ KEYED_SOURCES: Dict[str, Any] = {
     'virustotal': _virustotal,
     'ipinfo': _ipinfo,
     'abuseipdb': _abuseipdb,
+    'greynoise': _greynoise,
 }
 
 # Human-readable metadata used by `obscuralens sources` and the README.
@@ -427,10 +601,15 @@ SOURCE_CATALOG = {
     'ripestat': 'Announced prefix, origin ASN/holder and RIR via RIPEstat (keyless)',
     'reverse_dns': 'PTR record via DNS-over-HTTPS (keyless)',
     'rdap': 'Registry registration and abuse contact (keyless)',
+    'ipapi.co': 'Geolocation, ASN, currency and language hints (keyless)',
+    'otx': 'AlienVault OTX pulses, malware samples and passive DNS (keyless)',
+    'hackertarget': 'Reverse IP hostnames (keyless, daily quota)',
+    'threat_feeds': 'Tor exit list, Spamhaus DROP, Feodo and FireHOL level-1 (keyless)',
     'shodan': 'Full Shodan host data (keyed)',
     'virustotal': 'Reputation and detections (keyed)',
     'ipinfo': 'Hostname, org, privacy hints (keyed)',
     'abuseipdb': 'Abuse reports and confidence score (keyed)',
+    'greynoise': 'GreyNoise community: scanned/noise, Riot CDN (keyed)',
 }
 
 
@@ -468,12 +647,12 @@ def gather_all(ip: str, keys: Optional[Dict[str, str]] = None) -> Dict[str, Any]
     tasks: Dict[str, Any] = {}
 
     for name, fn in FREE_SOURCES.items():
-        if config.is_source_enabled(name):
+        if config.is_source_enabled(name) and health.source_allowed(name):
             tasks[name] = (lambda f=fn: f(ip))
 
     for name, fn in _plugin_sources('ip').items():
         source_name = f"plugin:{name}"
-        if config.is_source_enabled(source_name):
+        if config.is_source_enabled(source_name) and health.source_allowed(source_name):
             tasks[source_name] = (lambda f=fn: f(ip))
 
     key_map = {
@@ -481,10 +660,12 @@ def gather_all(ip: str, keys: Optional[Dict[str, str]] = None) -> Dict[str, Any]
         'virustotal': ('virustotal', lambda k: _virustotal(ip, k)),
         'ipinfo': ('ipinfo', lambda k: _ipinfo(ip, k)),
         'abuseipdb': ('abuseipdb', lambda k: _abuseipdb(ip, k)),
+        'greynoise': ('greynoise', lambda k: _greynoise(ip, k)),
     }
     for service, (source_name, factory) in key_map.items():
         key = keys.get(service)
-        if key and config.is_source_enabled(source_name):
+        if key and config.is_source_enabled(source_name) \
+                and health.source_allowed(source_name):
             tasks[source_name] = (lambda f=factory, k=key: f(k))
 
     results: Dict[str, Dict[str, Any]] = {}
@@ -502,6 +683,8 @@ def gather_all(ip: str, keys: Optional[Dict[str, str]] = None) -> Dict[str, Any]
                 except Exception as e:  # a broken source must not kill the scan
                     results[name] = {}
                     status[name] = {'ok': False, 'error': type(e).__name__}
+
+    health.record_batch('ip', status)
 
     merged: Dict[str, Any] = {}
     provenance: Dict[str, List[str]] = {}

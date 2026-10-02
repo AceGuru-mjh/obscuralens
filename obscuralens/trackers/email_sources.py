@@ -12,6 +12,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from ..config import config
 from ..utils.http_client import http
 
 # Webmail providers - useful for spotting throwaway or generic accounts.
@@ -202,15 +203,103 @@ def _is_ipv4(value: str) -> bool:
 
 
 def _disposable_check(domain: str, email: str) -> Dict[str, Any]:
-    """disposable.debounce.io - keyless disposable-mail detection."""
+    """
+    Disposable-mail detection: offline data pack first (3k+ known domains,
+    no network), then the keyless debounce.io API as a fallback for domains
+    the pack does not know.
+    """
+    try:  # offline pack - authoritative when it knows the domain
+        from ..utils.data_packs import is_disposable_email
+        if is_disposable_email(email):
+            return {'disposable': True, 'disposable_source': 'local-pack'}
+    except Exception:
+        pass
+
     ok, data, _ = http.get_json(
         f"https://disposable.debounce.io/?email={email}")
     if not ok or not data:
-        return {}
+        # The pack said 'not disposable' and the API is unreachable: report
+        # the offline answer rather than nothing at all.
+        return {'disposable': False, 'disposable_source': 'local-pack'}
     value = data.get('disposable')
     if isinstance(value, str):
         value = value.lower() == 'true'
-    return {'disposable': bool(value)}
+    return {'disposable': bool(value), 'disposable_source': 'debounce.io'}
+
+
+def _emailrep(email: str) -> Dict[str, Any]:
+    """
+    EmailRep.io (keyless): reputation score, suspicious flag, linked social
+    profiles, breach/leak exposure and first/last activity.
+    """
+    ok, d, _ = http.get_json(f"https://emailrep.io/{email}", cache_ttl=3600)
+    if not ok or not d or d.get('error'):
+        return {}
+    out: Dict[str, Any] = {
+        'emailrep_reputation': d.get('reputation'),
+        'emailrep_suspicious': d.get('suspicious'),
+        'emailrep_references': d.get('references'),
+    }
+    profiles = d.get('profiles')
+    if isinstance(profiles, list) and profiles:
+        out['emailrep_profiles'] = [str(p) for p in profiles[:15]]
+        out['emailrep_profile_count'] = len(profiles)
+    for field in ('last_seen', 'first_seen'):
+        if d.get(field):
+            out[f'emailrep_{field}'] = d.get(field)
+    # Explicit False is a real answer.
+    for field in ('credentials_leaked', 'data_breach', 'active', 'deliverable'):
+        if field in d and d.get(field) is not None:
+            out[f'emailrep_{field}'] = bool(d.get(field))
+    return out
+
+
+def _github_commits(email: str) -> Dict[str, Any]:
+    """
+    GitHub commit search by author email (keyless, low rate limit; a token
+    configured for the ``github`` service lifts it). A hit proves the address
+    contributed code and exposes commit author names and repositories.
+    """
+    headers = {'Accept': 'application/vnd.github+json'}
+    token = config.get_api_key('github')
+    if token:
+        headers['Authorization'] = f"Bearer {token}"
+
+    ok, d, _ = http.get_json(
+        f"https://api.github.com/search/commits?q=author-email:{email}"
+        f"&per_page=5&sort=author-date",
+        headers=headers, cache_ttl=3600)
+    if not ok or not isinstance(d, dict):
+        return {}
+    total = d.get('total_count')
+    if not total:
+        return {}
+
+    repos: List[str] = []
+    names: List[str] = []
+    dates: List[str] = []
+    for item in (d.get('items') or []):
+        if not isinstance(item, dict):
+            continue
+        repository = item.get('repository') or {}
+        full_name = repository.get('full_name')
+        if full_name and full_name not in repos:
+            repos.append(str(full_name))
+        commit = item.get('commit') or {}
+        author = commit.get('author') or {}
+        if author.get('name') and author['name'] not in names:
+            names.append(str(author['name']))
+        if author.get('date'):
+            dates.append(str(author['date']))
+
+    out: Dict[str, Any] = {'github_commit_matches': int(total)}
+    if repos:
+        out['github_commit_repos'] = repos[:5]
+    if names:
+        out['github_author_names'] = names[:3]
+    if dates:
+        out['github_last_commit'] = max(dates)
+    return out
 
 
 def _openpgp(email: str) -> Dict[str, Any]:
@@ -418,14 +507,18 @@ FREE_SOURCES = {
     'openpgp': _openpgp,
     'domain_rdap': _domain_rdap,
     'gravatar': _gravatar,
+    'emailrep': _emailrep,
+    'github_commits': _github_commits,
 }
 
 SOURCE_CATALOG = {
     'dns': 'MX/A/AAAA/NS/SOA/CAA/TXT, SPF, DMARC, DKIM, DNSSEC (keyless)',
-    'disposable': 'Disposable-mail detection (keyless)',
+    'disposable': 'Disposable-mail detection: offline pack + debounce.io (keyless)',
     'openpgp': 'OpenPGP key presence on keys.openpgp.org (keyless)',
     'domain_rdap': 'Domain registration dates, registrar, abuse contact (keyless)',
     'gravatar': 'Gravatar avatar existence (keyless)',
+    'emailrep': 'EmailRep.io reputation, linked profiles, leak flags (keyless)',
+    'github_commits': 'GitHub commit authorship search (keyless, low rate)',
     'patterns': 'Local-part heuristics (local)',
     'haveibeenpwned': 'Breach exposure (keyed)',
     'hibp_pastes': 'Paste exposure (keyed)',

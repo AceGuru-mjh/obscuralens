@@ -143,6 +143,148 @@ TOOLS: List[Dict[str, Any]] = [
             'additionalProperties': False,
         },
     },
+    # -- v4.0 tools ------------------------------------------------------------
+    {
+        'name': 'url_lookup',
+        'description': 'Analyze a URL: redirect chain, HTTP response, safety '
+                       'verdicts and archive history.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'target': {'type': 'string', 'description': 'http(s) URL.'},
+            },
+            'required': ['target'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'crypto_lookup',
+        'description': 'Analyze a cryptocurrency address (btc/eth/xmr/doge/'
+                       'ltc/xrp/ada): balances, totals and activity dates.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'target': {'type': 'string',
+                           'description': 'Cryptocurrency address.'},
+            },
+            'required': ['target'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'hash_lookup',
+        'description': 'Look up a file hash across malware repositories '
+                       'and reputation services.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'target': {'type': 'string',
+                           'description': 'md5/sha1/sha256 file hash.'},
+            },
+            'required': ['target'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'cve_lookup',
+        'description': 'Look up a CVE: description, CVSS, EPSS, references '
+                       'and affected products.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'target': {'type': 'string',
+                           'description': 'CVE identifier (CVE-YYYY-NNNN).'},
+            },
+            'required': ['target'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'asn_lookup',
+        'description': 'Look up an autonomous system: holder, country, '
+                       'announced prefixes and peers.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'target': {'type': ['string', 'integer'],
+                           'description': 'AS number (AS15169 or 15169).'},
+            },
+            'required': ['target'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'risk_report',
+        'description': 'Run a lookup and attach explainable heuristic risk '
+                       'scoring (score, verdict, signals).',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'kind': {'type': 'string',
+                         'enum': ['ip', 'phone', 'username', 'email', 'domain',
+                                  'url', 'crypto', 'hash', 'cve', 'asn'],
+                         'description': 'Target kind.'},
+                'target': {'type': 'string', 'description': 'Target value.'},
+            },
+            'required': ['kind', 'target'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'correlate',
+        'description': 'Correlate two targets against stored history and '
+                       'report shared infrastructure, or scan the whole '
+                       'history for clusters.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'a': {'type': 'string', 'description': 'First target value.'},
+                'b': {'type': 'string', 'description': 'Second target value.'},
+                'all': {'type': 'boolean',
+                        'description': 'Scan the whole history for clusters '
+                                       'instead of comparing two targets.'},
+            },
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'timeline',
+        'description': 'Build a chronological event timeline across stored '
+                       'lookup history.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'target': {'type': 'string',
+                           'description': 'Restrict to one target (optional).'},
+                'limit': {'type': 'integer',
+                          'description': 'Maximum events (default: 100).'},
+            },
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'threat_intel',
+        'description': 'Check an IP against Tor exit lists and blocklist '
+                       'feeds (Spamhaus DROP, Feodo, FireHOL level-1).',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'target': {'type': 'string', 'description': 'IPv4 address.'},
+            },
+            'required': ['target'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'source_health',
+        'description': 'Per-source reliability statistics and circuit-breaker '
+                       'state across all lookups.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {},
+            'additionalProperties': False,
+        },
+    },
 ]
 
 
@@ -191,6 +333,82 @@ def call_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         from .investigate import investigate
         pivot = bool(arguments.get('pivot', True))
         return investigate(_target(arguments), pivot=pivot)
+    if name == 'url_lookup':
+        from .trackers import URLTracker
+        return URLTracker().track(_target(arguments))
+    if name == 'crypto_lookup':
+        from .trackers import CryptoTracker
+        return CryptoTracker().track(_target(arguments))
+    if name == 'hash_lookup':
+        from .trackers import HashTracker
+        return HashTracker().track(_target(arguments))
+    if name == 'cve_lookup':
+        from .trackers import CVETracker
+        return CVETracker().track(_target(arguments))
+    if name == 'asn_lookup':
+        from .trackers import ASNTracker
+        return ASNTracker().track(str(arguments.get('target', '')))
+    if name == 'risk_report':
+        from .correlation import attach_risk
+        from .trackers import (
+            ASNTracker,
+            CryptoTracker,
+            CVETracker,
+            DomainTracker,
+            EmailTracker,
+            HashTracker,
+            IPTracker,
+            PhoneTracker,
+            URLTracker,
+            UsernameTracker,
+        )
+        kind = arguments.get('kind')
+        tracker_classes = {
+            'ip': IPTracker, 'phone': PhoneTracker,
+            'username': UsernameTracker, 'email': EmailTracker,
+            'domain': DomainTracker, 'url': URLTracker,
+            'crypto': CryptoTracker, 'hash': HashTracker,
+            'cve': CVETracker, 'asn': ASNTracker,
+        }
+        if kind not in tracker_classes:
+            raise ValueError(f'unknown kind: {kind}')
+        result = tracker_classes[kind]().track(_target(arguments))
+        attach_risk(str(kind), result)
+        return result
+    if name == 'correlate':
+        from .correlation import build_graph, correlate, history_records
+        if arguments.get('all'):
+            records = history_records(
+                limit=arguments.get('limit') or None)
+            return build_graph(records)
+        a = arguments.get('a')
+        b = arguments.get('b')
+        if not a or not b:
+            raise ValueError('correlate needs both a and b, or all=true')
+        return correlate(str(a), str(b))
+    if name == 'timeline':
+        from .correlation import build_timeline, history_records
+        limit = arguments.get('limit') or 100
+        records = history_records(limit=max(int(limit) * 3, 200))
+        target = arguments.get('target')
+        if target:
+            needle = str(target).lower()
+            records = [r for r in records
+                       if needle in str(r.get('value', '')).lower()]
+        return build_timeline(records, cap=int(limit))
+    if name == 'threat_intel':
+        from .intel import feeds as intel_feeds
+        from .intel import tor as intel_tor
+        target = _target(arguments)
+        return {
+            'ip': target,
+            'feeds': intel_feeds.check_ip(target),
+            'tor_exit': intel_tor.is_tor_exit(target),
+            'relay': intel_tor.relay_details(target),
+        }
+    if name == 'source_health':
+        from .health import health
+        return {'sources': health.get_health()}
     if name == 'watch_list':
         from .watchlist import watchlist
         return {'entries': [asdict(entry) for entry in watchlist.list()]}

@@ -320,6 +320,146 @@ def spotify(html: str) -> Dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# v4.0 platform extractors
+# ---------------------------------------------------------------------------
+
+def steam(html: str) -> Dict[str, Any]:
+    """Steam community profile: display name, level, location, avatar."""
+    data: Dict[str, Any] = {}
+    data['name'] = (
+        _clean(_first(r'<span[^>]+class="[^"]*actual_persona_name[^"]*"[^>]*>(.*?)</span>', html))
+        or _meta(html, 'title')
+    )
+    level = _first(r'<span[^>]+class="[^"]*friendPlayerLevelNum[^"]*"[^>]*>\s*(\d+)<', html)
+    if level:
+        data['level'] = int(level)
+    location = _first(r'<img[^>]+class="flag"[^>]*>\s*([^<]+)', html)
+    data['location'] = _clean(location)
+    avatar = _first(r'<img[^>]+src="([^"]+)"[^>]+class="[^"]*playerAvatar[^"]*"', html)
+    if not avatar:
+        avatar = _meta(html, 'image')
+    data['avatar'] = avatar
+    data['bio'] = _clean(_meta(html, 'description'), 400)
+    return data
+
+
+def mastodon(html: str) -> Dict[str, Any]:
+    """Mastodon (mastodon.social) public profile page."""
+    data: Dict[str, Any] = {}
+    data['name'] = _clean(_meta(html, 'title')) or _title(html)
+    data['bio'] = _clean(_meta(html, 'description'), 400)
+    data['avatar'] = _meta(html, 'image')
+    followers = _first(r'([\d.,]+)\s*[Ff]ollowers', html)
+    if followers:
+        data['followers'] = _count_number(followers)
+    following = _first(r'([\d.,]+)\s*[Ff]ollowing', html)
+    if following:
+        data['following'] = _count_number(following)
+    created = _first(r'<time[^>]+datetime="([^"]+)"', html)
+    if created:
+        data['created'] = created
+    data['verified'] = 'verified' in html.lower() and 'badge' in html.lower()
+    return data
+
+
+def wattpad(html: str) -> Dict[str, Any]:
+    data: Dict[str, Any] = {}
+    data['name'] = _clean(_meta(html, 'title')) or _title(html)
+    data['bio'] = _clean(_meta(html, 'description'), 400)
+    data['avatar'] = _meta(html, 'image')
+    followers = _first(r'([\d.,]+[KMB]?)\s*[Ff]ollowers', html)
+    if followers:
+        data['followers'] = _count_number(followers)
+    works = _first(r'([\d.,]+[KMB]?)\s*[Ww]orks', html)
+    if works:
+        data['works'] = _count_number(works)
+    return data
+
+
+def slideshare(html: str) -> Dict[str, Any]:
+    data: Dict[str, Any] = {}
+    data['name'] = _clean(_meta(html, 'title')) or _title(html)
+    data['bio'] = _clean(_meta(html, 'description'), 400)
+    data['avatar'] = _meta(html, 'image')
+    uploads = _first(r'([\d.,]+[KMB]?)\s*(?:[Ss]lide|[Uu]pload)', html)
+    if uploads:
+        data['uploads'] = _count_number(uploads)
+    followers = _first(r'([\d.,]+[KMB]?)\s*[Ff]ollowers', html)
+    if followers:
+        data['followers'] = _count_number(followers)
+    return data
+
+
+def redbubble(html: str) -> Dict[str, Any]:
+    data: Dict[str, Any] = {}
+    data['name'] = _clean(_meta(html, 'title')) or _title(html)
+    data['bio'] = _clean(_meta(html, 'description'), 400)
+    data['avatar'] = _meta(html, 'image')
+    designs = _first(r'([\d.,]+[KMB]?)\s*(?:[Dd]esigns?|[Ww]orks)', html)
+    if designs:
+        data['designs'] = _count_number(designs)
+    followers = _first(r'([\d.,]+[KMB]?)\s*[Ff]ollowers', html)
+    if followers:
+        data['followers'] = _count_number(followers)
+    return data
+
+
+def hackaday(html: str) -> Dict[str, Any]:
+    """Hackaday.io member profile."""
+    data: Dict[str, Any] = {}
+    data['name'] = _clean(_meta(html, 'title')) or _title(html)
+    data['bio'] = _clean(_meta(html, 'description'), 400)
+    data['avatar'] = _meta(html, 'image')
+    following = _first(r'([\d.,]+[KMB]?)\s*[Ff]ollowing', html)
+    if following:
+        data['following'] = _count_number(following)
+    followers = _first(r'([\d.,]+[KMB]?)\s*[Ff]ollowers', html)
+    if followers:
+        data['followers'] = _count_number(followers)
+    projects = _first(r'([\d.,]+[KMB]?)\s*(?:[Cc]reated|[Pp]rojects)', html)
+    if projects:
+        data['projects'] = _count_number(projects)
+    return data
+
+
+def lastfm(html: str) -> Dict[str, Any]:
+    """Last.fm listener profile: scrobbles and join date."""
+    data: Dict[str, Any] = {}
+    data['name'] = _clean(_meta(html, 'title')) or _title(html)
+    data['bio'] = _clean(_meta(html, 'description'), 400)
+    data['avatar'] = _meta(html, 'image')
+    scrobbles = _first(r'([\d.,]+[KMB]?)\s*scrobbles', html, re.I)
+    if scrobbles:
+        data['scrobbles'] = _count_number(scrobbles)
+    artists = _first(r'([\d.,]+[KMB]?)\s*[Aa]rtists', html)
+    if artists:
+        data['artists'] = _count_number(artists)
+    joined = _first(r'[Ss]crobbling since ([A-Za-z]+ \d{4})', html)
+    if joined:
+        data['joined'] = joined
+    return data
+
+
+def kaggle(html: str) -> Dict[str, Any]:
+    """Kaggle public profile: rank, followers, stats."""
+    data: Dict[str, Any] = {}
+    data['name'] = _clean(_meta(html, 'title')) or _title(html)
+    data['bio'] = _clean(_meta(html, 'description'), 400)
+    data['avatar'] = _meta(html, 'image')
+    followers = _first(r'([\d.,]+[KMB]?)\s*[Ff]ollowers', html)
+    if followers:
+        data['followers'] = _count_number(followers)
+    following = _first(r'([\d.,]+[KMB]?)\s*[Ff]ollowing', html)
+    if following:
+        data['following'] = _count_number(following)
+    # Kaggle title (Expert / Master / Grandmaster) is a strong signal.
+    title = _first(r'"(?:rankTitle|currentRanking)"\s*:\s*"([^"]+)"', html)
+    if title:
+        data['title'] = _clean(title)
+    return data
+
+
 def gitlab(html: str) -> Dict[str, Any]:
     return {
         'name': _clean(_meta(html, 'title')),
@@ -413,6 +553,15 @@ EXTRACTORS: Dict[str, Any] = {
     'Tumblr': tumblr,
     'WordPress': wordpress,
     'Blogger': blogger,
+    # v4.0 additions
+    'Steam': steam,
+    'Mastodon': mastodon,
+    'Wattpad': wattpad,
+    'SlideShare': slideshare,
+    'Redbubble': redbubble,
+    'Hackaday.io': hackaday,
+    'Last.fm': lastfm,
+    'Kaggle': kaggle,
 }
 
 

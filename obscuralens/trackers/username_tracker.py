@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import config
 from ..database import db
+from ..health import health
 from ..utils.http_client import http
 from .username_sources import API_PLATFORMS, api_profile, extract
 
@@ -62,6 +63,9 @@ NOT_FOUND_MARKERS = (
     "profile not found",
     "the page you were looking",
     "does not exist",
+    "the specified profile could not be found",
+    "user hasn't logged in",
+    "account has been suspended",
 )
 
 # Bot-wall / rate-limit statuses: the response says nothing about the account.
@@ -104,6 +108,15 @@ HTML_PLATFORMS = [
     {"name": "Tumblr", "url": "https://{}.tumblr.com"},
     {"name": "WordPress", "url": "https://{}.wordpress.com"},
     {"name": "Blogger", "url": "https://{}.blogspot.com"},
+    # v4.0 additions ------------------------------------------------------
+    {"name": "Steam", "url": "https://steamcommunity.com/id/{}"},
+    {"name": "Mastodon", "url": "https://mastodon.social/@{}"},
+    {"name": "Wattpad", "url": "https://www.wattpad.com/user/{}"},
+    {"name": "SlideShare", "url": "https://www.slideshare.net/{}"},
+    {"name": "Redbubble", "url": "https://www.redbubble.com/people/{}/shop"},
+    {"name": "Hackaday.io", "url": "https://hackaday.io/{}"},
+    {"name": "Last.fm", "url": "https://www.last.fm/user/{}"},
+    {"name": "Kaggle", "url": "https://www.kaggle.com/{}"},
 ]
 
 
@@ -188,6 +201,17 @@ class UsernameTracker:
                     result['unknown_count'] += 1
 
         result['results'].sort(key=lambda x: x['platform'])
+
+        # Feed the source-health tracker: a username platform 'works' when it
+        # returned a definite verdict (found / not_found).
+        platform_status = {
+            record['platform']: {
+                'ok': record['status'] in ('found', 'not_found'),
+                'error': record.get('error') or '',
+            }
+            for record in result['results']
+        }
+        health.record_batch('username', platform_status)
 
         db.save_query('username', username, result, result['success'],
                       '; '.join(result['errors']) if result['errors'] else "")

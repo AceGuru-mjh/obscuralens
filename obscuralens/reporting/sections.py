@@ -238,6 +238,194 @@ def batch_sections(kind: str, results: List[Dict[str, Any]]) -> List[Dict[str, A
     }]
 
 
+# ---------------------------------------------------------------------------
+# v4.0 kinds
+# ---------------------------------------------------------------------------
+
+def url_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('URL', ('url', 'final_url', 'domain', 'scheme', 'host', 'port',
+                 'redirect_count', 'host_is_ip')),
+        ('HTTP Response', ('http_status', 'http_title', 'http_server',
+                           'content_type')),
+        ('Verdicts', ('gsb_malicious', 'gsb_threat_types', 'vt_malicious',
+                      'vt_suspicious', 'vt_reputation', 'malicious_score',
+                      'urlscan_malicious_verdicts')),
+        ('History', ('urlscan_total', 'urlscan_last_scan',
+                     'wayback_captures', 'wayback_first_capture',
+                     'wayback_last_capture', 'vt_last_analysis')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    chain = info.get('redirect_chain') or []
+    if chain:
+        sections.append({
+            'title': f'Redirect Chain ({len(chain)} hops)', 'type': 'table',
+            'columns': ['URL', 'Status'],
+            'rows': [[hop.get('url', ''), hop.get('status', '')] for hop in chain],
+        })
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def crypto_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Address', ('address', 'chain', 'blockchair_type')),
+        ('Activity (blockchain.info)', ('btc_balance', 'btc_total_received',
+                                        'btc_total_sent', 'btc_tx_count',
+                                        'first_seen', 'last_seen')),
+        ('Activity (blockstream.info)', ('blockstream_funded_btc',
+                                         'blockstream_spent_btc',
+                                         'blockstream_tx_count',
+                                         'blockstream_mempool_txs',
+                                         'blockstream_last_activity')),
+        ('Activity (blockchair)', ('blockchair_balance', 'blockchair_tx_count',
+                                   'blockchair_first_seen_receiving',
+                                   'blockchair_first_seen_spending',
+                                   'blockchair_last_seen_receiving',
+                                   'blockchair_last_seen_spending')),
+        ('Activity (etherscan)', ('eth_balance', 'eth_tx_sample_count',
+                                  'eth_tx_first_seen', 'eth_tx_last_seen')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def hash_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Hash', ('hash', 'algorithm', 'file_name', 'file_size',
+                  'file_type_mime')),
+        ('Malware Classification', ('malware_family', 'vt_threat_label',
+                                    'malware_tags', 'imphash')),
+        ('Detections', ('malicious', 'suspicious', 'undetected', 'harmless',
+                        'malicious_score', 'reputation')),
+        ('Sightings', ('first_seen', 'last_seen', 'vt_created', 'otx_pulses',
+                       'known_file', 'otx_whitelisted')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def cve_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Identifier', ('cve', 'vuln_status', 'cna_state')),
+        ('Description', ('description', 'cna_description', 'cna_title')),
+        ('Scoring', ('cvss_score', 'cvss_severity', 'cvss_vector',
+                     'cvss_version', 'epss_score', 'epss_percentile',
+                     'epss_date')),
+        ('Timeline', ('published', 'last_modified', 'cna_published',
+                      'cna_updated')),
+        ('Weakness & Reach', ('cwe', 'osv_severity_vector')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    references = info.get('references') or []
+    if references:
+        sections.append({
+            'title': f'References ({len(references)})', 'type': 'table',
+            'columns': ['URL'],
+            'rows': [[url] for url in references],
+        })
+    cpes = info.get('affected_cpes') or []
+    if cpes:
+        sections.append({
+            'title': f'Affected Products ({info.get("cpe_count", len(cpes))})',
+            'type': 'table', 'columns': ['CPE'],
+            'rows': [[cpe] for cpe in cpes],
+        })
+    packages = info.get('osv_packages') or []
+    if packages:
+        sections.append({
+            'title': f'Affected Packages ({len(packages)})', 'type': 'table',
+            'columns': ['Ecosystem / Package'],
+            'rows': [[package] for package in packages],
+        })
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def asn_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Identity', ('asn_display', 'asn_name', 'asn_description',
+                      'asn_country', 'asn_website', 'asn_email')),
+        ('Footprint', ('announced_prefix_count', 'announced_v4_count',
+                       'announced_v6_count', 'ipv4_prefix_count',
+                       'ipv6_prefix_count', 'peer_count')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    prefixes = info.get('announced_prefixes') or []
+    if prefixes:
+        count = info.get('announced_prefix_count', len(prefixes))
+        sections.append({
+            'title': f'Announced Prefixes ({count})',
+            'type': 'table', 'columns': ['Prefix'],
+            'rows': [[prefix] for prefix in prefixes],
+        })
+    peers = info.get('peers') or []
+    if peers:
+        peer_count = info.get('peer_count', len(peers))
+        sections.append({
+            'title': f'Peers ({peer_count})',
+            'type': 'table', 'columns': ['Peer'],
+            'rows': [[peer] for peer in peers],
+        })
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
 def sections_for(kind: str, result: Dict[str, Any]) -> List[Dict[str, Any]]:
     builders = {
         'ip': ip_sections,
@@ -245,6 +433,12 @@ def sections_for(kind: str, result: Dict[str, Any]) -> List[Dict[str, Any]]:
         'username': username_sections,
         'email': email_sections,
         'domain': domain_sections,
+        # v4.0 kinds
+        'url': url_sections,
+        'crypto': crypto_sections,
+        'hash': hash_sections,
+        'cve': cve_sections,
+        'asn': asn_sections,
     }
     builder = builders.get(kind)
     return builder(result) if builder else []

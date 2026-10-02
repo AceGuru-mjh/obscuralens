@@ -7,6 +7,12 @@ Pivots (depth 1):
   * domain  -> up to ``max_pivots`` A records are looked up as IPs
   * ip      -> its PTR hostname is looked up as a domain
 
+v4.0 pivots:
+  * url     -> its host is looked up as a domain
+  * ip      -> InternetDB/Shodan vulnerabilities are looked up as CVEs
+  * domain  -> the first A record's ASN is looked up as an AS number
+  * cve     -> no pivot (reference data)
+
 The result is a self-contained payload with per-kind tracker results plus an
 entity list and a relationship list, renderable as a table, JSON or a Mermaid
 graph.
@@ -17,14 +23,21 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .reporting.sections import sections_for
 from .utils.validators import (
+    normalize_cve,
+    validate_asn,
+    validate_crypto_address,
+    validate_cve,
     validate_domain,
     validate_email,
+    validate_hash,
     validate_ip,
     validate_phone,
+    validate_url,
     validate_username,
 )
 
-KINDS = ('ip', 'phone', 'username', 'email', 'domain')
+KINDS = ('ip', 'phone', 'username', 'email', 'domain', 'url', 'crypto',
+         'hash', 'cve', 'asn')
 
 
 def detect_kind(target: str) -> Optional[str]:
@@ -36,10 +49,23 @@ def detect_kind(target: str) -> Optional[str]:
         return 'ip'
     if validate_email(value)[0]:
         return 'email'
+    # URLs and CVEs both contain ':' / '-' shapes; check URL before domain so
+    # "https://example.com" is not mistaken for a domain.
+    if '://' in value and validate_url(value)[0]:
+        return 'url'
+    if validate_cve(value)[0]:
+        return 'cve'
+    if validate_hash(value)[0]:
+        return 'hash'
+    if value.lower().startswith(('as',)) and validate_asn(value)[0] \
+            and re.match(r'^as\d+$', value.strip(), re.I):
+        return 'asn'
     if '.' in value and validate_domain(value)[0]:
         return 'domain'
     if validate_phone(value)[0]:
         return 'phone'
+    if validate_crypto_address(value)[0]:
+        return 'crypto'
     if validate_username(value)[0]:
         return 'username'
     return None
@@ -48,15 +74,22 @@ def detect_kind(target: str) -> Optional[str]:
 def _default_checker(kind: str, target: str) -> Dict[str, Any]:
     """Run the real tracker for a kind (imported lazily to avoid cycles)."""
     from .trackers import (
+        ASNTracker,
+        CryptoTracker,
+        CVETracker,
         DomainTracker,
         EmailTracker,
+        HashTracker,
         IPTracker,
         PhoneTracker,
+        URLTracker,
         UsernameTracker,
     )
     trackers = {
         'ip': IPTracker, 'phone': PhoneTracker, 'username': UsernameTracker,
         'email': EmailTracker, 'domain': DomainTracker,
+        'url': URLTracker, 'crypto': CryptoTracker, 'hash': HashTracker,
+        'cve': CVETracker, 'asn': ASNTracker,
     }
     return trackers[kind]().track(target)
 
@@ -138,6 +171,13 @@ def _add_ip_facts(graph: _Graph, result: Dict[str, Any]) -> None:
                'prefix')
     for hostname in (info.get('hostnames') or [])[:5]:
         graph.link(node, graph.add_entity('hostname', hostname), 'hostname')
+    for hostname in (info.get('passive_dns_hostnames') or [])[:5]:
+        graph.link(node, graph.add_entity('hostname', hostname), 'passive_dns')
+    for hostname in (info.get('reverse_ip_hostnames') or [])[:5]:
+        graph.link(node, graph.add_entity('hostname', hostname), 'reverse_ip')
+    for vuln in (info.get('vulns') or [])[:5]:
+        graph.link(node, graph.add_entity('cve', normalize_cve(str(vuln))),
+                   'exposes')
 
 
 def _add_email_facts(graph: _Graph, result: Dict[str, Any]) -> None:
@@ -176,12 +216,83 @@ def _add_username_facts(graph: _Graph, result: Dict[str, Any]) -> None:
                    'profile_on')
 
 
+def _add_url_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity('url', result.get('url'))
+    if not node:
+        return
+    graph.link(node, graph.add_entity('domain', info.get('domain')
+                                      or result.get('domain')),
+               'hosted_on')
+    final = info.get('final_url')
+    if final and final != result.get('url'):
+        graph.link(node, graph.add_entity('url', final), 'redirects_to')
+    for hop in (info.get('redirect_chain') or [])[:5]:
+        if hop.get('url') and hop['url'] != result.get('url'):
+            graph.link(node, graph.add_entity('url', hop['url']),
+                       'redirect_hop')
+
+
+def _add_crypto_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity('crypto', result.get('address'),
+                            label=f"{info.get('chain', 'address')}: "
+                                  f"{result.get('address', '')}")
+    if not node:
+        return
+
+
+def _add_hash_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity('hash', result.get('hash'),
+                            label=f"{info.get('algorithm', 'hash')}: "
+                                  f"{result.get('hash', '')}")
+    if not node:
+        return
+    if info.get('malware_family'):
+        graph.link(node, graph.add_entity('malware_family',
+                                          info.get('malware_family')),
+                   'classified_as')
+
+
+def _add_cve_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity('cve', result.get('cve'))
+    if not node:
+        return
+    for cpe in (info.get('affected_cpes') or [])[:5]:
+        graph.link(node, graph.add_entity('cpe', cpe), 'affects')
+    if info.get('cwe'):
+        graph.link(node, graph.add_entity('cwe', info.get('cwe')),
+                   'weakness')
+
+
+def _add_asn_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity('asn', info.get('asn_display')
+                            or f"AS{result.get('asn', '')}")
+    if not node:
+        return
+    graph.link(node, graph.add_entity('organisation', info.get('asn_name')),
+               'operated_by')
+    graph.link(node, graph.add_entity('country', info.get('asn_country')),
+               'registered_in')
+    for prefix in (info.get('announced_prefixes')
+                   or info.get('bgpview_ipv4_prefixes') or [])[:10]:
+        graph.link(node, graph.add_entity('prefix', prefix), 'announces')
+
+
 _GRAPH_BUILDERS = {
     'domain': _add_domain_facts,
     'ip': _add_ip_facts,
     'email': _add_email_facts,
     'phone': _add_phone_facts,
     'username': _add_username_facts,
+    'url': _add_url_facts,
+    'crypto': _add_crypto_facts,
+    'hash': _add_hash_facts,
+    'cve': _add_cve_facts,
+    'asn': _add_asn_facts,
 }
 
 
@@ -255,6 +366,16 @@ def investigate(target: str, pivot: bool = True, max_pivots: int = 3,
             ptr = info.get('reverse_dns')
             if ptr and validate_domain(str(ptr))[0]:
                 pivot_to('domain', str(ptr))
+            # v4.0: follow known vulnerabilities as CVE pivots.
+            for vuln in (info.get('vulns') or [])[:max_pivots]:
+                cve_id = normalize_cve(str(vuln))
+                if cve_id:
+                    pivot_to('cve', cve_id)
+        elif kind == 'url':
+            # v4.0: a URL pivots to the domain of its host.
+            domain = primary.get('domain') or (primary.get('info') or {}).get('domain')
+            if domain and validate_domain(str(domain))[0]:
+                pivot_to('domain', str(domain))
 
     graph = _Graph(value, kind)
     for kind_name, result in payload['results'].items():

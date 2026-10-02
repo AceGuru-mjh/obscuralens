@@ -11,6 +11,9 @@ from obscuralens.mcp_server import call_tool, handle_request, main
 TOOL_NAMES = {
     'ip_lookup', 'phone_lookup', 'username_lookup', 'email_lookup',
     'domain_lookup', 'investigate', 'watch_list', 'watch_check',
+    # v4.0 tools
+    'url_lookup', 'crypto_lookup', 'hash_lookup', 'cve_lookup', 'asn_lookup',
+    'risk_report', 'correlate', 'timeline', 'threat_intel', 'source_health',
 }
 
 
@@ -44,6 +47,8 @@ def test_tools_list_contains_all_tools_with_valid_schemas():
     response = handle_request(_request('tools/list'))
     tools = response['result']['tools']
     assert {tool['name'] for tool in tools} == TOOL_NAMES
+    no_target_required = ('watch_list', 'watch_check', 'correlate', 'timeline',
+                          'threat_intel', 'source_health', 'risk_report')
     for tool in tools:
         assert isinstance(tool['description'], str) and tool['description']
         schema = tool['inputSchema']
@@ -51,7 +56,7 @@ def test_tools_list_contains_all_tools_with_valid_schemas():
         assert isinstance(schema['properties'], dict)
         for prop in schema['properties'].values():
             assert 'type' in prop
-        if tool['name'] not in ('watch_list', 'watch_check'):
+        if tool['name'] not in no_target_required:
             assert 'target' in schema['required']
 
 
@@ -158,4 +163,4 @@ def test_main_end_to_end(monkeypatch):
     assert len(out_lines) == 2
     first, second = json.loads(out_lines[0]), json.loads(out_lines[1])
     assert first['result']['serverInfo']['name'] == 'obscuralens'
-    assert len(second['result']['tools']) == 8
+    assert len(second['result']['tools']) == 18  # 8 core + 10 v4.0 tools

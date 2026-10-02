@@ -1,0 +1,43 @@
+# Brand abuse pipeline
+# --------------------
+# Check a suspect URL and its host domain for phishing / brand-abuse signals.
+# Typical starting point: a look-alike domain reported by a customer or a
+# phishing kit seen in a mail campaign.
+
+name: brand-abuse
+description: Check a suspect URL and its host domain for phishing / brand-abuse signals
+
+# The URL under investigation (any http/https URL; the kind is auto-detected
+# when using $target in a bare lookup, here we are explicit for clarity).
+variables:
+  target: https://secure-login.example-verify.com/
+
+steps:
+  # 1. URL lookup: redirect chain, page title, VirusTotal / urlscan.io /
+  #    Google Safe Browsing verdicts and Wayback Machine history.
+  - lookup:
+      kind: url
+      target: $target
+
+  # 2. Registrant / infrastructure side: enrich the host domain (WHOIS age,
+  #    registrar, name servers, certificate transparency subdomains). Phishing
+  #    kits are usually hosted on freshly registered look-alike domains, so a
+  #    young registration here is a strong corroborating signal.
+  - lookup:
+      kind: domain
+      target: example-verify.com
+
+  # 3. Escalation rule: flag the run when Google Safe Browsing reports the
+  #    URL as malicious (SOCIAL_ENGINEERING / PHISHING threat match).
+  - assert:
+      field: gsb_malicious
+      op: '=='
+      value: true
+      message: URL flagged as phishing by Google Safe Browsing
+
+  # 4. Write a Markdown summary for the brand-protection folder. An empty
+  #    path would print to the console instead; relative paths resolve under
+  #    the configured report directory.
+  - output:
+      format: markdown
+      path: brand-abuse-report.md

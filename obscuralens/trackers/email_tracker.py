@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 from ..config import config
 from ..core.metrics import metrics
 from ..database import db
+from ..health import health
 from .email_sources import FREE_SOURCES, KEYED_SOURCES, _pattern_analysis
 
 
@@ -50,22 +51,27 @@ class EmailTracker:
         local_part = email.split('@')[0] if '@' in email else email
 
         tasks: Dict[str, Any] = {}
-        if config.is_source_enabled('dns'):
+        if config.is_source_enabled('dns') and health.source_allowed('dns'):
             tasks['dns'] = lambda: FREE_SOURCES['dns'](domain) if domain else {}
-        if config.is_source_enabled('disposable'):
+        if config.is_source_enabled('disposable') and health.source_allowed('disposable'):
             tasks['disposable'] = lambda: FREE_SOURCES['disposable'](domain, email)
-        if config.is_source_enabled('openpgp'):
+        if config.is_source_enabled('openpgp') and health.source_allowed('openpgp'):
             tasks['openpgp'] = lambda: FREE_SOURCES['openpgp'](email)
-        if config.is_source_enabled('domain_rdap'):
+        if config.is_source_enabled('domain_rdap') and health.source_allowed('domain_rdap'):
             tasks['domain_rdap'] = lambda: FREE_SOURCES['domain_rdap'](domain) if domain else {}
-        if config.is_source_enabled('gravatar'):
+        if config.is_source_enabled('gravatar') and health.source_allowed('gravatar'):
             tasks['gravatar'] = lambda: FREE_SOURCES['gravatar'](email)
+        if config.is_source_enabled('emailrep') and health.source_allowed('emailrep'):
+            tasks['emailrep'] = lambda: FREE_SOURCES['emailrep'](email)
+        if config.is_source_enabled('github_commits') \
+                and health.source_allowed('github_commits'):
+            tasks['github_commits'] = lambda: FREE_SOURCES['github_commits'](email)
         if config.is_source_enabled('patterns'):
             tasks['patterns'] = lambda: _pattern_analysis(email, local_part, domain)
 
         for name, fn in _plugin_sources('email').items():
             source_name = f"plugin:{name}"
-            if config.is_source_enabled(source_name):
+            if config.is_source_enabled(source_name) and health.source_allowed(source_name):
                 tasks[source_name] = (lambda f=fn: f(email))
 
         if config.is_configured('haveibeenpwned'):
@@ -94,6 +100,8 @@ class EmailTracker:
                     except Exception as e:
                         results[name] = {}
                         status[name] = {'ok': False, 'error': type(e).__name__}
+
+            health.record_batch('email', status)
 
             # Deterministic merge: task registration order sets priority.
             for name in tasks:

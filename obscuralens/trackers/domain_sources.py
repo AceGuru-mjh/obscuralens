@@ -22,6 +22,7 @@ from urllib.parse import quote
 import requests
 
 from ..config import config
+from ..health import health
 from ..utils.http_client import http
 from .email_sources import _dns_records, _domain_rdap, _parse_iso
 
@@ -212,6 +213,127 @@ def _wayback(domain: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v4.0 keyless additions
+# ---------------------------------------------------------------------------
+
+def _crtsh(domain: str) -> Dict[str, Any]:
+    """
+    crt.sh Certificate Transparency search (keyless, can be slow): every
+    certificate issued for the domain and its subdomains, with issuer names.
+    """
+    ok, data, _ = http.get_json(
+        f"https://crt.sh/?q=%.{quote(domain, safe='')}&output=json",
+        cache_ttl=1800)
+    if not ok or not isinstance(data, list) or not data:
+        return {}
+
+    root = domain.lower()
+    subdomains = set()
+    issuers = {}
+    serials = set()
+    latest = ''
+    for record in data:
+        if not isinstance(record, dict):
+            continue
+        if record.get('id') is not None:
+            serials.add(record['id'])
+        issuer = str(record.get('issuer_name') or '').strip()
+        if issuer:
+            issuers[issuer] = issuers.get(issuer, 0) + 1
+        for field in ('common_name', 'name_value'):
+            for name in str(record.get(field) or '').split('\n'):
+                name = name.strip().lower().lstrip('*.').rstrip('.')
+                if name and name != root and name.endswith(root):
+                    subdomains.add(name)
+        not_before = str(record.get('not_before') or '')
+        if not_before > latest:
+            latest = not_before
+
+    out: Dict[str, Any] = {'crtsh_certs': len(serials) or len(data)}
+    if subdomains:
+        out['crtsh_subdomains'] = sorted(subdomains)[:100]
+    top_issuers = sorted(issuers.items(), key=lambda kv: -kv[1])[:3]
+    if top_issuers:
+        out['crtsh_issuers'] = [name for name, _count in top_issuers]
+    if latest:
+        out['crtsh_last_issued'] = latest
+    return out
+
+
+def _hackertarget(domain: str) -> Dict[str, Any]:
+    """hackertarget.com host search (keyless, daily quota): subdomain/IP pairs."""
+    ok, text, _ = http.get_text(
+        f"https://api.hackertarget.com/hostsearch/?q={domain}")
+    if not ok or not text:
+        return {}
+    low = text.strip().lower()
+    if low.startswith('error') or 'invalid' in low or 'quota' in low:
+        return {}
+
+    subdomains: List[str] = []
+    ips: List[str] = []
+    for line in text.strip().splitlines():
+        parts = [p.strip() for p in line.split(',')]
+        if not parts or not parts[0]:
+            continue
+        subdomains.append(parts[0])
+        if len(parts) > 1 and parts[1]:
+            ips.append(parts[1])
+    if not subdomains:
+        return {}
+    out: Dict[str, Any] = {
+        'hackertarget_subdomains': subdomains[:50],
+        'hackertarget_subdomain_count': len(subdomains),
+    }
+    if ips:
+        out['hackertarget_ips'] = sorted(set(ips))[:20]
+    return out
+
+
+def _security_txt(domain: str) -> Dict[str, Any]:
+    """
+    RFC 9116 security.txt (keyless): disclosure contacts, expiry and policy
+    URLs published under /.well-known/security.txt.
+    """
+    status, text, _error = http.fetch(f"https://{domain}/.well-known/security.txt")
+    if status != 200 or not text:
+        return {}
+
+    contacts: List[str] = []
+    expires = ''
+    languages = ''
+    canonical: List[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        field, _, value = line.partition(':')
+        value = value.strip()
+        if not value:
+            continue
+        field = field.lower()
+        if field == 'contact' and len(contacts) < 5:
+            contacts.append(value)
+        elif field == 'expires':
+            expires = value
+        elif field == 'preferred-languages':
+            languages = value
+        elif field == 'canonical' and len(canonical) < 3:
+            canonical.append(value)
+
+    out: Dict[str, Any] = {'security_txt': True}
+    if contacts:
+        out['security_contacts'] = contacts
+    if expires:
+        out['security_expires'] = expires
+    if languages:
+        out['security_languages'] = languages
+    if canonical:
+        out['security_canonical'] = canonical
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -222,6 +344,9 @@ FREE_SOURCES: Dict[str, Any] = {
     'http': _http_probe,
     'urlscan': _urlscan,
     'wayback': _wayback,
+    'crt.sh': _crtsh,
+    'hackertarget': _hackertarget,
+    'security_txt': _security_txt,
 }
 
 # Human-readable metadata used by `obscuralens sources` and the README.
@@ -232,6 +357,9 @@ SOURCE_CATALOG = {
     'http': 'Status, title, server/security headers, robots.txt (keyless)',
     'urlscan': 'Public urlscan.io scan history, observed IPs and servers (keyless)',
     'wayback': 'First and last Wayback Machine captures (keyless)',
+    'crt.sh': 'Certificate Transparency via crt.sh: certificates, subdomains, issuers (keyless)',
+    'hackertarget': 'Subdomain/IP host search (keyless, daily quota)',
+    'security_txt': 'RFC 9116 security.txt disclosure contacts and policy (keyless)',
 }
 
 
@@ -267,12 +395,12 @@ def gather_all(domain: str) -> Dict[str, Any]:
     tasks: Dict[str, Any] = {}
 
     for name, fn in FREE_SOURCES.items():
-        if config.is_source_enabled(name):
+        if config.is_source_enabled(name) and health.source_allowed(name):
             tasks[name] = (lambda f=fn: f(domain))
 
     for name, fn in _plugin_sources('domain').items():
         source_name = f"plugin:{name}"
-        if config.is_source_enabled(source_name):
+        if config.is_source_enabled(source_name) and health.source_allowed(source_name):
             tasks[source_name] = (lambda f=fn: f(domain))
 
     results: Dict[str, Dict[str, Any]] = {}
@@ -290,6 +418,8 @@ def gather_all(domain: str) -> Dict[str, Any]:
                 except Exception as e:  # a broken source must not kill the scan
                     results[name] = {}
                     status[name] = {'ok': False, 'error': type(e).__name__}
+
+    health.record_batch('domain', status)
 
     merged: Dict[str, Any] = {}
     provenance: Dict[str, List[str]] = {}
