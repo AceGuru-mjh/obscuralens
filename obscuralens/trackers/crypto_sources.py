@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ..config import config
+from ..health import health
 from ..utils.http_client import http
 from ..utils.validators import detect_crypto_chain
 
@@ -395,12 +396,12 @@ def gather_all(address: str, keys: Optional[Dict[str, str]] = None) -> Dict[str,
     tasks: Dict[str, Any] = {}
 
     for name, fn in FREE_SOURCES.items():
-        if config.is_source_enabled(name):
+        if config.is_source_enabled(name) and health.source_allowed(name):
             tasks[name] = (lambda f=fn: f(address))
 
     for name, fn in _plugin_sources('crypto').items():
         source_name = f"plugin:{name}"
-        if config.is_source_enabled(source_name):
+        if config.is_source_enabled(source_name) and health.source_allowed(source_name):
             tasks[source_name] = (lambda f=fn: f(address))
 
     key_map = {
@@ -408,7 +409,8 @@ def gather_all(address: str, keys: Optional[Dict[str, str]] = None) -> Dict[str,
     }
     for service, (source_name, factory) in key_map.items():
         key = keys.get(service)
-        if key and config.is_source_enabled(source_name):
+        if key and config.is_source_enabled(source_name) \
+                and health.source_allowed(source_name):
             tasks[source_name] = (lambda f=factory, k=key: f(k))
 
     results: Dict[str, Dict[str, Any]] = {}
@@ -426,6 +428,8 @@ def gather_all(address: str, keys: Optional[Dict[str, str]] = None) -> Dict[str,
                 except Exception as e:  # a broken source must not kill the scan
                     results[name] = {}
                     status[name] = {'ok': False, 'error': type(e).__name__}
+
+    health.record_batch('crypto', status)
 
     merged: Dict[str, Any] = {}
     provenance: Dict[str, List[str]] = {}

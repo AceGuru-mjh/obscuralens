@@ -20,6 +20,7 @@ import concurrent.futures as futures
 from typing import Any, Dict, List, Optional
 
 from ..config import config
+from ..health import health
 from ..utils.http_client import http
 from ..utils.validators import normalize_asn
 
@@ -315,12 +316,12 @@ def gather_all(asn_value: Any, keys: Optional[Dict[str, str]] = None) -> Dict[st
     tasks: Dict[str, Any] = {}
 
     for name, fn in FREE_SOURCES.items():
-        if config.is_source_enabled(name):
+        if config.is_source_enabled(name) and health.source_allowed(name):
             tasks[name] = (lambda f=fn: f(num))
 
     for name, fn in _plugin_sources('asn').items():
         source_name = f"plugin:{name}"
-        if config.is_source_enabled(source_name):
+        if config.is_source_enabled(source_name) and health.source_allowed(source_name):
             tasks[source_name] = (lambda f=fn: f(num))
 
     results: Dict[str, Dict[str, Any]] = {}
@@ -338,6 +339,8 @@ def gather_all(asn_value: Any, keys: Optional[Dict[str, str]] = None) -> Dict[st
                 except Exception as e:  # a broken source must not kill the scan
                     results[name] = {}
                     status[name] = {'ok': False, 'error': type(e).__name__}
+
+    health.record_batch('asn', status)
 
     merged: Dict[str, Any] = {}
     provenance: Dict[str, List[str]] = {}

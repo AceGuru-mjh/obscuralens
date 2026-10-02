@@ -33,6 +33,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import quote, urljoin
 
 from ..config import config
+from ..health import health
 from ..utils.http_client import http
 from ..utils.validators import url_parts
 
@@ -453,17 +454,18 @@ def gather_all(url: str, keys: Optional[Dict[str, str]] = None) -> Dict[str, Any
     tasks: Dict[str, Any] = {}
 
     for name, fn in FREE_SOURCES.items():
-        if config.is_source_enabled(name):
+        if config.is_source_enabled(name) and health.source_allowed(name):
             tasks[name] = (lambda f=fn: f(url))
 
     for name, fn in _plugin_sources('url').items():
         source_name = f"plugin:{name}"
-        if config.is_source_enabled(source_name):
+        if config.is_source_enabled(source_name) and health.source_allowed(source_name):
             tasks[source_name] = (lambda f=fn: f(url))
 
     for service, fn in KEYED_SOURCES.items():
         key = keys.get(service)
-        if key and config.is_source_enabled(service):
+        if key and config.is_source_enabled(service) \
+                and health.source_allowed(service):
             tasks[service] = (lambda f=fn, k=key: f(url, k))
 
     results: Dict[str, Dict[str, Any]] = {}
@@ -481,6 +483,8 @@ def gather_all(url: str, keys: Optional[Dict[str, str]] = None) -> Dict[str, Any
                 except Exception as e:  # a broken source must not kill the scan
                     results[name] = {}
                     status[name] = {'ok': False, 'error': type(e).__name__}
+
+    health.record_batch('url', status)
 
     merged: Dict[str, Any] = {}
     provenance: Dict[str, List[str]] = {}
