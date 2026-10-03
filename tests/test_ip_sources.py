@@ -74,6 +74,77 @@ def test_ripestat_degrades_gracefully(fake_http):
     assert ip_sources._ripestat('8.8.8.8') == {}
 
 
+def test_greynoise_hit_parses(fake_http, fake_response):
+    fake_http.get = lambda url, **kw: fake_response(
+        status_code=200,
+        json_data={'ip': '1.2.3.4', 'noise': True, 'riot': False,
+                   'classification': 'malicious',
+                   'name': 'Mirai', 'last_seen': '2026-09-01',
+                   'message': 'seen scanning'})
+    out = ip_sources._greynoise('1.2.3.4')
+    assert out['gn_noise'] is True
+    assert out['gn_riot'] is False
+    assert out['gn_classification'] == 'malicious'
+    assert out['gn_name'] == 'Mirai'
+    assert out['gn_message'] == 'seen scanning'
+
+
+def test_greynoise_not_observed_is_real_answer(fake_http, fake_response):
+    """A 404 'not observed' body is valuable intel, not a failure."""
+    fake_http.get = lambda url, **kw: fake_response(
+        status_code=404,
+        json_data={'ip': '8.8.8.8', 'noise': False, 'riot': False,
+                   'message': 'IP not observed scanning the internet.'})
+    out = ip_sources._greynoise('8.8.8.8')
+    assert out['gn_noise'] is False
+    assert out['gn_riot'] is False
+    assert out['gn_message'] == 'IP not observed scanning the internet.'
+    # Absent classification/name are dropped, not rendered as empty.
+    assert 'gn_classification' not in out
+    assert 'gn_name' not in out
+
+
+def test_greynoise_other_status_is_no_data(fake_http, fake_response):
+    fake_http.get = lambda url, **kw: fake_response(
+        status_code=429, json_data={'error': 'rate limited'})
+    assert ip_sources._greynoise('1.2.3.4') == {}
+
+
+def test_greynoise_network_error_is_no_data(fake_http):
+    def boom(url, **kwargs):
+        raise ConnectionError('down')
+
+    fake_http.get = boom
+    assert ip_sources._greynoise('1.2.3.4') == {}
+
+
+def test_greynoise_attaches_configured_key(fake_http, fake_response,
+                                           monkeypatch):
+    seen = {}
+
+    def capture(url, **kwargs):
+        seen.update(kwargs.get('headers') or {})
+        return fake_response(status_code=200, json_data={'noise': False})
+
+    fake_http.get = capture
+    monkeypatch.setattr(config, 'get_api_key',
+                        lambda service: 'secret' if service == 'greynoise' else None)
+    out = ip_sources._greynoise('1.2.3.4')
+    assert seen.get('key') == 'secret'
+    assert out['gn_noise'] is False
+
+
+def test_greynoise_runs_without_key_in_gather(monkeypatch):
+    """The source must run keyless: previously it never ran at all because
+    IPTracker._keys() never supplied the key its keyed registration needed."""
+    monkeypatch.setattr(ip_sources, 'FREE_SOURCES', {
+        'greynoise': lambda ip: {'gn_noise': False},
+    })
+    out = ip_sources.gather_all('8.8.8.8', {})
+    assert out['sources']['greynoise']['ok'] is True
+    assert out['fields']['gn_noise'] is False
+
+
 def test_gather_all_merges_deterministically(monkeypatch):
     monkeypatch.setattr(ip_sources, 'FREE_SOURCES', _fake_sources())
     out = ip_sources.gather_all('1.2.3.4')

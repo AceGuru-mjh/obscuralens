@@ -261,11 +261,14 @@ def test_osv_http_failure_returns_empty(fake_http):
 
 
 # ---------------------------------------------------------------------------
-# cvelistV2 reader
+# cvelist reader
 # ---------------------------------------------------------------------------
 
 def test_cvelist_bucket_path_math():
     url = cve_sources._cvelist_url('CVE-2021-44228')
+    # Regression: the CNA mirror lives in the cvelistV5 repository
+    # (cvelistV2 no longer serves these paths).
+    assert 'CVEProject/cvelistV5' in url
     assert '/cves/2021/44xxx/' in url
     assert url.endswith('/cves/2021/44xxx/CVE-2021-44228.json')
     # 1234 // 1000 == 1 -> the '1xxx' bucket.
@@ -275,14 +278,14 @@ def test_cvelist_bucket_path_math():
 
 def test_cvelist_uses_bucketed_url(fake_http):
     fake_http.json = lambda url, **kw: (True, CNA, '')
-    cve_sources._cvelistv2('CVE-2021-44228')
+    cve_sources._cvelist('CVE-2021-44228')
     urls = [u for kind, u in fake_http.calls if kind == 'json']
     assert any('/cves/2021/44xxx/CVE-2021-44228.json' in u for u in urls)
 
 
 def test_cvelist_fields(fake_http):
     fake_http.json = lambda url, **kw: (True, CNA, '')
-    out = cve_sources._cvelistv2('CVE-2021-44228')
+    out = cve_sources._cvelist('CVE-2021-44228')
     assert out['cna_title'] == 'Remote code execution in Apache Log4j2'
     assert out['cna_published'] == '2021-11-24'
     assert out['cna_updated'] == '2021-12-10T00:00:00'
@@ -298,13 +301,13 @@ def test_cvelist_description_truncated(fake_http):
         'cveMetadata': {'state': 'PUBLISHED'},
     }
     fake_http.json = lambda url, **kw: (True, payload, '')
-    out = cve_sources._cvelistv2('CVE-2021-44228')
+    out = cve_sources._cvelist('CVE-2021-44228')
     assert len(out['cna_description']) == 500
 
 
 def test_cvelist_http_failure_returns_empty(fake_http):
     fake_http.json = lambda url, **kw: (False, None, 'http 404')
-    assert cve_sources._cvelistv2('CVE-2021-44228') == {}
+    assert cve_sources._cvelist('CVE-2021-44228') == {}
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +415,7 @@ def test_gather_all_nvd_key_override(fake_http):
 
 def test_registries_are_consistent():
     assert set(cve_sources.FREE_SOURCES) == {
-        'nvd', 'osv', 'cvelistV2', 'epss', 'circl'}
+        'nvd', 'osv', 'cvelist', 'epss', 'circl'}
     assert cve_sources.KEYED_SOURCES == {}
     assert set(cve_sources.SOURCE_CATALOG) == set(cve_sources.FREE_SOURCES)
 
@@ -427,7 +430,7 @@ def test_tracker_success_shape(fake_http, recording_db):
 
     assert result['cve'] == 'CVE-2021-44228'
     assert result['success'] is True
-    assert result['sources_ok'] == ['circl', 'cvelistV2', 'epss', 'nvd', 'osv']
+    assert result['sources_ok'] == ['circl', 'cvelist', 'epss', 'nvd', 'osv']
     assert result['sources_failed'] == {}
     assert result['errors'] == []
     assert result['field_count'] > 5
@@ -459,7 +462,7 @@ def test_tracker_partial_failure_still_succeeds(fake_http, recording_db):
     assert result['sources_ok'] == ['circl', 'nvd', 'osv']
     # Readers swallow transport errors and return {} - the merged report then
     # records the source as "no data" rather than crashing the scan.
-    assert result['sources_failed'] == {'cvelistV2': 'no data', 'epss': 'no data'}
+    assert result['sources_failed'] == {'cvelist': 'no data', 'epss': 'no data'}
     assert result['errors'] == ['2 source(s) unavailable']
     assert 'epss_score' not in result['info']
     assert recording_db[0]['success'] is True
@@ -512,6 +515,6 @@ def test_batch_track_preserves_order(fake_http, recording_db):
 
 def test_tracker_helpers():
     tracker = CVETracker()
-    assert tracker.source_names() == ['circl', 'cvelistV2', 'epss', 'nvd', 'osv']
+    assert tracker.source_names() == ['circl', 'cvelist', 'epss', 'nvd', 'osv']
     assert set(tracker.source_catalog()) == set(cve_sources.SOURCE_CATALOG)
     assert 'keyless' in tracker.source_catalog()['nvd']

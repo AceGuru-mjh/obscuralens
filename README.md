@@ -23,7 +23,7 @@ Multi-source OSINT console and investigation platform for **14 target kinds**: I
 
 ## What's new in v4.0
 
-- **5 new trackers**: `url` (redirect chains, urlscan.io, Wayback, keyed Google Safe Browsing/VirusTotal), `crypto` (blockchain.info, Blockstream, Blockchair, keyed Etherscan), `hash` (MalwareBazaar, CIRCL hashlookup, OTX, keyed VirusTotal), `cve` (NVD, OSV, cvelistV2, EPSS) and `asn` (RIPEstat, BGPView).
+- **5 new trackers**: `url` (redirect chains, urlscan.io, Wayback, keyed Google Safe Browsing/VirusTotal), `crypto` (blockchain.info, Blockstream, Blockchair, keyed Etherscan), `hash` (MalwareBazaar, CIRCL hashlookup, OTX, keyed VirusTotal), `cve` (NVD, OSV, cvelistV5, EPSS) and `asn` (RIPEstat, BGPView).
 - **New sources for existing trackers**: IP gains ipapi.co, AlienVault OTX (pulses + passive DNS), hackertarget and threat feeds (Tor exit list, Spamhaus DROP, Feodo, FireHOL level-1) plus keyed GreyNoise; domain gains crt.sh, hackertarget hostsearch and RFC 9116 security.txt; email gains EmailRep.io, GitHub commit search and an offline disposable-domain pack (3,000+ domains); username gains 8 HTML platforms (Steam, Mastodon, Wattpad, SlideShare, Redbubble, Hackaday.io, Last.fm, Kaggle); phone gains offline geo enrichment (country name, flag, continent).
 - **14 new CLI commands**: `url`, `crypto`, `hash`, `cve`, `asn`, `risk`, `timeline`, `correlate`, `diff`, `export`, `case`, `pipeline`, `intel`, `experimental` — plus `sources health` and a `--risk` flag on every lookup.
 - **Correlation, timeline and risk scoring** across your stored lookup history: clusters, bridge entities, chronological event timelines and explainable per-kind risk signals. See [docs/advanced.md](docs/advanced.md).
@@ -49,7 +49,7 @@ Multi-source OSINT console and investigation platform for **14 target kinds**: I
 | **URL** | Redirect walk, urlscan.io, Wayback CDX + keyed Google Safe Browsing/VirusTotal | redirect chain + count, final URL, status, title, server, urlscan verdicts, archive captures, GSB/VT verdicts |
 | **Crypto** | blockchain.info, Blockstream Esplora, Blockchair, mempool.space (BTC/ETH/LTC/DOGE) + keyed Etherscan | balance, received/sent totals, tx counts, first/last activity, mempool counters |
 | **Hash** | MalwareBazaar, CIRCL hashlookup, OTX + keyed VirusTotal | malware family, file names/size/type, tags, known-file verdict, detections, reputation, threat label |
-| **CVE** | NVD 2.0, OSV.dev, cvelistV2, FIRST EPSS, CIRCL | description, CVSS score/vector/severity, CWE, references, affected CPEs, EPSS probability, CIRCL state/assigner |
+| **CVE** | NVD 2.0, OSV.dev, cvelistV5, FIRST EPSS, CIRCL | description, CVSS score/vector/severity, CWE, references, affected CPEs, EPSS probability, CIRCL state/assigner |
 | **ASN** | RIPEstat, BGPView | holder, description, country, website, announced prefixes (v4/v6 counts), peers |
 | **MAC** | offline IEEE OUI pack (766 vendors), macvendors.com, maclookup.app + offline bit decomposition | vendor, assignment type, multicast/local flags, reserved blocks, Docker vNIC decode, EUI-64 + IPv6 hints |
 | **IBAN** | offline mod-97 + country structure pack (124 countries), openiban.com | checksum verdict, country, bank code, account slices, BIC + bank name, pretty/masked forms |

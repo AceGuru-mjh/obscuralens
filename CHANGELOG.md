@@ -143,7 +143,7 @@ risk scoring, case management, YAML pipelines and graph exports.
     label). MD5/SHA-1/SHA-256 routed per algorithm.
   - `obscuralens cve <id>` — NVD 2.0 (CVSS V3.1 > V3.0 > V2 preference,
     CWE, references, CPEs; optional API key), Google OSV.dev (affected
-    packages, severity vector), the raw cvelistV2 CNA record and FIRST.org
+    packages, severity vector), the raw cvelistV5 CNA record and FIRST.org
     EPSS exploitation probability.
   - `obscuralens asn <num>` — RIPEstat overview + announced prefixes and
     BGPView record, prefixes and peers.
