@@ -1,0 +1,157 @@
+# ObscuraLens explainable rule pack -- phone
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the phone tracker output: is_voip, is_toll_free, is_prepaid,
+# valid_format, carrier, country_code, number_length, region_code...
+# ---------------------------------------------------------------------------
+
+name: phone-rules
+description: >-
+  Explainable line-type, validity and jurisdiction heuristics for phone
+  number lookups.
+version: 1
+rules:
+  - id: PHONE-001
+    title: VoIP line
+    description: >-
+      The number terminates on a VoIP service instead of a carrier
+      network. VoIP numbers are issued in minutes and discarded, which
+      makes them the default choice for SMS-verification abuse and
+      throwaway contact channels.
+    severity: medium
+    weight: 15
+    tags: [voip, disposable]
+    conditions:
+      - field: is_voip
+        operator: is_true
+
+  - id: PHONE-002
+    title: Toll-free number
+    description: >-
+      The number is toll-free, so it is organisational infrastructure
+      rather than a personal line. Treat it as a company contact surface
+      -- reachable, but useless for identifying an individual.
+    severity: info
+    weight: 5
+    tags: [line-type, context]
+    conditions:
+      - field: is_toll_free
+        operator: is_true
+
+  - id: PHONE-003
+    title: Prepaid subscription
+    description: >-
+      Carrier metadata marks the line as prepaid. Prepaid numbers have no
+      lasting billing identity and are trivially replaced, so they anchor
+      attribution far more weakly than postpaid lines.
+    severity: low
+    weight: 10
+    tags: [prepaid, attribution]
+    conditions:
+      - field: is_prepaid
+        operator: is_true
+
+  - id: PHONE-004
+    title: Number fails validation
+    description: >-
+      The number does not validate against the national numbering plan.
+      Invalid numbers appear when a contact channel was typed by hand,
+      fabricated, or mangled by copy-paste -- worth resolving before any
+      other signal is scored.
+    severity: low
+    weight: 10
+    tags: [validity]
+    references: ["E.164 ITU-T recommendation"]
+    conditions:
+      - field: valid_format
+        operator: is_false
+
+  - id: PHONE-005
+    title: Country mismatch with claimed locale
+    description: >-
+      The number's country code disagrees with the locale the subject
+      claims (the tracker computes this when both are known). Innocent
+      explanations exist -- travel, virtual numbers -- but it is also the
+      classic tell of a fabricated persona.
+    severity: low
+    weight: 10
+    tags: [geolocation, persona]
+    conditions:
+      - field: country_mismatch
+        operator: is_true
+
+  - id: PHONE-006
+    title: Region code absent
+    description: >-
+      The number carries no region/area information. Mobile and VoIP
+      ranges often lack one, so this is a context note about how much
+      geographic precision the lookup can ever provide.
+    severity: info
+    weight: 0
+    tags: [geolocation, coverage]
+    conditions:
+      - field: region_code
+        operator: not_exists
+
+  - id: PHONE-007
+    title: Carrier unknown
+    description: >-
+      No carrier could be resolved for the line. Without a carrier,
+      line-type judgements rest entirely on the number range, which is
+      exactly where number-recycling mistakes creep in.
+    severity: info
+    weight: 5
+    tags: [coverage]
+    conditions:
+      - field: carrier
+        operator: empty
+        value: true
+
+  - id: PHONE-008
+    title: Unusually short number
+    description: >-
+      The national number is seven digits or fewer. Short numbers are
+      usually special services, internal ranges or malformed input rather
+      than dialable subscriber lines.
+    severity: info
+    weight: 5
+    tags: [validity]
+    conditions:
+      - field: number_length
+        operator: lte
+        value: 7
+
+  - id: PHONE-009
+    title: Callback-fraud country code
+    description: >-
+      The country code belongs to a region repeatedly named in telecom
+      fraud advisories for premium-rate callback schemes. The number
+      itself is not fraudulent -- this is a caution about calling back
+      unknown missed calls from it.
+    severity: low
+    weight: 10
+    tags: [fraud, context]
+    conditions:
+      - field: country_code
+        operator: in
+        value: [NG, KE, GH, CM, CI, SN, ML]
+
+  - id: PHONE-010
+    title: Landline in a claimed-mobile persona
+    description: >-
+      The line is fixed-line while the surrounding context presents it as
+      a mobile. Mobile-only workflows (OTP, WhatsApp) cannot reach a
+      fixed line, so one side of the claimed identity is not consistent.
+    severity: info
+    weight: 5
+    tags: [line-type, persona]
+    conditions:
+      - field: is_mobile
+        operator: is_false
+      - field: type
+        operator: eq
+        value: fixed line

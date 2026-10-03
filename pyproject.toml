@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "obscuralens"
-version = "4.0.0"
-description = "Multi-source OSINT console for IPs, phone numbers, usernames, emails and domains"
+version = "5.1.0"
+description = "Multi-source OSINT console and investigation platform for 14 target kinds with a built-in web UI"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -48,6 +48,7 @@ dev = [
 web = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
 ]
 tui = [
     "textual>=0.60",
@@ -61,9 +62,14 @@ exe = [
     "uvicorn>=0.29",
     "textual>=0.60",
 ]
+desktop = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
 
 [project.scripts]
 obscuralens = "obscuralens.cli:main"
+obscuralens-desktop = "obscuralens.desktop.launcher:main"
 
 [project.urls]
 Homepage = "https://github.com/AceGuru-mjh/obscuralens"
@@ -89,4 +95,12 @@ select = ["E", "F", "W", "I", "B", "C4", "SIM"]
 ignore = ["E501"]
 
 [tool.setuptools.package-data]
-obscuralens = ["data/*.txt"]
+obscuralens = [
+    "data/*.txt",
+    "rules/packs/*.yaml",
+    "reporting/templates/*.j2",
+    "web/static/index.html",
+    "web/static/css/*.css",
+    "web/static/js/*.js",
+    "web/static/js/views/*.js",
+]

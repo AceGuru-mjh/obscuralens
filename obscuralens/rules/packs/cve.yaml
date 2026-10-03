@@ -1,0 +1,188 @@
+# ObscuraLens explainable rule pack -- cve
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the CVE tracker output: cvss, epss, exploit_available,
+# in_kev, cpe_wildcard_count, fixed, attack_vector, privileges,
+# affected_products...
+# ---------------------------------------------------------------------------
+
+name: cve-rules
+description: >-
+  Explainable patch-prioritisation heuristics for CVE lookups built on
+  CVSS severity, EPSS probability and exploitation evidence.
+version: 1
+rules:
+  - id: CVE-001
+    title: Critical CVSS base score
+    description: >-
+      The CVSS base score is 9.0 or higher. Severity alone does not mean
+      attackers care, but a score this high usually reflects trivial
+      exploitability or full system compromise, so the patch deserves a
+      slot at the front of the queue pending EPSS and KEV context.
+    severity: high
+    weight: 25
+    tags: [severity]
+    references: ["CVSS v3.1 specification (FIRST)"]
+    conditions:
+      - field: cvss
+        operator: gte
+        value: 9.0
+
+  - id: CVE-002
+    title: High exploitation probability (EPSS)
+    description: >-
+      EPSS puts the probability of exploitation in the wild at 50% or
+      higher. EPSS is a live probability model fed by real intrusion
+      telemetry, so it beats raw severity for deciding what actually
+      gets attacked next.
+    severity: high
+    weight: 25
+    tags: [epss, prioritisation]
+    references: ["FIRST EPSS"]
+    conditions:
+      - field: epss
+        operator: gte
+        value: 0.5
+
+  - id: CVE-003
+    title: Public exploit available
+    description: >-
+      A working public exploit exists. Availability collapses the
+      skill barrier to hours, which is why exploited-in-the-wild lists
+      are dominated by CVEs with published weaponised code.
+    severity: critical
+    weight: 30
+    tags: [exploit]
+    conditions:
+      - field: exploit_available
+        operator: is_true
+
+  - id: CVE-004
+    title: CISA KEV catalogued
+    description: >-
+      The CVE is on CISA's Known Exploited Vulnerabilities catalog.
+      KEV is an authoritative, federally mandated minimum-patch list;
+      presence here outranks every probabilistic score in this pack.
+    severity: critical
+    weight: 30
+    tags: [kev, prioritisation]
+    references: ["CISA Known Exploited Vulnerabilities catalog"]
+    conditions:
+      - field: in_kev
+        operator: is_true
+
+  - id: CVE-005
+    title: Broad product wildcard match
+    description: >-
+      Three or more affected CPE entries use wildcards, spanning many
+      versions or editions at once. Wildcard breadth makes exposure
+      auditing harder and multiplies the count of assets that must be
+      checked against the advisory.
+    severity: medium
+    weight: 10
+    tags: [scope]
+    conditions:
+      - field: cpe_wildcard_count
+        operator: gte
+        value: 3
+
+  - id: CVE-006
+    title: High (but not critical) severity
+    description: >-
+      CVSS lands between 7.0 and 8.9. These dominate remediation queues
+      by volume; the discriminator for which ones actually matter should
+      be exploitation evidence (EPSS, KEV) rather than the score itself.
+    severity: medium
+    weight: 15
+    tags: [severity]
+    references: ["CVSS v3.1 specification (FIRST)"]
+    conditions:
+      - field: cvss
+        operator: gte
+        value: 7.0
+      - field: cvss
+        operator: lt
+        value: 9.0
+
+  - id: CVE-007
+    title: No fix available
+    description: >-
+      The advisory offers no patch. Without a vendor fix the remaining
+      options are mitigation or removal, so these CVEs need a different
+      -- and usually faster -- operational decision than a routine patch.
+    severity: medium
+    weight: 15
+    tags: [remediation]
+    conditions:
+      - field: fixed
+        operator: is_false
+
+  - id: CVE-008
+    title: Network-exploitable and high severity
+    description: >-
+      The vulnerable component is reachable over the network with a
+      high CVSS score. Pre-auth network reachability is the property
+      that makes wormable ransomware history repeat itself.
+    severity: medium
+    weight: 10
+    tags: [exposure]
+    references: ["MITRE ATT&CK T1210"]
+    conditions:
+      - field: attack_vector
+        operator: eq
+        value: network
+      - field: cvss
+        operator: gte
+        value: 7.0
+
+  - id: CVE-009
+    title: No privileges required over network
+    description: >-
+      Exploitation needs no privileges on the target. Combined with
+      network reachability this describes the classic pre-auth
+      remote-compromise primitive that mass-scanners monetise.
+    severity: medium
+    weight: 10
+    tags: [exposure]
+    references: ["MITRE ATT&CK T1190"]
+    conditions:
+      - field: attack_vector
+        operator: eq
+        value: network
+      - field: privileges
+        operator: eq
+        value: none
+
+  - id: CVE-010
+    title: Very many affected products
+    description: >-
+      Ten or more distinct products are affected. Wide product footprints
+      make asset-matching slow and error-prone, which historically causes
+      the long tail of unpatched copies after the headline systems are
+      fixed.
+    severity: low
+    weight: 5
+    tags: [scope]
+    conditions:
+      - field: affected_products
+        operator: gte
+        value: 10
+
+  - id: CVE-011
+    title: Exploitation reported as weaponised
+    description: >-
+      Threat intelligence characterises exploitation as weaponised --
+      reliable, repeated attacks in the wild rather than a proof-of-
+      concept. Operationally this is the strongest signal short of KEV
+      listing itself.
+    severity: high
+    weight: 25
+    tags: [exploit]
+    conditions:
+      - field: exploitation
+        operator: eq
+        value: weaponized

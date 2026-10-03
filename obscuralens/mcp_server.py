@@ -1,10 +1,22 @@
 """
 Model Context Protocol (MCP) server for ObscuraLens.
 
-Exposes the ObscuraLens lookup and watchlist tools to AI assistants over
-stdio using newline-delimited JSON-RPC 2.0 (one JSON object per line), which
-is the transport MCP defines. This is deliberately *not* LSP Content-Length
+Exposes 34 ObscuraLens tools to AI assistants over stdio using
+newline-delimited JSON-RPC 2.0 (one JSON object per line), which is the
+transport MCP defines. This is deliberately *not* LSP Content-Length
 framing.
+
+Tool families:
+
+* 14 target lookups - ip, phone, username, email, domain, url, crypto,
+  hash, cve, asn and the v5.0 mac, iban, imei and coords kinds.
+* 6 investigation and history views - investigate, risk_report,
+  correlate, timeline, tools_geo_profile and tools_patterns.
+* 2 intel/health views - threat_intel and source_health.
+* 2 watchlist actions - watch_list and watch_check.
+* 10 v5.0 analyst toolbox tools - tools_encode, tools_decode, tools_jwt,
+  tools_hash_id, tools_extract, tools_squat, tools_exif, tools_stego,
+  tools_coords_convert and the 10-target-capped tools_batch.
 
 Run it with::
 
@@ -17,7 +29,7 @@ the stream stays machine-parsable.
 import json
 import sys
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import __version__
 
@@ -285,6 +297,307 @@ TOOLS: List[Dict[str, Any]] = [
             'additionalProperties': False,
         },
     },
+    # -- v5.0 tools ------------------------------------------------------------
+    {
+        'name': 'mac_lookup',
+        'description': 'Look up a MAC address (EUI-48/64): vendor from the '
+                       'IEEE OUI registry, locally-administered and multicast '
+                       'flags, reserved blocks, virtual-NIC detection and '
+                       'EUI-64/IPv6 hints. Keyless sources only.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'mac': {'type': 'string',
+                        'description': 'MAC address in any common notation: '
+                                       'colon, dash, Cisco dotted or bare hex.'},
+            },
+            'required': ['mac'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'iban_lookup',
+        'description': 'Validate and dissect an International Bank Account '
+                       'Number: ISO 13616 mod-97 verdict, country, expected '
+                       'length and BBAN structure, bank code and account '
+                       'slices. Offline arithmetic plus a keyless openiban '
+                       'enrichment when reachable.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'iban': {'type': 'string',
+                         'description': 'IBAN with or without spaces (e.g. '
+                                        'DE89370400440532013000).'},
+            },
+            'required': ['iban'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'imei_lookup',
+        'description': 'Validate and dissect an IMEI or IMEISV: Luhn check '
+                       'with the expected check digit, TAC to manufacturer '
+                       'and model via the offline pack, reporting body '
+                       'identifier, serial and pretty formatting. Fully '
+                       'offline (keyless, no network).',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'imei': {'type': 'string',
+                         'description': 'IMEI (15 digits) or IMEISV (16 '
+                                        'digits), with or without dashes.'},
+            },
+            'required': ['imei'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'coords_lookup',
+        'description': 'Look up a geographic position in any notation '
+                       '(decimal degrees, DMS, UTM or MGRS): reverse geocode '
+                       'to a place and address, elevation and gridded '
+                       're-encodings. Keyless sources (Nominatim, '
+                       'BigDataCloud, Open-Elevation) plus offline math.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'coords': {'type': 'string',
+                           'description': 'Coordinates in decimal degrees, '
+                                          'DMS, UTM or MGRS form.'},
+            },
+            'required': ['coords'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_encode',
+        'description': 'Encode text through every supported scheme at once '
+                       '(hex, base32, base64, base85, URL percent, HTML '
+                       'entities, ROT13, Caesar, binary, decimal, reversed, '
+                       'Morse, gzip) and compute every standard digest (md5 '
+                       'through blake2b plus crc32). Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'text': {'type': 'string',
+                         'description': 'The plaintext to encode and digest.'},
+            },
+            'required': ['text'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_decode',
+        'description': 'Decode an encoded value: with an explicit scheme, '
+                       'decode exactly that scheme; without one, try every '
+                       'scheme and rank the best-scoring candidates. Purely '
+                       'offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'value': {'type': 'string',
+                          'description': 'The encoded string to decode.'},
+                'scheme': {'type': 'string',
+                           'description': 'Optional explicit scheme: hex, '
+                                          'base32, base64, base85, '
+                                          'url_percent, html_entity, rot13, '
+                                          'caesar, binary, decimal, '
+                                          'reversed, morse or gzip. Omit to '
+                                          'auto-detect.'},
+            },
+            'required': ['value'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_jwt',
+        'description': 'Inspect a JWT (compact serialization) without '
+                       'verifying the signature: decoded header and payload, '
+                       'human-readable claim times with expiry verdicts, '
+                       'algorithm risk analysis and key-material hints. '
+                       'Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'token': {'type': 'string',
+                          'description': 'JWT token string '
+                                         '(header.payload.signature).'},
+            },
+            'required': ['token'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_hash_id',
+        'description': 'Identify the likely algorithm of a hash-like string: '
+                       'length, charset and prefix analysis over the md5/sha '
+                       'families, bcrypt, Argon2, MySQL and base64 digests, '
+                       'with confidence levels and same-length alternatives. '
+                       'Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'hash': {'type': 'string',
+                         'description': 'The digest string to identify.'},
+            },
+            'required': ['hash'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_extract',
+        'description': 'Extract every OSINT pivot target from arbitrary '
+                       'text: emails, URLs, domains, IPv4/IPv6, ASN, MAC, '
+                       'IBAN, IMEI, hashes, CVEs, crypto addresses, '
+                       'coordinates, phone candidates, handles and tracking '
+                       'ids, with per-kind counts. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'text': {'type': 'string',
+                         'description': 'Text to scan (paste, email body, '
+                                        'report excerpt).'},
+            },
+            'required': ['text'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_squat',
+        'description': 'Generate typo and typosquatting variants of a domain '
+                       'across 15 families (omission, insertion, homoglyph, '
+                       'bitsquat, tld_swap, ...) and score each variant 0-100 '
+                       'for deception risk. Offline; returns the 60 '
+                       'highest-risk variants.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'domain': {'type': 'string',
+                           'description': 'Domain (or URL) to defend, e.g. '
+                                          'google.com.'},
+                'min_risk': {'type': 'integer',
+                             'description': 'Only return variants scoring at '
+                                            'least this risk (0-100, '
+                                            'default: 0).'},
+            },
+            'required': ['domain'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_exif',
+        'description': 'Analyze the metadata of a local image file: EXIF, '
+                       'GPS (decimal, DMS and a tracker-ready coords '
+                       'string), camera summary, timeline hints, file hashes '
+                       'and OSINT notes. Privacy: the file is read locally '
+                       'and never uploaded anywhere.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'path': {'type': 'string',
+                         'description': 'Path of a local image file (jpeg, '
+                                        'png, gif, bmp or webp).'},
+            },
+            'required': ['path'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_stego',
+        'description': 'Local steganography triage of an image file: LSB '
+                       'plane scoring (PNG/BMP/GIF), entropy profiling, '
+                       'embedded-file carving and trailing-data detection, '
+                       'with a verdict and suspicion score. Privacy: the '
+                       'file is read locally and never uploaded anywhere.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'path': {'type': 'string',
+                         'description': 'Path of a local image file (png, '
+                                        'bmp, gif or jpeg).'},
+            },
+            'required': ['path'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_coords_convert',
+        'description': 'Convert coordinates between every supported format: '
+                       'parses decimal degrees, DMS, UTM or MGRS input and '
+                       'emits decimal degrees, DMS, DDM, geohash, Maidenhead, '
+                       'UTM and MGRS notations plus a timezone hint. Purely '
+                       'offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'value': {'type': 'string',
+                          'description': 'Coordinates in decimal degrees, DMS, '
+                                         'UTM or MGRS form (e.g. 48.8584, '
+                                         '2.2945 or 31U DQ 48288 11087).'},
+            },
+            'required': ['value'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_geo_profile',
+        'description': 'Summarize the geographic footprint of the stored '
+                       'lookup history: distinct countries, top country and '
+                       'region, coordinate activity, geohash clusters, time '
+                       'span and the top-10 country histogram. Reads the '
+                       'local database only.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {},
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_patterns',
+        'description': 'Pattern-of-life report for one repeatedly looked-up '
+                       'target from stored history: cadence, burstiness, '
+                       'hour-of-day and weekday profile. Reads local history '
+                       'only.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'kind': {'type': 'string',
+                         'description': 'Target kind as stored in history, '
+                                        'e.g. ip, domain, email or coords.'},
+                'value': {'type': 'string',
+                          'description': 'Target value as stored in history.'},
+            },
+            'required': ['kind', 'value'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'tools_batch',
+        'description': 'Run one lookup kind across multiple targets with the '
+                       'batch engine. MCP safety caps the run at 10 targets; '
+                       'returns a summary plus one status line per target. '
+                       'Uses the same keyless/keyed sources as single '
+                       'lookups.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'kind': {'type': 'string',
+                         'description': 'Target kind (ip, domain, mac, iban, '
+                                        'coords, ...).'},
+                'targets': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                    'description': 'Targets to look up (max 10; extras are '
+                                   'dropped and reported).',
+                },
+                'risk': {'type': 'boolean',
+                         'description': 'Attach heuristic risk scoring to '
+                                        'each result (default: false).'},
+            },
+            'required': ['kind', 'targets'],
+            'additionalProperties': False,
+        },
+    },
 ]
 
 
@@ -303,13 +616,43 @@ def _identifier(value: Any) -> Any:
     return value
 
 
+class _ToolError(Exception):
+    """
+    Tool-level error whose message reaches the client verbatim.
+
+    The JSON-RPC loop reports unexpected exceptions as
+    ``'TypeName: message'`` error results. Raising this subclass instead
+    keeps optional-module messages clean (for example ``'module not
+    available in this build'``) while still marking the response with
+    ``isError: true``.
+    """
+
+
+def _required_str(arguments: Dict[str, Any], key: str) -> str:
+    """
+    Return a required non-blank string argument or raise ValueError.
+
+    Mirrors :func:`_target` for the v5.0 tools whose primary argument is
+    not called ``target`` (``mac``, ``iban``, ``imei``, ``coords``,
+    ``text``, ``value``, ``token``, ``hash``, ``domain``, ``path`` or
+    ``kind``).
+    """
+    value = arguments.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f'{key} is required')
+    return value
+
+
 def call_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     """
     Dispatch one MCP tool call to the matching ObscuraLens function.
 
     Trackers are imported lazily so this module can be imported cheaply and
-    tests can monkeypatch the tracker classes. Raises ValueError for an
-    unknown tool; callers translate that into an ``isError`` result.
+    tests can monkeypatch the tracker classes; every v5.0 handler below
+    follows the same lazy-import convention. The v5.0 tools are dispatched
+    through the ``_HANDLERS`` registry after the built-in branches above.
+    Raises ValueError for an unknown tool; callers translate that into an
+    ``isError`` result.
     """
     arguments = arguments or {}
     if name == 'ip_lookup':
@@ -416,7 +759,622 @@ def call_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         from .watchlist import watchlist
         identifier = _identifier(arguments.get('identifier'))
         return {'diffs': [asdict(diff) for diff in watchlist.check(identifier)]}
+    handler = _HANDLERS.get(name)
+    if handler is not None:
+        return handler(arguments)
     raise ValueError(f'unknown tool: {name}')
+
+
+# ---------------------------------------------------------------------------
+# v5.0 tools: handlers registered in _HANDLERS and dispatched by call_tool
+# ---------------------------------------------------------------------------
+
+#: MCP safety cap for ``tools_batch``: one call runs at most this many
+#: lookups, so a single client request can never keep every source busy
+#: for minutes.
+_MAX_BATCH_TARGETS = 10
+
+#: How many auto-detected candidates ``tools_decode`` reports (decode_auto
+#: scores and sorts every scheme's attempt; only the best survive here).
+_MAX_DECODE_CANDIDATES = 6
+
+#: How many typosquat variants ``tools_squat`` returns (highest risk first).
+_MAX_SQUAT_VARIANTS = 60
+
+
+def _compact_tracker_result(result: Dict[str, Any], key: str) -> Dict[str, Any]:
+    """
+    Compact one tracker report for an MCP response.
+
+    Keeps the merged ``info`` fields, per-source status and the standard
+    verdict keys, but replaces the full ``field_sources`` provenance map
+    with per-field confirmation counts (how many sources supplied each
+    field) so the JSON payload stays small.
+    """
+    counts: Dict[str, int] = {}
+    for field, sources in (result.get('field_sources') or {}).items():
+        if isinstance(sources, (list, tuple)):
+            counts[field] = len(sources)
+    return {
+        key: result.get(key, ''),
+        'info': result.get('info', {}),
+        'sources_ok': result.get('sources_ok', []),
+        'sources_failed': result.get('sources_failed', {}),
+        'provenance_counts': counts,
+        'field_count': result.get('field_count', 0),
+        'success': result.get('success', False),
+        'errors': result.get('errors', []),
+    }
+
+
+def _tool_mac_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Vendor and bit-level anatomy of a MAC address (EUI-48/EUI-64).
+
+    Input: ``mac`` - any common notation (``'B8:27:EB:AA:BB:CC'``,
+    ``'b8-27-eb-aa-bb-cc'``, Cisco dotted ``'b827.ebdc.aabb'`` or bare hex).
+
+    Output: compact tracker report - canonical ``mac``, merged ``info``
+    fields (vendor, assignment block, locally-administered / multicast
+    flags, reserved blocks, virtual-NIC detection, EUI-64 and IPv6 hints),
+    ``sources_ok`` / ``sources_failed``, per-field provenance counts and
+    the standard verdict keys. Invalid identifiers return
+    ``success=False`` without touching the network or history.
+
+    Sources: keyless only - offline IEEE OUI pack, macvendors.com and
+    maclookup.app; the offline sources keep the lookup useful with the
+    network down.
+    """
+    from .trackers import MACTracker
+    result = MACTracker().track(_required_str(arguments, 'mac'))
+    return _compact_tracker_result(result, 'mac')
+
+
+def _tool_iban_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validate and dissect an International Bank Account Number.
+
+    Input: ``iban`` - IBAN with or without spaces (e.g.
+    ``'DE89370400440532013000'``); the mod-97 checksum decides validity.
+
+    Output: compact tracker report - canonical ``iban``, merged ``info``
+    fields (mod-97 verdict, country, expected length and BBAN structure
+    verdict, bank code / account slices, bank name and BIC when the
+    enrichment answers), source status and provenance counts. Identifiers
+    failing the checksum return ``success=False`` before any network
+    traffic or history write.
+
+    Sources: offline mod-97 + country structure pack (always available)
+    plus the keyless openiban API - no API keys are used.
+    """
+    from .trackers import IBANTracker
+    result = IBANTracker().track(_required_str(arguments, 'iban'))
+    return _compact_tracker_result(result, 'iban')
+
+
+def _tool_imei_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validate and dissect an IMEI or IMEISV identifier.
+
+    Input: ``imei`` - 15-digit IMEI or 16-digit IMEISV, with or without
+    dashes/spaces; the Luhn check digit decides validity.
+
+    Output: compact tracker report - canonical ``imei``, merged ``info``
+    fields (TAC-derived manufacturer and model, reporting body identifier,
+    serial, check-digit verdict with the expected digit on failure, pretty
+    AA-BBBBBB-CCCCCC-D form), source status and provenance counts. Invalid
+    identifiers return ``success=False`` without network or history.
+
+    Sources: fully offline (3GPP TS 23.003 decomposition + curated TAC
+    pack) - no network, no keys.
+    """
+    from .trackers import IMEITracker
+    result = IMEITracker().track(_required_str(arguments, 'imei'))
+    return _compact_tracker_result(result, 'imei')
+
+
+def _tool_coords_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Place intelligence for a geographic position in any notation.
+
+    Input: ``coords`` - decimal degrees (``'48.8584, 2.2945'``), DMS, UTM
+    (``'31U 448288 5411087'``) or MGRS (``'31U DQ 48288 11087'``).
+
+    Output: compact tracker report whose ``info`` carries latitude,
+    longitude, geohash, mgrs, utm, the reverse-geocoded place
+    (``formatted_address`` with city / region / country), elevation and
+    solar geometry; ``latitude``, ``longitude``, ``geohash``, ``mgrs``,
+    ``utm`` and ``place`` are additionally lifted to the top level for
+    convenience. Unparseable input returns ``success=False`` without
+    touching the network.
+
+    Sources: keyless - Nominatim, BigDataCloud and Open-Elevation plus the
+    offline ``geohash_local`` math source (which always succeeds, so a
+    report still carries the coordinates themselves when offline).
+    """
+    from .trackers import CoordsTracker
+    result = CoordsTracker().track(_required_str(arguments, 'coords'))
+    compact = _compact_tracker_result(result, 'coords')
+    info = result.get('info') or {}
+    for top_key, info_key in (('latitude', 'latitude'),
+                              ('longitude', 'longitude'),
+                              ('geohash', 'geohash'), ('mgrs', 'mgrs'),
+                              ('utm', 'utm'), ('place', 'formatted_address')):
+        compact[top_key] = info.get(info_key)
+    return compact
+
+
+def _tool_encode(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Every encoding and every digest of a text, in one call.
+
+    Input: ``text`` - the plaintext to transform.
+
+    Output: ``{'text': echo, 'encodings': {scheme: value}, 'hashes':
+    {algorithm: digest}}``. Encodings cover hex, base32, base64, base85,
+    URL percent, HTML entities, ROT13, Caesar, binary, decimal, reversed,
+    Morse and gzip; hashes cover md5, the sha1/sha2/sha3 families,
+    blake2s/b and crc32. Schemes that cannot encode the input are silently
+    skipped, so ``encodings`` may be partial - never a failure.
+
+    Purely offline: nothing is transmitted anywhere.
+    """
+    from .experimental.encoders import encode_all, hash_all
+    text = _required_str(arguments, 'text')
+    return {'text': text, 'encodings': encode_all(text), 'hashes': hash_all(text)}
+
+
+def _tool_decode(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Decode an encoded value - one explicit scheme or ranked auto-detection.
+
+    Input: ``value`` - the encoded string; optional ``scheme`` - one of the
+    ``encoders.SCHEMES`` names (hex, base32, base64, base85, url_percent,
+    html_entity, rot13, caesar, binary, decimal, reversed, morse, gzip).
+
+    Output: with ``scheme``, ``{'value', 'scheme', 'decoded'}`` - a
+    ValueError-style tool error surfaces when that scheme cannot decode
+    the value. Without, ``{'value', 'candidates': [...]}`` with the
+    top-ranked ``{'scheme', 'result', 'score', 'note'}`` entries from
+    ``decode_auto`` (best first, capped at 6, notes flag no-op decodes).
+
+    Purely offline.
+    """
+    from .experimental.encoders import SCHEMES, decode_auto
+    value = _required_str(arguments, 'value')
+    scheme = arguments.get('scheme')
+    if scheme is not None:
+        name = str(scheme).strip().lower()
+        if name not in SCHEMES:
+            available = ', '.join(sorted(SCHEMES))
+            raise ValueError(f'unknown scheme: {name!r}; available: {available}')
+        return {'value': value, 'scheme': name,
+                'decoded': SCHEMES[name]['decode'](value)}
+    candidates = decode_auto(value)[:_MAX_DECODE_CANDIDATES]
+    return {'value': value, 'candidates': candidates}
+
+
+def _tool_jwt(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Inspect a JWT without verifying its signature.
+
+    Input: ``token`` - a JWT in compact serialization
+    (``header.payload.signature``).
+
+    Output: decoded ``header`` and ``payload``, ``alg`` risk analysis
+    (``alg: none`` is flagged critical), human-readable ``claims`` with
+    expiry verdicts, ``identifiers`` (iss / sub / aud / jti), ``key_info``
+    (kid / x5c / jku / x5u attack-surface hints), ``token_stats`` and an
+    aggregated ``notes`` list (critical first). Malformed tokens return
+    ``{'error': ..., 'notes': [...]}`` instead of raising.
+
+    Purely offline. The payload is attacker-controlled until the signature
+    is verified with real key material - the notes say so explicitly.
+    """
+    from .experimental.jwt_tools import inspect_jwt
+    result = inspect_jwt(_required_str(arguments, 'token'))
+    if 'error' in result:
+        return {'error': result['error'], 'notes': result.get('notes', [])}
+    return {
+        'header': result.get('header', {}),
+        'payload': result.get('payload', {}),
+        'alg': result.get('alg'),
+        'claims': result.get('claims', {}),
+        'identifiers': result.get('identifiers', {}),
+        'key_info': result.get('key_info', {}),
+        'token_stats': result.get('token_stats', {}),
+        'notes': result.get('notes', []),
+    }
+
+
+def _tool_hash_id(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Identify the likely algorithm behind a hash-like string.
+
+    Input: ``hash`` - the digest string (hex, base64-armored, bcrypt or
+    Argon2 PHC form; a leading ``0x`` is tolerated).
+
+    Output: ``{'hash': echo, 'candidates': [...]}`` where each candidate
+    is ``{'name', 'confidence', 'length', 'charset', 'note'}`` sorted
+    high-to-low. Same-length alternatives (Keccak-256 vs sha256, for
+    example) are all listed with explanatory notes; unrecognised shapes
+    return a single low-confidence 'Unknown' entry.
+
+    Purely offline structural analysis - no hash database is consulted
+    (pair the result with ``hash_lookup`` for reputation data).
+    """
+    from .experimental.hash_identify import identify_hash
+    value = _required_str(arguments, 'hash')
+    return {'hash': value, 'candidates': identify_hash(value)}
+
+
+def _tool_extract(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract every OSINT pivot target from arbitrary text.
+
+    Input: ``text`` - the text to scan (email body, paste, dump, report
+    excerpt).
+
+    Output: ``{'text_length', 'entities': {kind: [values]}, 'summary'}``.
+    Strong kinds (emails, urls, domains, ipv4, ipv6, asn, macs, ibans,
+    imeis, hashes, cves, crypto_addresses, coords) are validator-confirmed;
+    weak kinds (phone_candidates, user_handles, tracking_ids) are leads to
+    verify. ``summary`` counts entities per kind plus a grand total.
+
+    Purely offline.
+    """
+    from .experimental.entity_extract import extract_entities, summarize_entities
+    text = _required_str(arguments, 'text')
+    entities = extract_entities(text)
+    return {
+        'text_length': len(text),
+        'entities': entities,
+        'summary': summarize_entities(entities),
+    }
+
+
+def _tool_squat(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Typosquatting variants of a domain, scored for deception risk.
+
+    Input: ``domain`` - the domain (or URL) to defend; optional
+    ``min_risk`` - only return variants scoring at least this risk
+    (0-100, default 0).
+
+    Output: ``{'domain', 'total_variants', 'returned', 'min_risk',
+    'variants': [...]}`` where each variant is ``{'domain', 'category',
+    'description', 'risk'}`` sorted by risk descending, capped at the 60
+    most dangerous entries.
+
+    Purely offline: variants are generated (15 families - omission,
+    insertion, substitution, transposition, duplication, hyphenation,
+    subdomain, vowel_swap, plural, singular, bitsquat, homoglyph,
+    ascii_similarity, tld_swap, combo_squat) and scored with an explainable
+    distance + category rubric. No DNS or registration data is fetched;
+    feed interesting variants to ``domain_lookup`` for live checks.
+    """
+    from .experimental.squatting import generate_variants, score_variants
+    domain = _required_str(arguments, 'domain')
+    raw_risk = arguments.get('min_risk')
+    if raw_risk is None:
+        min_risk = 0
+    elif isinstance(raw_risk, bool) or not isinstance(raw_risk, (int, float)):
+        raise ValueError('min_risk must be an integer between 0 and 100')
+    else:
+        min_risk = max(0, min(100, int(raw_risk)))
+    scored = score_variants(generate_variants(domain), domain)
+    selected = [v for v in scored if v.get('risk', 0) >= min_risk]
+    selected = selected[:_MAX_SQUAT_VARIANTS]
+    return {
+        'domain': domain,
+        'total_variants': len(scored),
+        'returned': len(selected),
+        'min_risk': min_risk,
+        'variants': selected,
+    }
+
+
+def _tool_exif(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Metadata triage of a local image file (EXIF, GPS, camera, timeline).
+
+    Input: ``path`` - path of a local image file (jpeg, png, gif, bmp or
+    webp) readable by this process.
+
+    Output: the full ``exif_reader.analyze`` report - container metadata,
+    friendly EXIF, GPS as decimal + DMS + a tracker-ready ``'lat, lon'``
+    coords string, a camera summary, timeline hints, interesting strings,
+    file hashes and actionable ``osint_notes``. Missing or unreadable
+    files return ``{'error': ...}`` instead of raising.
+
+    Privacy: analysis is local-only - the file is read from disk and
+    nothing ever leaves the machine.
+    """
+    from .experimental.exif_reader import analyze
+    path = _required_str(arguments, 'path')
+    result = analyze(path)
+    result['path'] = path
+    return result
+
+
+def _tool_stego(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Local steganography triage of an image file.
+
+    Input: ``path`` - path of a local image file (png, bmp, gif or jpeg).
+
+    Output: the full ``steganography.analyze`` report - ``summary`` with a
+    0-100 suspicion score, verdict and findings; ``lsb`` plane analysis
+    (PNG / BMP / GIF; JPEG gets entropy + carving only, with a note that
+    DCT-domain stego is out of scope), ``entropy`` profiling,
+    ``embedded_files`` carving and trailing-data detection. Missing files
+    return ``{'error': ..., 'summary': ...}`` instead of raising.
+
+    Privacy: analysis is local-only - the file is read from disk and
+    nothing ever leaves the machine.
+    """
+    from .experimental.steganography import analyze
+    path = _required_str(arguments, 'path')
+    result = analyze(path)
+    result['path'] = path
+    return result
+
+
+def _tool_coords_convert(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert coordinates between every supported notation.
+
+    Input: ``value`` - coordinates in decimal degrees (``'48.8584,
+    2.2945'``), DMS, UTM (``'31U 448288 5411087'``) or MGRS (``'31U DQ
+    48288 11087'``) form.
+
+    Output: ``latitude`` / ``longitude`` (6-decimal precision) plus the
+    ``decimal`` pair, ``latitude_dms`` / ``longitude_dms``, ``ddm``
+    (degrees + decimal minutes), ``geohash`` (9 chars), ``maidenhead``
+    locator, ``utm`` string with ``utm_parts`` (zone / band / easting /
+    northing), ``mgrs``, ``hemisphere`` and a solar ``utc_offset_hint``.
+    Outside the UTM latitude range (-80..84) the grid fields are null with
+    an explanatory ``utm_note``. Unparseable input raises a
+    ValueError-style tool error.
+
+    Purely offline coordinate maths - no reverse geocoding happens here
+    (use ``coords_lookup`` for place intelligence).
+    """
+    from .utils import coordinate_math
+    from .utils.validators import parse_coords
+    value = _required_str(arguments, 'value')
+    try:
+        parsed = parse_coords(value)
+    except ValueError as exc:
+        raise ValueError(f'could not parse coordinates: {exc}') from exc
+    if parsed is None:
+        raise ValueError('could not parse coordinates: expected decimal '
+                         'degrees, DMS, UTM or MGRS form')
+    lat, lon = parsed
+    result: Dict[str, Any] = {
+        'value': value,
+        'latitude': round(lat, 6),
+        'longitude': round(lon, 6),
+        'decimal': f"{lat:.6f}, {lon:.6f}",
+        'latitude_dms': coordinate_math.latlon_to_dms(lat, 'lat'),
+        'longitude_dms': coordinate_math.latlon_to_dms(lon, 'lon'),
+        'ddm': coordinate_math.latlon_to_ddm(lat, lon),
+        'geohash': coordinate_math.latlon_to_geohash(lat, lon, 9),
+        'maidenhead': coordinate_math.latlon_to_maidenhead(lat, lon, 3),
+        'hemisphere': 'northern' if lat >= 0.0 else 'southern',
+        'utc_offset_hint': coordinate_math.estimate_timezone_offset(lon),
+    }
+    try:
+        zone, band, easting, northing = coordinate_math.latlon_to_utm(lat, lon)
+        result['utm'] = f"{zone}{band} {easting:.0f} {northing:.0f}"
+        result['utm_parts'] = {
+            'zone': zone, 'band': band,
+            'easting': round(easting, 1), 'northing': round(northing, 1),
+        }
+        result['mgrs'] = coordinate_math.latlon_to_mgrs(lat, lon, 5)
+    except ValueError:
+        result['utm'] = None
+        result['utm_parts'] = None
+        result['mgrs'] = None
+        result['utm_note'] = 'latitude outside the UTM grid range (-80..84)'
+    return result
+
+
+def _tool_geo_profile(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Geographic footprint summary of the stored lookup history.
+
+    Input: none - the tool takes no arguments and analyses whatever lookup
+    history this ObscuraLens instance has accumulated.
+
+    Output: ``profile`` - the one-call analyst summary
+    (``distinct_countries``, ``top_country``, ``top_region``,
+    ``coords_lookups``, ``geohash_clusters``, ``span_days``) - plus
+    ``top_countries`` (the ten largest country histogram entries with
+    sample targets), ``total_geo_tagged``, ``total_records`` and
+    ``unknown`` counts.
+
+    Reads the local query-history database only - no network, no keys.
+    """
+    try:
+        from .advanced.geospatial import country_breakdown, geo_profile_summary
+    except ImportError as exc:
+        raise _ToolError('module not available in this build') from exc
+    profile = geo_profile_summary()
+    breakdown = country_breakdown()
+    return {
+        'profile': profile,
+        'top_countries': breakdown.get('countries', [])[:10],
+        'total_geo_tagged': breakdown.get('total_geo_tagged', 0),
+        'total_records': breakdown.get('total_records', 0),
+        'unknown': breakdown.get('unknown', 0),
+    }
+
+
+def _call_flexible(func: Any, *args: Any, **kwargs: Any) -> Any:
+    """
+    Call ``func`` with ``kwargs`` filtered to the parameters it declares.
+
+    The ``advanced`` engines are built in parallel work waves, so their
+    keyword names may drift while this server is written. When every
+    keyword name exists in the signature the call is made by keyword;
+    otherwise the arguments are passed positionally in ``args`` order. A
+    TypeError raised inside ``func`` is therefore never masked by a
+    redundant retry - only the binding strategy changes.
+    """
+    import inspect
+    try:
+        parameters = inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return func(*args)
+    if all(name in parameters for name in kwargs):
+        return func(**kwargs)
+    return func(*args)
+
+
+def _tool_patterns(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Pattern-of-life report for one repeatedly looked-up target.
+
+    Input: ``kind`` - the target kind as stored in history (ip, domain,
+    email, coords, ...); ``value`` - the target value as stored in history
+    (normalised forms such as lowercase domains or ``'lat, lon'`` pairs).
+
+    Output: ``{'kind', 'value', 'report'}`` where ``report`` is the
+    pattern_report dict produced from the stored history - lookup counts,
+    cadence, burstiness and the hour-of-day / weekday activity profile.
+
+    Reads the local query history only - no network, no keys.
+    """
+    try:
+        from .advanced.patterns import pattern_report
+    except ImportError as exc:
+        raise _ToolError('module not available in this build') from exc
+    kind = _required_str(arguments, 'kind')
+    value = _required_str(arguments, 'value')
+    report = _call_flexible(pattern_report, kind, value, kind=kind, value=value)
+    return {'kind': kind, 'value': value, 'report': report}
+
+
+def _batch_entries(raw: Any) -> List[Any]:
+    """
+    Normalise a ``run_batch`` return value into per-target entries.
+
+    Accepts the documented list-of-results shape, a dict wrapping its
+    results under ``results`` / ``entries`` / ``items``, or any single
+    value, so the tool keeps working if the batch engine's envelope
+    evolves.
+    """
+    if isinstance(raw, dict):
+        for key in ('results', 'entries', 'items'):
+            inner = raw.get(key)
+            if isinstance(inner, list):
+                return inner
+        return [raw]
+    if isinstance(raw, (list, tuple)):
+        return list(raw)
+    return [raw]
+
+
+def _batch_status(entry: Any) -> Tuple[str, bool]:
+    """
+    One-line status and success flag for a single batch entry.
+
+    Handles both the ``{'target', 'result': {...}}`` envelope shape and a
+    bare tracker-result dict; anything else is stringified defensively so
+    a surprise payload can never crash the RPC loop.
+    """
+    if not isinstance(entry, dict):
+        return str(entry)[:120], False
+    inner = entry.get('result') if isinstance(entry.get('result'), dict) else entry
+    target = (entry.get('target') or entry.get('value')
+              or inner.get('target') or inner.get('value') or '?')
+    if inner.get('success'):
+        return f"{target}: ok ({inner.get('field_count', 0)} fields)", True
+    problem = inner.get('errors') or inner.get('error') or 'failed'
+    if isinstance(problem, (list, tuple)):
+        problem = problem[0] if problem else 'failed'
+    return f"{target}: failed ({str(problem)[:80]})", False
+
+
+def _tool_batch(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Run one lookup kind across multiple targets (capped at 10).
+
+    Input: ``kind`` - the target kind (any tracker kind: ip, domain, mac,
+    iban, coords, ...); ``targets`` - list of target values, maximum 10
+    (extra entries are dropped and reported via ``capped`` /
+    ``requested``); optional ``risk`` - attach heuristic risk scoring to
+    each result (default false).
+
+    Output: ``{'kind', 'risk', 'requested', 'capped', 'summary',
+    'per_target'}`` - ``summary`` counts succeeded / failed targets and
+    ``per_target`` carries one status line per target, so a batch never
+    floods the context window with full reports.
+
+    MCP safety: the hard 10-target cap keeps one call from keeping every
+    source busy for minutes. Uses the same keyless/keyed sources as the
+    single-target lookup tools.
+    """
+    try:
+        from .advanced.batch import run_batch
+    except ImportError as exc:
+        raise _ToolError('module not available in this build') from exc
+    kind = _required_str(arguments, 'kind')
+    raw_targets = arguments.get('targets')
+    if not isinstance(raw_targets, (list, tuple)) or not raw_targets:
+        raise ValueError('targets must be a non-empty array of strings')
+    targets = [str(item).strip() for item in raw_targets if str(item).strip()]
+    if not targets:
+        raise ValueError('targets must contain at least one non-blank value')
+    requested = len(targets)
+    capped = requested > _MAX_BATCH_TARGETS
+    targets = targets[:_MAX_BATCH_TARGETS]
+    risk = bool(arguments.get('risk', False))
+    raw = _call_flexible(run_batch, kind, targets, risk,
+                         kind=kind, targets=targets, risk=risk)
+    lines: List[str] = []
+    succeeded = 0
+    for entry in _batch_entries(raw):
+        line, ok = _batch_status(entry)
+        lines.append(line)
+        if ok:
+            succeeded += 1
+    return {
+        'kind': kind,
+        'risk': risk,
+        'requested': requested,
+        'capped': capped,
+        'summary': {
+            'targets': len(targets),
+            'succeeded': succeeded,
+            'failed': len(targets) - succeeded,
+        },
+        'per_target': lines,
+    }
+
+
+#: v5.0 tool registry: tool name -> handler, kept in the same order as the
+#: ``TOOLS`` schema entries so the advertised surface and the dispatch
+#: table can be reviewed side by side.
+_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
+    'mac_lookup': _tool_mac_lookup,
+    'iban_lookup': _tool_iban_lookup,
+    'imei_lookup': _tool_imei_lookup,
+    'coords_lookup': _tool_coords_lookup,
+    'tools_encode': _tool_encode,
+    'tools_decode': _tool_decode,
+    'tools_jwt': _tool_jwt,
+    'tools_hash_id': _tool_hash_id,
+    'tools_extract': _tool_extract,
+    'tools_squat': _tool_squat,
+    'tools_exif': _tool_exif,
+    'tools_stego': _tool_stego,
+    'tools_coords_convert': _tool_coords_convert,
+    'tools_geo_profile': _tool_geo_profile,
+    'tools_patterns': _tool_patterns,
+    'tools_batch': _tool_batch,
+}
 
 
 def _success(msg_id: Any, result: Any) -> Dict[str, Any]:
@@ -476,6 +1434,12 @@ def handle_request(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         try:
             result = call_tool(params['name'], arguments)
             is_error = False
+        except _ToolError as exc:
+            # Clean tool-level error (e.g. an optional module missing from
+            # this build): report the message verbatim, still marked as an
+            # error result so clients surface it.
+            result = {'error': str(exc)}
+            is_error = True
         except Exception as exc:  # never let a tool crash the server loop
             result = {'error': f'{type(exc).__name__}: {exc}'}
             is_error = True

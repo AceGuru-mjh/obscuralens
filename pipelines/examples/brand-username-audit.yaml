@@ -1,0 +1,102 @@
+# Brand username audit pipeline
+# -----------------------------
+# Audit how a brand or executive handle is (ab)used across social
+# platforms: sweep the username across every platform the username
+# tracker covers, attach the exposure-profile score, and correlate the
+# confirmed accounts against local history to catch repeats from earlier
+# audits. The gate flags broad footprints that deserve manual review for
+# impersonation.
+#
+# Typical starting points: a quarterly brand-protection audit, a report
+# of a fake support account, or pre-incident due diligence on an
+# executive's public presence.
+#
+# IMPORTANT framing: username rules describe an *exposure profile* of a
+# handle, never a risk verdict about the person behind it. A broad
+# footprint is the baseline fact that makes impersonation detectable.
+#
+# Run it with:
+#   obscuralens pipeline run brand-username-audit --set handle=acme_support
+#
+# Useful variable overrides (--set key=value):
+#   handle     the username to sweep (no leading @)
+#   confirmed  platform count that triggers the review gate
+
+name: brand-username-audit
+description: Audit a brand handle across platforms for footprint and impersonation
+
+# Default values; every $token below is replaced at run time and callers
+# can override any variable from the CLI without editing this file.
+variables:
+  handle: acme_support
+  confirmed: 5
+
+steps:
+  # 1. Full multi-platform sweep of the handle. The kind is auto-detected
+  #    (a bare word without @, dots or slashes reads as a username). The
+  #    tracker fans out across dozens of platforms and returns a FLAT
+  #    result dict (no 'info' wrapper): found/not-found/unknown counts
+  #    plus per-platform rows for every confirmed profile.
+  - lookup: $handle
+
+  # 2. Attach the exposure-profile score. The username scorer weighs
+  #    footprint breadth, platform mix and coverage quality; the signals
+  #    are framed as exposure, not suspicion - a wide footprint mostly
+  #    means the handle is in active public use.
+  - risk: true
+
+  # 3. Review gate: broad footprint. Five or more confirmed platforms is
+  #    where manual review pays off - compare bios, follower history and
+  #    creation dates to tell genuine brand accounts from squatters and
+  #    impersonators. A passing assertion becomes a finding.
+  - assert:
+      field: found_count
+      op: '>='
+      value: $confirmed
+      message: handle confirmed on many platforms - review for impersonation
+
+  # 4. Coverage gate: incomplete sweep. When many platforms returned
+  #    'unknown' (rate limits, anti-scraping walls), the misses below
+  #    should be treated as unknown rather than absent - recorded so the
+  #    report does not overstate the all-clear.
+  - assert:
+      field: unknown_count
+      op: '>='
+      value: 20
+      message: sweep had many inconclusive platform checks
+
+  # 5. Correlate against local query history: earlier audits that swept
+  #    the same handle (or handles one edit away) link this run to
+  #    previous quarterly reviews, making drift visible - a platform that
+  #    newly confirmed since last quarter is the interesting row.
+  - correlate: true
+
+  # 6. Build an event timeline from dated fields (first-seen stamps on
+  #    the confirmed profiles) so the audit report can show which
+  #    accounts are long-established and which appeared recently.
+  - timeline: true
+
+  # 7. Export the Markdown summary for the brand-protection folder.
+  #    Relative paths resolve under the configured report directory; the
+  #    file name folds in the handle so parallel audits do not collide.
+  - output:
+      format: markdown
+      path: username-$handle.md
+
+  # 8. Print the compact summary table to the console for the analyst
+  #    running the audit (counts, steps, findings at a glance).
+  - output:
+      format: table
+      path: ''
+
+# Follow-up commands worth documenting in the audit notes:
+#   obscuralens report --format html   full HTML report of this sweep
+#   obscuralens case add --note "impersonation candidate on <platform>"
+#
+# Reading the findings:
+#   * review gate passing -> list candidate platforms for manual verdict:
+#     genuine brand account / squatter / impersonator / abandoned
+#   * coverage gate       -> re-run the inconclusive platforms before
+#                            declaring coverage complete
+#   * both quiet          -> footprint unchanged since last audit; file
+#                            the artefacts and close

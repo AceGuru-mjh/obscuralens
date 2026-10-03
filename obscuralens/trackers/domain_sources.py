@@ -8,6 +8,7 @@ so one blocked or flaky source cannot blank out a whole report. Coverage:
 * ``dns``         - MX/A/AAAA/NS/SOA/CAA/TXT, SPF, DMARC, DKIM, DNSSEC posture
 * ``certspotter`` - Certificate Transparency issuance history and subdomains
 * ``http``        - homepage status, title, server/security headers, robots.txt
+* ``doh.google``  - A/AAAA/MX/NS via DNS-over-HTTPS, cross-confirming ``dns``
 
 Sources listed in ``app.disabled_sources`` are skipped. Field provenance is
 tracked: ``gather_all`` returns which source(s) supplied each value, so a
@@ -15,6 +16,7 @@ report can show exactly where a fact came from.
 """
 
 import concurrent.futures as futures
+import ipaddress
 import re
 from typing import Any, Dict, List
 from urllib.parse import quote
@@ -334,6 +336,122 @@ def _security_txt(domain: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v5.0 keyless additions
+# ---------------------------------------------------------------------------
+
+# DoH JSON answer type codes (RFC 8484): A=1, NS=2, MX=15, AAAA=28.
+_DOH_TYPE_A = 1
+_DOH_TYPE_NS = 2
+_DOH_TYPE_MX = 15
+_DOH_TYPE_AAAA = 28
+
+
+def _doh_answers(data: Any, type_code: int) -> List[str]:
+    """Collect the ``data`` values of one answer type from a DoH reply."""
+    values: List[str] = []
+    if not isinstance(data, dict):
+        return values
+    for answer in data.get('Answer') or []:
+        if not isinstance(answer, dict):
+            continue
+        if answer.get('type') == type_code and answer.get('data'):
+            values.append(str(answer['data']))
+    return values
+
+
+def _doh_google(domain: str) -> Dict[str, Any]:
+    """
+    DNS-over-HTTPS core record set via Google Public DNS (keyless).
+
+    Endpoint: ``https://dns.google/resolve?name={domain}&type=A`` (plus
+    AAAA, MX and NS - four sequential queries inside one reader).
+
+    This deliberately re-uses the field names of the built-in ``dns`` source
+    (``a_records`` / ``aaaa_records`` / ``mx_records`` / ``ns_records``) so
+    the two sources cross-confirm each other: ``gather_all`` provenance then
+    lists every provider of a record set instead of silently picking one.
+    The extra ``doh_responded`` marker records that the resolver itself
+    answered (Status 0) even when a record type is empty - a "no MX"
+    answer is a fact, not a failure. A bare ``.`` MX answer (RFC 7505 null
+    MX) is dropped just like the ``dns`` reader drops it. If none of the
+    four queries reach the resolver, the reader returns ``{}`` so the
+    source reports no data.
+    """
+    out: Dict[str, Any] = {}
+    responded = False
+
+    queries = (
+        ('A', _DOH_TYPE_A),
+        ('AAAA', _DOH_TYPE_AAAA),
+        ('MX', _DOH_TYPE_MX),
+        ('NS', _DOH_TYPE_NS),
+    )
+    for rtype, type_code in queries:
+        ok, data, _ = http.get_json(
+            f"https://dns.google/resolve?name={domain}&type={rtype}")
+        if not ok or not isinstance(data, dict) or data.get('Status') != 0:
+            continue
+        responded = True
+        answers = _doh_answers(data, type_code)
+        if not answers:
+            continue
+        if type_code == _DOH_TYPE_A:
+            out['a_records'] = [v for v in answers if _is_ipv4_literal(v)]
+        elif type_code == _DOH_TYPE_AAAA:
+            out['aaaa_records'] = [v for v in answers if _is_ipv6_literal(v)]
+        elif type_code == _DOH_TYPE_MX:
+            hosts = [h for h in _doh_mx_hosts(answers) if h and h != '.']
+            if hosts:
+                out['mx_records'] = hosts
+        elif type_code == _DOH_TYPE_NS:
+            out['ns_records'] = sorted({v.rstrip('.') for v in answers if v})
+
+    if not responded:
+        return {}
+    out['doh_responded'] = True
+    return {k: v for k, v in out.items() if v}
+
+
+def _is_ipv4_literal(value: str) -> bool:
+    """True when the DoH answer value is a literal IPv4 address."""
+    try:
+        return ipaddress.ip_address(value).version == 4
+    except ValueError:
+        return False
+
+
+def _is_ipv6_literal(value: str) -> bool:
+    """True when the DoH answer value is a literal IPv6 address."""
+    try:
+        return ipaddress.ip_address(value).version == 6
+    except ValueError:
+        return False
+
+
+def _doh_mx_hosts(answers: List[str]) -> List[str]:
+    """
+    Turn ``"10 alt1.example.com."`` MX answers into hosts, priority-sorted.
+
+    Mirrors the format of the ``dns`` reader's ``mx_records`` field so the
+    two sources merge cleanly; ``_doh_google`` then drops the null-MX ``.``
+    the same way the ``dns`` reader does.
+    """
+    records: List[Any] = []
+    for raw in answers:
+        parts = raw.split()
+        if len(parts) == 2:
+            try:
+                priority = int(parts[0])
+            except ValueError:
+                priority = 999
+            records.append((priority, parts[1].rstrip('.') or '.'))
+        elif raw:
+            records.append((999, raw.rstrip('.') or '.'))
+    records.sort(key=lambda item: item[0])
+    return [host for _prio, host in records]
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -347,6 +465,7 @@ FREE_SOURCES: Dict[str, Any] = {
     'crt.sh': _crtsh,
     'hackertarget': _hackertarget,
     'security_txt': _security_txt,
+    'doh.google': _doh_google,
 }
 
 # Human-readable metadata used by `obscuralens sources` and the README.
@@ -360,6 +479,7 @@ SOURCE_CATALOG = {
     'crt.sh': 'Certificate Transparency via crt.sh: certificates, subdomains, issuers (keyless)',
     'hackertarget': 'Subdomain/IP host search (keyless, daily quota)',
     'security_txt': 'RFC 9116 security.txt disclosure contacts and policy (keyless)',
+    'doh.google': 'A/AAAA/MX/NS records via Google DNS-over-HTTPS, cross-confirming the dns source (keyless)',
 }
 
 

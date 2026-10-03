@@ -1,0 +1,174 @@
+# ObscuraLens curated IMEI TAC (Type Allocation Code) pack.
+#
+# Source: community TAC database maintained on GitHub (MoazEb/tac-database,
+# itself compiled from public GSMA-certified device listings and imei.info
+# records), sampled and spot-checked against well-documented assignments.
+#
+# This is a CURATED SUBSET (139 of ~255,000 known TACs) covering the iconic
+# model families an OSINT operator meets most: every recent iPhone
+# generation, Galaxy S/Note/Z/A lines, Pixels, Xiaomi/Redmi/POCO, Huawei,
+# OnePlus, HMD Nokia, classic feature phones (Nokia N900, 3310), IoT modem
+# modules (Quectel, Sierra Wireless) and rugged brands (Doogee, Ulefone).
+# It is offline enrichment, not the complete registry.
+#
+# Format: one entry per line, sorted by TAC, no duplicates:
+#   TAC8|Manufacturer|Model-hint
+# where TAC8 is the 8-digit Type Allocation Code (the first 8 digits of an
+# IMEI; digits 9-14 are the serial number and digit 15 the Luhn check digit).
+#
+# Reporting Body Identifier (first two TAC digits, 3GPP TS 23.003):
+#   01 = PTCRB (North America)         35 = BABT (United Kingdom)
+#   86 = TAF (China)                   91 = TEC (India, domestic makers)
+#   44 = BABT-era secondary range (Motorola / Nokia / Siemens era devices)
+#   99 = modern mixed allocation (CDMA-era iPhones, current Chinese makers)
+# Other two-digit codes (33, 49, 50, 51, 52, 98, ...) are GSMA-assigned
+# regional certification identifiers whose public documentation is
+# inconsistent; the tracker reports the raw code and only names the bodies
+# listed above.
+#
+# Notes:
+# * A miss here means "not in this curated subset", NOT "unknown device" -
+#   hundreds of thousands of TACs exist and only commercial IMEI services
+#   can resolve them all.
+# * The imei_math source derives TAC / reporting body / SNR / check digit /
+#   Luhn validity from the identifier itself, so basic decomposition works
+#   for any IMEI even without a TAC pack hit.
+33002236|Apple|IPHONE 5 (2012)
+35000098|Samsung|GALAXY A32 5G (SM-A326B, 2021)
+35000226|Apple|IPHONE 12 PRO MAX (A2342, 2020)
+35000235|Apple|IPHONE 14 (A2884, 2022)
+35000245|Apple|IPHONE 7 (A1778, 2016)
+35000314|Samsung|GALAXY NOTE20 ULTRA 5G (2020)
+35000505|Samsung|GALAXY S25 (SM-S931B, 2025)
+35000580|Nokia|3310
+35000750|Apple|IPHONE 15 PRO MAX (A3108, 2023)
+35000800|Samsung|GALAXY S21+ 5G (SM-G996N, 2021)
+35000921|Samsung|GALAXY S24 FE (SM-S721B/DS, 2024)
+35001019|Apple|IPHONE AIR (A3518, 2025)
+35001160|Samsung|GALAXY S23 FE (SM-S711B/DS, 2023)
+35001708|Apple|IPHONE 13 PRO (A2638, 2021)
+35001904|Apple|IPHONE 13 PRO MAX (A2484, 2021)
+35002027|Samsung|GALAXY S22 5G (SM-S901B/DS, 2022)
+35002268|Samsung|GALAXY Z FOLD5 (SM-F946B/DS, 2023)
+35002333|Apple|IPHONE 16 (A3287, 2024)
+35003042|ASUS|ROG PHONE 7 ULTIMATE (2023)
+35003160|Samsung|GALAXY Z FLIP5 (2023)
+35003890|Google|PIXEL 9 PRO XL (GZC4K, 2024)
+35003958|Apple|IPHONE SE (A2296, 2020)
+35004012|Samsung|GALAXY A54 5G (SM-A546E/DS, 2023)
+35004887|Ulefone|ARMOR 27T PRO (2024)
+35006094|Samsung|GALAXY A52 4G (SM-A525F/DS, 2021)
+35006371|Samsung|GALAXY XCOVER7 PRO (2025)
+35007068|Samsung|GALAXY WATCH 4 (44MM)
+35008884|Motorola|RAZR 50 ULTRA (XT2451-3, 2024)
+35009403|Samsung|GALAXY S20 FE LTE (SM-G780G/DS, 2020)
+35009642|itel|A56
+35013502|Apple|IPHONE 12 MINI (A2399, 2020)
+35014955|Motorola|EDGE 30 (XT2203-1, 2022)
+35016048|Apple|IPHONE 11 (A2221, 2019)
+35024598|Google|PIXEL 8 (GZPF0, 2023)
+35035054|Samsung|GALAXY S10+ (2019)
+35039182|Apple|IPAD AIR 5
+35052635|Alcatel|1 (2021)
+35062495|Samsung|GALAXY S8 (SM-G950U, 2017)
+35071544|Tecno|SPARK 10 PRO (G88, 2023)
+35081496|Nokia|G21 (TA-1415, 2022)
+35082626|Sony|XPERIA 10 III LITE (XQ-BT44, 2021)
+35082926|TCL|JITTERBUG FLIP 2
+35084938|Sony|XPERIA 1 III (XQ-BC52, 2021)
+35084958|Apple|IPHONE XR (A1984, 2018)
+35092033|Motorola|MOTO G9 PLAY (XT2083-1, 2020)
+35142059|Google|PIXEL 6 (GB7N6, 2021)
+35150511|Samsung|GALAXY A10 (SM-A105F/DS, 2019)
+35151911|Samsung|GALAXY S9 (SM-G9600, 2018)
+35152006|BlackBerry|Z10
+35153406|Samsung|GALAXY Y DUOS
+35154805|BlackBerry|BOLD
+35155209|Samsung|GALAXY S7 EDGE (SM-G935FD, 2016)
+35155407|Samsung|GALAXY S6 EDGE (SM-G925I, 2015)
+35155509|Samsung|GALAXY A5 (2017) (SM-A520F)
+35157107|Samsung|GALAXY S5 MINI (SM-G800Y, 2014)
+35159311|Samsung|GALAXY NOTE 10 (SM-N970F/DS, 2019)
+35160711|Motorola|MOTO E (2020) (XT2051-2)
+35161058|Google|PIXEL 7 (GVU6C, 2022)
+35162307|BlackBerry|PRIV
+35164684|Apple|IPHONE X (A1902, 2017)
+35168507|LG|G4 STYLUS (MT6592M, 2015)
+35169445|ASUS|ZENFONE 9 (2022)
+35175210|Samsung|GALAXY NOTE 9 (SM-N960U, 2018)
+35175589|Samsung|GALAXY M31S (SM-M317F/DSN, 2020)
+35178307|HTC|ONE M9 (2015)
+35180461|Google|PIXEL 6 PRO (G8V0U, 2021)
+35190406|HTC|ONE M8 (M82014, 2014)
+35194411|LG|K40 (2019)
+35198006|Apple|IPHONE 5S (A1530, 2013)
+35199506|Apple|IPHONE 5C (2013)
+35200107|Apple|IPHONE 6 PLUS (A1522, 2014)
+35202506|Apple|IPHONE 6S (A1688, 2015)
+35208509|Samsung|GALAXY J5 PRO (2017) (SM-G570F, 2018)
+35217957|Nokia|XR20
+35218807|Sony|XPERIA Z5 PREMIUM DUAL (2015)
+35228110|Doogee|S55 LITE (S55, 2018)
+35241978|Google|PIXEL 7 PRO (GE2AE, 2022)
+35249311|Google|PIXEL 5 (GD1YQ, 2020)
+35285710|Google|PIXEL 4 XL (G020K, 2019)
+35297609|Apple|IPHONE 8 PLUS (A1897, 2017)
+35304477|Nokia|3310 (2017)
+35309310|Apple|IPHONE XS MAX (A1921, 2018)
+35313711|Nokia|8.3 5G (TA-1243, 2020)
+35323010|Apple|IPHONE 6S PLUS (A1687, 2015)
+35323834|Google|PIXEL 8 PRO (G1MNW, 2023)
+35339109|Nokia|6.1 PLUS (TA-1103, 2018)
+35371712|TCL|20 PRO 5G (2021)
+35377908|Apple|IPHONE 7 PLUS (A1784, 2016)
+35381511|Google|PIXEL 4A (5G) (G6QU3, 2020)
+35394509|Google|PIXEL 3 (G013A, 2018)
+35404110|Ulefone|S10 PRO (S10)
+35467840|Nokia|5.4 (TA-1328, 2020)
+35493043|Sony|XPERIA 5 III (XQ-BQ72, 2021)
+35495809|HTC|DESIRE 12 (2018)
+35540511|LG|VELVET (2020)
+35587009|Fairphone|FAIRPHONE 4 (FP42021, 2021)
+35662509|Doogee|X53 (X532015, 2015)
+35668501|Sierra Wireless|AC881U
+35674108|Apple|IPHONE X (A1902, 2017)
+35685611|Apple|IPHONE 11 (A2111, 2019)
+35693803|Nokia|N900
+35719706|Fairphone|FAIRPHONE 2 (FP22015, 2015)
+35972608|BlackBerry|KEYONE (BBB100-7, 2017)
+86000107|Redmi|NOTE 12 (2023)
+86000505|vivo|X60 (V2045, 2045)
+86002604|Huawei|Y6 2019 (MRD-LX1F, 2019)
+86003007|OPPO|RENO 12 PRO 5G (2024)
+86004207|Honor|90 GT (MAG-AN00, 2023)
+86005605|OPPO|A72 5G (PDYT20, 2020)
+86008904|Huawei|P40 PRO (ELS-AN00, 2020)
+86009705|Xiaomi|MI 11 LITE 5G (2021)
+86010804|Huawei|P30 LITE NOVA 4E (MAR-LX2, 2019)
+86012404|Xiaomi|MI 10
+86015204|Huawei|P20 PRO (CLT-AL01, 2018)
+86015205|realme|8 PRO (2021)
+86015405|realme|REALME C3 (2020)
+86015406|OnePlus|NORD N30 SE (2024)
+86020404|Xiaomi|MI 9 PRO 5G
+86022505|Huawei|MATE 40 PRO 4G (NOH-AL00, 2020)
+86025405|Xiaomi|POCO X3 PRO (2021)
+86028405|OnePlus|9 PRO (LE2120, 2021)
+86038004|Xiaomi|MI 8 LITE (2018)
+86038305|OPPO|FIND X3 (PEDM00, 2021)
+86042504|Quectel|EC25-EC
+86044504|Huawei|MATE 20 (HMA-AL00, 2018)
+86054804|Quectel|EC25-E
+86083404|Huawei|E5576-323
+86093503|ZTE|AXON 7 MINI
+86098204|ZTE|BLADE A7 2019 (A7, 2019)
+86103004|Huawei|HONOR 20 NOVA 5T (YAL-L21, 2019)
+86142806|Honor|MAGIC4 LITE (ANY-LX1, 2022)
+86153105|OnePlus|1+ IN2018 (IN2018, 2020)
+86161604|OnePlus|7 PRO (GM1910, 2019)
+86208804|Honor|HONOR 9X (HLK-TL00)
+86352404|vivo|Y21 (1926)
+86413005|Redmi|REDMI 9
+99000086|Apple|IPHONE 4S (A1387, 2011)
+99001646|Redmi|NOTE 8 PRO
+99001735|Redmi|NOTE 10 5G (2021)

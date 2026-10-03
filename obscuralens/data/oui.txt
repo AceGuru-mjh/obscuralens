@@ -1,0 +1,796 @@
+# ObscuraLens curated IEEE OUI (Organizationally Unique Identifier) pack.
+#
+# Source registries:
+#   * IEEE Registration Authority public OUI listings (standards.ieee.org)
+#   * Wireshark "manuf" vendor database (generated from the IEEE registry)
+#
+# This is a CURATED SUBSET (766 of ~40,000 public assignments) focused on the
+# vendors an OSINT operator meets most: enterprise networking gear, laptop and
+# phone makers, virtualization platforms, NAS/CCTV/IoT vendors and printer
+# manufacturers. It is offline enrichment, not the complete registry.
+#
+# Format: one entry per line, sorted by prefix, no duplicates:
+#   AABBCC|Vendor Name
+# where AABBCC is the 6-hex-digit OUI (the first three octets of an EUI-48
+# MAC address, as printed in the IEEE registry).
+#
+# Notes:
+# * A miss here means "not in this curated subset", NOT "unknown vendor" -
+#   the macvendors / maclookup online sources query the full registry.
+# * 52:54:00 is the QEMU/KVM default vNIC prefix. Its first octet has the
+#   locally-administered bit set, so it is not an IEEE-assigned OUI;
+#   Wireshark nevertheless resolves it to QEMU and so does this pack.
+# * 08:00:27 (VirtualBox default) is registered to PCS Systemtechnik GmbH.
+# * 00:05:69 / 00:0C:29 / 00:1C:14 / 00:50:56 are VMware vNIC prefixes;
+#   00:16:3E is the Xen/XenSource prefix.
+# * B8:27:EB belongs to the Raspberry Pi Foundation; DC:A6:32 and E4:5F:01
+#   belong to Raspberry Pi Trading Ltd (Pi 4 / Pi 400 / CM4 generations).
+# * 01:00:5E (IPv4 multicast) and 33:33 (IPv6 multicast) are IETF reserved
+#   blocks, not vendor assignments; the mac tracker reports them directly
+#   from the address bits, so they are intentionally absent here.
+000001|Xerox Corporation
+000002|Xerox Corporation
+000003|Xerox Corporation
+000005|Xerox Corporation
+000008|Xerox Corporation
+00000C|Cisco Systems, Inc
+00000E|Fujitsu Limited
+000039|Toshiba Corporation
+000048|Seiko Epson Corporation
+00004C|NEC Corporation
+000085|Canon Inc.
+000097|Dell EMC
+0000C0|Western Digital Corporation
+0000DD|TCL Incorporated
+0000E2|Acer Technologies Corp.
+0000F0|Samsung Electronics Co.,Ltd
+000102|3Com
+000103|3Com
+000124|Acer Incorporated
+000131|Bosch Security Systems, Inc.
+000142|Cisco Systems, Inc
+000143|Cisco Systems, Inc
+000144|Dell EMC
+00014A|Sony Corporation
+00016C|Foxconn
+0001E3|Siemens AG
+0001E6|Hewlett Packard
+0001E7|Hewlett Packard
+00023F|Compal Electronics INC.
+000255|IBM Corp
+00026C|Philips CFT
+00029C|3Com
+0002A5|Hewlett Packard
+0002B3|Intel Corporation
+0002EE|Nokia Danmark A/S
+000347|Intel Corporation
+000393|Apple, Inc.
+0003FF|Microsoft Corporation
+00040E|AVM GmbH
+00041F|Sony Interactive Entertainment Inc.
+000423|Intel Corporation
+000463|Bosch Security Systems
+00047D|Motorola Solutions Inc.
+0004AC|IBM Corp
+0004CF|Seagate Technology
+000502|Apple, Inc.
+00054E|Philips
+00055D|D-Link Systems, Inc.
+000569|VMware, Inc.
+000585|Juniper Networks
+0005B5|Broadcom Technologies
+000629|IBM Corp
+00064A|Honeywell Co., Ltd. (KOREA)
+00065B|Dell Inc.
+000740|Buffalo Inc.
+000795|Elitegroup Computer Systems Co.,Ltd.
+0007AB|Samsung Electronics Co.,Ltd
+0007B4|Cisco Systems, Inc
+00080D|Toshiba
+0008C6|Philips Consumer Communications
+00092D|HTC Corporation
+00095B|Netgear
+0009BF|Nintendo Co., Ltd.
+000A13|Honeywell Video Systems
+000A27|Apple, Inc.
+000A28|Motorola
+000AD9|Sony Corporation
+000AE4|Wistron Corporation
+000AE6|Elitegroup Computer Systems Co.,Ltd.
+000AEB|TP-Link Technologies Co.,Ltd.
+000AF7|Broadcom
+000B0F|Bosch Rexroth AG
+000B5D|Fujitsu Limited
+000B82|Grandstream Networks, Inc.
+000B86|Hewlett Packard Enterprise
+000BA3|Siemens AG
+000BAC|3Com Ltd
+000C29|VMware, Inc.
+000C41|Cisco-Linksys, LLC
+000C42|Routerboard.com
+000C50|Seagate Technology
+000C6E|ASUSTek COMPUTER INC.
+000CCA|HGST a Western Digital Company
+000D02|NEC Platforms, Ltd.
+000D0B|Buffalo Inc.
+000D3A|Microsoft Corp.
+000D41|Siemens AG ICM MP UC RD IT KLF1
+000D87|Elitegroup Computer Systems Co.,Ltd.
+000D88|D-Link Corporation
+000DB6|Broadcom
+000E07|Sony Corporation
+000E08|Cisco-Linksys, LLC
+000E1F|TCL Networks Equipment Co., Ltd.
+000E59|Sagemcom Broadband SAS
+000E7B|Toshiba
+000E8F|Sercomm Corporation.
+000EA6|ASUSTek COMPUTER INC.
+000EC7|Motorola Korea
+000EED|Nokia Danmark A/S
+000F12|Panasonic Europe Ltd.
+000F3D|D-Link Corporation
+000F66|Cisco-Linksys, LLC
+000FB0|Compal Electronics INC.
+000FB5|Netgear
+000FF8|Cisco Systems, Inc
+0010D9|IBM Japan (Fujisawa)
+0010DB|Juniper Networks
+001112|Honeywell CMSS
+00112F|ASUSTek COMPUTER INC.
+001132|Synology Incorporated
+001150|Belkin Corporation
+00119F|Nokia Danmark A/S
+0011AD|Shanghai Ruijie Technology
+0011C6|Seagate Technology
+00121E|Juniper Networks
+001247|Samsung Electronics Co.,Ltd
+00125A|Microsoft Corporation
+001267|Panasonic Corporation
+0012BF|Arcadyan Corporation
+0012FE|Lenovo Mobile Communication Technology Ltd.
+001315|Sony Interactive Entertainment Inc.
+001349|Zyxel Communications Corporation
+001438|Hewlett Packard Enterprise
+00146C|Netgear
+001478|TP-Link Technologies Co.,Ltd.
+0014A4|Hon Hai Precision Ind. Co.,Ltd.
+0014C2|Hewlett Packard
+0014EE|Western Digital Technologies, Inc.
+00150C|AVM GmbH
+00152A|Nokia Corporation
+001556|Sagemcom Broadband SAS
+001558|Foxconn
+001565|Xiamen Yealink Network Technology Co.,Ltd
+00156D|Ubiquiti Inc
+0015C1|Sony Interactive Entertainment Inc.
+0015EB|ZTE Corporation
+001601|Buffalo Inc.
+001636|Quanta Computer Inc.
+00163E|Xensource, Inc.
+001656|Nintendo Co., Ltd.
+001697|NEC Corporation
+0016D3|Wistron Corporation
+0016D4|Compal Communications, Inc.
+0016E0|3Com Ltd
+00173F|Belkin International Inc.
+001742|Fujitsu Limited
+00175C|Sharp Corporation
+001787|Brother, Brother & Sons ApS
+001788|Philips Lighting BV
+0017AB|Nintendo Co., Ltd.
+0017C4|Quanta Microsystems, INC.
+0017CC|Alcatel-Lucent
+0017E0|Cisco Systems, Inc
+0017EF|IBM Corp
+00180A|Cisco Meraki
+001862|Seagate Technology
+001882|Huawei Technologies Co.,Ltd
+001885|Motorola Solutions Inc.
+00192D|Nokia Corporation
+00194B|Sagemcom Broadband SAS
+001987|Panasonic Mobile Communications Co.,Ltd.
+00199D|Vizio, Inc
+0019B7|Nokia Danmark A/S
+0019C6|ZTE Corporation
+0019CB|Zyxel Communications Corporation
+0019E0|TP-Link Technologies Co.,Ltd.
+001A11|Google, Inc.
+001A1E|Hewlett Packard Enterprise
+001A2A|Arcadyan Corporation
+001A4F|AVM GmbH
+001A70|Cisco-Linksys, LLC
+001A95|Hisense Mobile Communications Technoligy Co.,Ltd.
+001B24|Quanta Computer Inc.
+001BA9|Brother industries, LTD.
+001C14|VMware, Inc.
+001C50|TCL Technoly Electronics (Huizhou) Co., Ltd.
+001C62|LG Electronics (Mobile Communications)
+001CDF|Belkin International Inc.
+001CEE|SHARP Corporation
+001D19|Arcadyan Corporation
+001D28|Sony Corporation
+001D4C|Alcatel-Lucent
+001D60|ASUSTek COMPUTER INC.
+001D72|Wistron Corporation
+001E10|Huawei Technologies Co.,Ltd
+001E58|D-Link Corporation
+001E73|ZTE Corporation
+001E75|LG Electronics (Mobile Communications)
+001E8F|Canon Inc.
+001E90|Elitegroup Computer Systems Co.,Ltd.
+001EA3|Nokia Danmark A/S
+001F55|Honeywell Security (China) Co., Ltd.
+001F6B|LG Electronics (Mobile Communications)
+001F92|Motorola Solutions Inc.
+001FF8|Siemens AG, Sector Industry, Drive Technologies, Motion Control Systems
+002035|IBM Corp
+002037|Seagate Technology
+00203D|Honeywell Environmental & Combustion Controls
+002075|Motorola Communication Israel
+00211B|Cisco Systems, Inc
+002135|Alcatel-Lucent
+00215D|Intel Corporate
+002170|Dell Inc.
+0021BD|Nintendo Co., Ltd.
+0022F3|SHARP Corporation
+0022FD|Nokia Danmark A/S
+002318|Toshiba
+00234E|Hon Hai Precision Ind. Co.,Ltd.
+002376|HTC Corporation
+0023F8|Zyxel Communications Corporation
+002503|IBM Corp
+002568|Huawei Technologies Co.,Ltd
+0026AB|Seiko Epson Corporation
+0026E2|LG Electronics (Mobile Communications)
+002722|Ubiquiti Inc
+00301E|3Com Europe Ltd
+00306E|Hewlett Packard
+0030B6|Cisco Systems, Inc
+003A9D|NEC Platforms, Ltd.
+003DE1|Huawei Device Co., Ltd.
+003EC4|Huawei Device Co., Ltd.
+004017|Silex Technology America
+004026|Buffalo Inc.
+004084|Honeywell
+00408C|Axis Communications AB
+004B0D|Huawei Device Co., Ltd.
+005009|Philips Broadband Networks
+005013|Seagate Cloud Systems Inc
+005043|Marvell Semiconductor, Inc.
+005056|VMware, Inc.
+005907|LenovoEMC Products USA, LLC
+006034|ROBERT BOSCH GmbH
+006067|Acer Netxus Inc.
+006201|Motorola Mobility LLC, a Lenovo Company
+00620B|Broadcom Limited
+0068EB|HP Inc.
+006B9E|Vizio, Inc
+007147|Amazon Technologies Inc.
+0071C2|Pegatron Corporation
+00749C|Ruijie Networks Co.,LTD
+0077E4|Nokia Solutions and Networks GmbH & Co. KG
+007D3B|Samsung Electronics Co.,Ltd
+008077|Brother industries, LTD.
+008092|Silex Technology, Inc.
+00841E|Cisco Meraki
+008621|Amazon Technologies Inc.
+009030|Honeywell-Dating
+0090A6|Cisco Systems, Inc
+0090A9|Western Digital
+0090F1|Seagate Cloud Systems Inc
+009EC8|Xiaomi Communications Co Ltd
+00A024|3Com
+00A060|Acer Peripherals, Inc.
+00A0C6|Qualcomm Inc.
+00B8B6|Motorola Mobility LLC, a Lenovo Company
+00BB3A|Amazon Technologies Inc.
+00BBC1|Canon Inc.
+00BC99|Hangzhou Hikvision Digital Technology Co.,Ltd.
+00BD3A|Nokia Corporation
+00BD3E|Vizio, Inc
+00C002|Sercomm Corporation.
+00C09F|Quanta Computer Inc.
+00C30A|Xiaomi Communications Co Ltd
+00D060|Panasonic Europe Ltd.
+00E04C|Realtek Semiconductor Corp.
+00EB2D|Sony Corporation
+00EC0A|Xiaomi Communications Co Ltd
+00EEBD|HTC Corporation
+00F620|Google, Inc.
+00FADE|Motorola Mobility LLC, a Lenovo Company
+00FD22|Cisco Systems, Inc
+04006E|Google, Inc.
+040312|Hangzhou Hikvision Digital Technology Co.,Ltd.
+040A83|Alcatel-Lucent
+040E3C|HP Inc.
+0418D6|Ubiquiti Inc
+04421A|ASUSTek COMPUTER INC.
+044E06|Ericsson AB
+046C59|Intel Corporate
+0495E6|Tenda Technology Co.,Ltd.Dongguan branch
+04A151|Netgear
+04BAD6|D-Link Corporation
+04EECD|Hangzhou Hikvision Digital Technology Co.,Ltd.
+04F13E|Apple, Inc.
+04F41C|Routerboard.com
+04FB66|Ericsson AB
+080027|PCS Systemtechnik GmbH (VirtualBox default prefix)
+08005A|IBM Corp
+080072|Xerox Corp Univ Grant Program
+0840F3|Tenda Technology Co.,Ltd.Dongguan branch
+085531|Routerboard.com
+08674E|Hisense broadband multimedia technology Co.,Ltd
+086A0B|Cisco Meraki
+08863B|Belkin International Inc.
+089BB9|Nokia Solutions and Networks GmbH & Co. KG
+08B258|Juniper Networks
+08BA5F|Qingdao Hisense Electronics Co.,Ltd.
+08EDED|Zhejiang Dahua Technology Co., Ltd.
+0C413E|Microsoft Corporation
+0C4885|LG Electronics (Mobile Communications)
+0C4F9B|Huawei Technologies Co.,Ltd
+0C54A5|Pegatron Corporation
+0C7329|Sercomm Corporation.
+0C7C28|Nokia Solutions and Networks GmbH & Co. KG
+0C8509|Shen Zhen Tenda Technology Co.,Ltd
+0CDFA4|Samsung Electronics Co.,Ltd
+100501|Pegatron Corporation
+105F02|Ruijie Networks Co.,LTD
+105FAD|Intel Corporate
+107B44|ASUSTek COMPUTER INC.
+107D1A|Dell Inc.
+10B676|HP Inc.
+10BD43|Robert Bosch Elektronikai Kft.
+10C595|Lenovo
+142876|Apple, Inc.
+143A9A|Hon Hai Precision Industry Co.,LTD
+144146|Honeywell (China) Co., LTD
+144CFF|Grandstream Networks, Inc.
+147590|TP-Link Technologies Co.,Ltd.
+149138|Amazon Technologies Inc.
+149FE8|Lenovo Mobile Communication Technology Ltd.
+14A78B|Zhejiang Dahua Technology Co., Ltd.
+1806FF|Acer Computer(Shanghai) Limited.
+185936|Xiaomi Communications Co Ltd
+1867B0|Samsung Electronics Co.,Ltd
+18C086|Broadcom
+18E728|Cisco Systems, Inc
+18F7F6|Ericsson AB
+1C3947|Compal Information (Kunshan) Co., Ltd.
+1C4586|Nintendo Co.,Ltd
+1C56FE|Motorola Mobility LLC, a Lenovo Company
+1C599B|Huawei Technologies Co.,Ltd
+1C5A6B|Philips Electronics Nederland BV
+1C5F2B|D-Link International
+1C740D|Zyxel Communications Corporation
+1CB17F|NEC Platforms, Ltd.
+1CBCEC|silex technology, Inc.
+1CE4DD|Technicolor (China) Technology Co., Ltd.
+1CED6F|AVM Audiovisuelles Marketing und Computersysteme GmbH
+1CF29A|Google, Inc.
+200889|ZTE Corporation
+202C05|Zhejiang Dahua Zhilian Co.,Ltd
+2037A5|Apple, Inc.
+204C03|Hewlett Packard Enterprise
+204E7F|Netgear
+206A8A|Wistron Infocomm (Zhongshan) Corporation
+20AA4B|Cisco-Linksys, LLC
+20BEB4|Hisense broadband multimedia technology Co.,Ltd
+20CF30|ASUSTek COMPUTER INC.
+20E59B|Panasonic Automotive Systems
+2428FD|Hangzhou Hikvision Digital Technology Co.,Ltd.
+243FAA|Huawei Device Co., Ltd.
+245EBE|QNAP Systems, Inc.
+246968|TP-Link Technologies Co.,Ltd.
+246E96|Dell Inc.
+249AD8|Yealink(Xiamen) Network Technology Co.,Ltd.
+24A43C|Ubiquiti Inc
+24A452|Samsung Electronics Co.,Ltd
+24EB16|Intel Corporate
+281878|Microsoft Corporation
+284E44|Huawei Technologies Co.,Ltd
+288023|Hewlett Packard
+28B829|Juniper Networks
+28CDC1|Raspberry Pi Trading Ltd
+2C0DCF|Xiaomi Communications Co Ltd
+2C301A|Technicolor CH USA Inc for Telus
+2C600C|Quanta Computer Inc.
+2C7CF2|Apple, Inc.
+2C93FB|Sercomm France Sarl
+2CA7EF|OnePlus Technology (Shenzhen) Co., Ltd
+2CC81B|Routerboard.com
+2CCF67|Raspberry Pi (Trading) Ltd
+2CD2E7|Nokia Corporation
+2CD444|Fujitsu Limited
+30055C|Brother industries, LTD.
+301389|Siemens AG, Automations & Drives,
+3037A6|Cisco Systems, Inc
+30766F|LG Electronics (Mobile Communications)
+3093BC|Sagemcom Broadband SAS
+30A8DB|Sony Corporation
+30B1B5|Arcadyan Corporation
+30BB7D|OnePlus Technology (Shenzhen) Co., Ltd
+30E044|Google, Inc.
+30F028|Bosch Sicherheitssysteme GmbH
+34033D|HP Inc.
+340A33|D-Link International
+342EB7|Intel Corporate
+343759|ZTE Corporation
+343DC4|Buffalo Inc.
+3440B5|IBM
+345180|TCL King Electrical Appliances (Huizhou) Co., Ltd
+345A06|SHARP Corporation
+346895|Hon Hai Precision Ind. Co.,Ltd.
+34800D|Marvell Semiconductors
+3483D5|Huawei Technologies Co.,Ltd
+348446|Ericsson AB
+3497D7|Yealink(Xiamen) Network Technology Co.,Ltd.
+3497F6|ASUSTek COMPUTER INC.
+349F7B|Canon Inc.
+34AA8B|Samsung Electronics Co.,Ltd
+381A52|Seiko Epson Corporation
+386FF4|Amazon Technologies Inc.
+38A067|Nokia Solutions and Networks GmbH & Co. KG
+38CADA|Apple, Inc.
+38E7D8|HTC Corporation
+38EC07|Motorola Mobility LLC, a Lenovo Company
+38F18F|Technicolor (China) Technology Co., Ltd.
+3A3541|Raspberry Pi (Trading) Ltd
+3C3786|Netgear
+3C6FEA|Panasonic India Pvt. Ltd.
+3C7895|TP-Link Systems Inc.
+3C8D20|Google, Inc.
+3CA62F|AVM Audiovisuelles Marketing und Computersysteme GmbH
+3CEF8C|Zhejiang Dahua Technology Co., Ltd.
+407183|Juniper Networks
+40A746|Broadcom Limited
+40B0FA|LG Electronics (Mobile Communications)
+40D133|Intel Corporate
+40ECF8|Siemens AG
+40F407|Nintendo Co., Ltd.
+441EA1|Hewlett Packard
+4447CC|Hangzhou Hikvision Digital Technology Co.,Ltd.
+445BED|Hewlett Packard Enterprise
+445CE9|Samsung Electronics Co.,Ltd
+447654|Huawei Technologies Co.,Ltd
+44A038|Huawei Device Co., Ltd.
+44BDC8|Xiaomi Communications Co Ltd
+4801C5|OnePlus Technology (Shenzhen) Co., Ltd
+480560|Meta Platforms, Inc.
+48210B|Pegatron Corporation
+48262C|Apple, Inc.
+482AE3|Wistron InfoComm(Kunshan)Co.,Ltd.
+4857DD|Facebook Inc
+487B2F|Microsoft Corporation
+488B0A|Cisco Systems, Inc
+4890F0|Dell Inc.
+4896D9|ZTE Corporation
+48A98A|Routerboard.com
+4A688D|Shenzhen TCL New Technology Co., Ltd
+4C53FD|Amazon Technologies Inc.
+4C5FD2|Alcatel-Lucent
+4CCC34|Motorola Solutions Inc.
+50125C|Sony Corporation
+502690|Fujitsu Limited
+5027E4|Marvell Semiconductors
+50284A|Intel Corporate
+503CC4|Lenovo Mobile Communication Technology Ltd.
+50465D|ASUSTek COMPUTER INC.
+50579C|Seiko Epson Corporation
+509903|Meta Platforms, Inc.
+50ACB9|Huawei Technologies Co.,Ltd
+50B03B|Sony Interactive Entertainment Inc.
+50E039|Zyxel Communications Corporation
+50EC50|Beijing Xiaomi Mobile Software Co., Ltd
+50F0D3|Samsung Electronics Co.,Ltd
+525400|QEMU/KVM virtual NICs (unregistered prefix, locally administered)
+543530|Hon Hai Precision Ind. Co.,Ltd.
+546751|Compal Broadband Networks, Inc.
+547595|TP-Link Technologies Co.,Ltd.
+547975|Nokia Corporation
+54BF55|Juniper Networks
+54ECB0|Sercomm France Sarl
+5803FB|Hangzhou Hikvision Digital Technology Co.,Ltd.
+580FA5|Apple, Inc.
+58B4BB|Ruijie Networks Co.,LTD
+58CB52|Google, Inc.
+58EF68|Belkin International Inc.
+5C17CF|OnePlus Technology (Shenzhen) Co., Ltd
+5C1B17|Bosch Automotive Electronics India Pvt. Ltd.
+5C60BA|HP Inc.
+5C70A3|LG Electronics (Mobile Communications)
+5CD998|D-Link Corporation
+5CE176|Cisco Systems, Inc
+5CE42A|Intel Corporate
+5CFA25|Sagemcom Broadband SAS
+60128B|Canon Inc.
+601466|ZTE Corporation
+6079C9|Huawei Technologies Co.,Ltd
+6084BD|Buffalo Inc.
+608F5C|Samsung Electronics Co.,Ltd
+60A8FE|Nokia Solutions and Networks GmbH & Co. KG
+60E327|TP-Link Technologies Co.,Ltd.
+60F549|Apple, Inc.
+6475DA|Arcadyan Corporation
+649C81|Qualcomm Inc.
+64AEF1|Qingdao Hisense Electronics Co.,Ltd.
+64C2DE|LG Electronics (Mobile Communications)
+64EB8C|Seiko Epson Corporation
+64FD29|Zhejiang Dahua Technology Co., Ltd.
+6822E5|Huawei Device Co., Ltd.
+6854ED|Alcatel-Lucent
+687251|Ubiquiti Inc
+68847E|Fujitsu Limited
+68871C|Motorola Mobility LLC, a Lenovo Company
+68B691|Amazon Technologies Inc.
+68ECC5|Intel Corporate
+6C0699|Beijing Xiaomi Mobile Software Co., Ltd
+6C3B6B|Routerboard.com
+6C5AB5|TCL Technoly Electronics (Huizhou) Co., Ltd.
+6C8336|Samsung Electronics Co.,Ltd
+6C92CF|Broadcom Limited
+6CAE8B|IBM Corporation
+6CC3B2|Cisco Meraki
+6CCDD6|Netgear
+6CE4DA|NEC Platforms, Ltd.
+6CF37F|Hewlett Packard Enterprise
+7022FE|Apple, Inc.
+702C09|Nintendo Co.,Ltd
+704D7B|ASUSTek COMPUTER INC.
+7054D2|Pegatron Corporation
+706BB9|Cisco Systems, Inc
+706E10|Huawei Technologies Co.,Ltd
+70720D|Lenovo Mobile Communication Technology Ltd.
+70F74F|Robert Bosch JuP1
+70F8AE|Microsoft Corporation
+7429AF|Hon Hai Precision Ind. Co.,Ltd.
+743675|Juniper Networks
+747827|Dell Inc.
+74A57E|Panasonic Ecology Systems
+74BFC0|Canon Inc.
+74C99A|Ericsson AB
+74D4DD|Quanta Computer Inc.
+74DDF0|Shen Zhen Tenda Technology Co.,Ltd
+74F92C|Ubiquiti Inc
+782B46|Intel Corporate
+78542E|D-Link International
+787E42|ZTE Corporation
+788CB5|TP-Link Systems Inc
+7894B4|Sercomm Corporation.
+78C4FA|Meta Platforms, Inc.
+78E7D1|Hewlett Packard
+78EDBC|OnePlus Technology (Shenzhen) Co., Ltd
+78F7BE|Samsung Electronics Co.,Ltd
+7A3F8C|Seagate Technology Thailand Ltd.
+7C2499|Apple, Inc.
+7C6166|Amazon Technologies Inc.
+7C6193|HTC Corporation
+7C7716|Zyxel Communications Corporation
+7C942A|Huawei Technologies Co.,Ltd
+7C94B2|Philips Healthcare PCCI
+7CD95C|Google, Inc.
+80051F|Vizio, Inc
+802395|AVM Audiovisuelles Marketing und Computersysteme GmbH
+8035C1|Xiaomi Communications Co Ltd
+8099E7|Sony Corporation
+80CA52|Wistron InfoComm(Chongqing)Co.,Ltd.
+80CF41|Lenovo Mobile Communication Technology Ltd.
+84002D|Pegatron Corporation
+8455A5|Samsung Electronics Co.,Ltd
+8457F7|Meta Platforms, Inc.
+84683E|Intel Corporate
+849A40|Hangzhou Hikvision Digital Technology Co.,Ltd.
+84AFEC|Buffalo Inc.
+84B1E2|Microsoft Corporation
+84B261|Cisco Systems, Inc
+88074B|LG Electronics (Mobile Communications)
+881032|Apple, Inc.
+88124E|Qualcomm Inc.
+883037|Juniper Networks
+887384|Toshiba
+88A29E|Raspberry Pi (Trading) Ltd
+88AEDD|EliteGroup Computer Systems Co., LTD
+88F872|Huawei Technologies Co.,Ltd
+8C19B5|Arcadyan Corporation
+8C4E46|Motorola Mobility LLC, a Lenovo Company
+8C5219|SHARP Corporation
+8C8474|Broadcom Limited
+8CC9E9|Huawei Device Co., Ltd.
+8CEDE1|Ubiquiti Inc
+8CFDF0|Qualcomm Inc.
+9009D0|Synology Incorporated
+90324B|Hon Hai Precision Ind. Co.,Ltd.
+903809|Ericsson AB
+904528|Nintendo Co.,Ltd
+905C44|Compal Broadband Networks, Inc.
+9067B5|Alcatel-Lucent
+908D6E|Dell Inc.
+909A4A|TP-Link Technologies Co.,Ltd.
+90C710|ZTE Corporation
+90E17B|Apple, Inc.
+90E2BA|Intel Corporate
+94103E|Belkin International Inc.
+94350A|Samsung Electronics Co.,Ltd
+943B22|Netgear
+94652D|OnePlus Technology (Shenzhen) Co., Ltd
+94B40F|Hewlett Packard Enterprise
+94D331|Xiaomi Communications Co Ltd
+94DDF8|Brother Industries, LTD.
+94EB2C|Google, Inc.
+94F929|Meta Platforms, Inc.
+94FEF4|Sagemcom Broadband SAS
+980D2E|HTC Corporation
+98226E|Amazon Technologies Inc.
+985A98|Huawei Technologies Co.,Ltd
+98F9CC|Zhejiang Dahua Technology Co., Ltd.
+98FE54|Raspberry Pi (Trading) Ltd
+9C32CE|Canon Inc.
+9C4A7B|Nokia Corporation
+9C9613|Lenovo Future Communication Technology (Chongqing) Company Limited
+A00363|Robert Bosch Healthcare GmbH
+A027B6|Samsung Electronics Co.,Ltd
+A039F7|LG Electronics (Mobile Communications)
+A04ECF|Apple, Inc.
+A05950|Intel Corporate
+A06610|Fujitsu Limited
+A091A2|OnePlus Electronics (Shenzhen) Co., Ltd.
+A091CA|Nokia Solutions and Networks GmbH & Co. KG
+A09F7A|D-Link Middle East FZCO
+A0AD9F|ASUSTek COMPUTER INC.
+A0BD71|QUALCOMM Incorporated
+A0D3C1|Hewlett Packard
+A40E2B|Facebook Inc
+A411BB|Cisco Systems, Inc
+A41242|NEC Platforms, Ltd.
+A41437|Hangzhou Hikvision Digital Technology Co.,Ltd.
+A48CDB|Lenovo
+A4AE12|Hon Hai Precision Industry Co., Ltd.
+A4EE57|Seiko Epson Corporation
+A82948|TP-Link Systems Inc.
+A82BD5|Xiaomi Communications Co Ltd
+A86D04|Siemens AG
+A87971|Huawei Technologies Co.,Ltd
+A88200|Hisense Electric Co.,Ltd
+A897DC|IBM
+A8A668|ZTE Corporation
+A8B13B|HP Inc.
+AC3DCB|Intel Corporate
+AC49DB|Apple, Inc.
+AC5A14|Samsung Electronics Co.,Ltd
+AC60B6|Ericsson AB
+AC7713|Honeywell Safety Products (Shanghai) Co.,Ltd
+AC8BA9|Ubiquiti Inc
+ACA09D|Juniper Networks
+ACCC8E|Axis Communications AB
+ACD618|OnePlus Technology (Shenzhen) Co., Ltd
+ACE6BB|Google, Inc.
+ACF6F7|LG Electronics (Mobile Communications)
+B03956|Netgear
+B05CE5|Nokia Corporation
+B07C8E|Brother Industries, LTD.
+B0ACFA|Fujitsu Limited
+B0C2C7|Motorola Mobility LLC, a Lenovo Company
+B0C745|Buffalo Inc.
+B0D888|Panasonic Automotive Systems Co.,Ltd
+B40F3B|Tenda Technology Co.,Ltd.Dongguan branch
+B41F4D|Sony Interactive Entertainment Inc.
+B44506|Dell Inc.
+B4527D|Sony Corporation
+B454F2|Huawei Device Co., Ltd.
+B4A5EF|Sercomm Corporation.
+B4FBF9|Huawei Technologies Co.,Ltd
+B827EB|Raspberry Pi Foundation
+B831B5|Microsoft Corporation
+B8374B|Hewlett Packard Enterprise
+B869F4|Routerboard.com
+B87826|Nintendo Co.,Ltd
+B888E3|Compal Information (Kunshan) Co., Ltd.
+B8A386|D-Link International
+B8A44F|Axis Communications AB
+B8B2F8|Apple, Inc.
+B8B4C9|Cisco Meraki
+B8ECA3|Zyxel Communications Corporation
+B8F4A4|Google, Inc.
+B8FE96|Amazon Technologies Inc.
+BC0358|Intel Corporate
+BC1485|Samsung Electronics Co.,Ltd
+BC325F|Zhejiang Dahua Technology Co., Ltd.
+BC9388|Nokia Solutions (Shanghai) Co.,Ltd.
+BC97E1|Broadcom Limited
+BC9B5E|Hangzhou Hikvision Digital Technology Co.,Ltd.
+BCC493|Cisco Systems, Inc
+BCC8CC|Seiko Epson Corporation
+BCCFCC|HTC Corporation
+BCD177|TP-Link Technologies Co.,Ltd.
+BCEE7B|ASUSTek COMPUTER INC.
+C01803|HP Inc.
+C01850|Quanta Computer Inc.
+C074AD|Grandstream Networks, Inc.
+C0A476|Ruijie Networks Co.,LTD
+C0CB38|Hon Hai Precision Ind. Co.,Ltd.
+C0DD8A|Meta Platforms, Inc.
+C4411E|Belkin International Inc.
+C4710F|Xiaomi Communications Co Ltd
+C47764|Samsung Electronics Co.,Ltd
+C47BE3|Huawei Technologies Co.,Ltd
+C49A02|LG Electronics (Mobile Communications)
+C4E532|Arcadyan Corporation
+C4EBFF|ZTE Corporation
+C80A35|Qingdao Hisense Smart Life Technology Co., Ltd
+C82A14|Apple, Inc.
+C858C0|Intel Corporate
+C8787D|D-Link Corporation
+C87EA1|TCL MOKA International Limited
+C891F9|Sagemcom Broadband SAS
+C89E43|Netgear
+C8C750|Motorola Mobility LLC, a Lenovo Company
+C8FE6A|Juniper Networks
+CA083C|Western Digital Technologies, Inc.
+CA125C|Microsoft Corporation
+CC07E4|Lenovo Mobile Communication Technology Ltd.
+CC5763|Panasonic Automotive Systems Co.,Ltd
+CC96E5|Dell Inc.
+CCCE1E|AVM Audiovisuelles Marketing und Computersysteme GmbH
+CCDD58|Robert Bosch GmbH
+D05509|Nintendo Co.,Ltd
+D08543|Cisco Systems, Inc
+D0B3C2|Meta Platforms, Inc.
+D0BF9C|Hewlett Packard
+D0D003|Samsung Electronics Co.,Ltd
+D0EA11|Routerboard.com
+D404E6|Broadcom Limited
+D42C46|Buffalo Inc.
+D4612E|Huawei Technologies Co.,Ltd
+D4DCCD|Apple, Inc.
+D806D1|Honeywell Fire System (Shanghai) Co,. Ltd.
+D807B6|TP-Link Technologies Co.,Ltd.
+D83ADD|Raspberry Pi Trading Ltd
+D87157|Lenovo Mobile Communication Technology Ltd.
+D88C73|ZTE Corporation
+D8912A|Zyxel Communications Corporation
+D893D4|Xiaomi Communications Co Ltd
+D897BA|Pegatron Corporation
+D8A491|Huawei Device Co., Ltd.
+D8EB46|Google, Inc.
+D8F883|Intel Corporate
+DC07F8|Hangzhou Hikvision Digital Technology Co.,Ltd.
+DC0B34|LG Electronics (Mobile Communications)
+DC2C6E|Routerboard.com
+DC3EF8|Nokia Corporation
+DC9FDB|Ubiquiti Inc
+DCA632|Raspberry Pi Trading Ltd
+DCCD2F|Seiko Epson Corporation
+E006E6|Hon Hai Precision Ind. Co.,Ltd.
+E0071B|Hewlett Packard Enterprise
+E03F49|ASUSTek COMPUTER INC.
+E0508B|Zhejiang Dahua Technology Co., Ltd.
+E0DB10|Samsung Electronics Co.,Ltd
+E419C1|Huawei Technologies Co.,Ltd
+E426D5|Motorola Mobility LLC, a Lenovo Company
+E454E8|Dell Inc.
+E45E37|Intel Corporate
+E45F01|Raspberry Pi Trading Ltd
+E46F13|D-Link International
+E47FB2|Fujitsu Limited
+E490FD|Apple, Inc.
+E4FB1E|Microsoft Corporation
+E4FC82|Juniper Networks
+E82725|Axis Communications AB
+E843B6|QNAP Systems, Inc.
+E89847|Xiaomi Communications Co Ltd
+E8BCE4|Cisco Systems, Inc
+E8D87E|Amazon Technologies Inc.
+E8E0B7|Toshiba
+E8E7C3|ZTE Corporation
+EC26CA|TP-Link Technologies Co.,Ltd.
+EC71DB|Reolink Innovation Limited
+ECB4E8|Wistron Mexico SA de CV
+F01628|Technicolor (China) Technology Co., Ltd.
+F0704F|Samsung Electronics Co.,Ltd
+F0C850|Huawei Technologies Co.,Ltd
+F0DBF8|Apple, Inc.
+F0EF86|Google, Inc.
+F40669|Intel Corporate
+F48139|Canon Inc.
+F4C7AA|Marvell Semiconductors
+FC934E|Realtek Semiconductor Corp.

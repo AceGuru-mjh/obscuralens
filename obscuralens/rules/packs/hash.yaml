@@ -1,0 +1,169 @@
+# ObscuraLens explainable rule pack -- hash
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the hash tracker output: malware_family,
+# malicious_detections, packed, popularity, signature_valid, first_seen,
+# file_type, yara_rules...
+# ---------------------------------------------------------------------------
+
+name: hash-rules
+description: >-
+  Explainable detection, packing and prevalence heuristics for file
+  hash lookups.
+version: 1
+rules:
+  - id: HASH-001
+    title: Named malware family
+    description: >-
+      Scanners converge on a specific malware family name for this
+      sample. A family attribution anchors the whole incident: known
+      capabilities, typical delivery and documented remediation all
+      follow from it.
+    severity: high
+    weight: 25
+    tags: [detection, family]
+    conditions:
+      - field: malware_family
+        operator: not_empty
+        value: true
+
+  - id: HASH-002
+    title: Multiple engines detect it
+    description: >-
+      Five or more engines flag the sample malicious. Cross-engine
+      agreement at this level rules out single-vendor false positives
+      and makes the detection safe to act on operationally.
+    severity: high
+    weight: 25
+    tags: [detection]
+    conditions:
+      - field: malicious_detections
+        operator: gte
+        value: 5
+
+  - id: HASH-003
+    title: Packer detected
+    description: >-
+      The sample is packed. Packers compress and obfuscate executables,
+      which defeats static signatures and forces behavioural analysis --
+      standard practice for evasive malware and for protecting
+      legitimate commercial software alike.
+    severity: medium
+    weight: 10
+    tags: [packing, evasion]
+    references: ["MITRE ATT&CK T1027.002"]
+    conditions:
+      - field: packed
+        operator: is_true
+
+  - id: HASH-004
+    title: Rare but detected sample
+    description: >-
+      The sample is almost unknown to prevalence databases while at
+      least one engine detects it. Targeted, low-distribution malware is
+      exactly what this combination looks like, as opposed to mass-
+      distributed commodity threats with huge prevalence.
+    severity: medium
+    weight: 15
+    tags: [targeting, prevalence]
+    conditions:
+      - field: popularity
+        operator: lte
+        value: 10
+      - field: malicious_detections
+        operator: gte
+        value: 1
+
+  - id: HASH-005
+    title: Invalid code signature
+    description: >-
+      The file is signed but the signature fails validation (broken
+      chain, tampered content, revoked cert). Attackers sign freely with
+      stolen or bought certificates, and a *broken* signature means the
+      file changed after signing -- suspicious either way.
+    severity: medium
+    weight: 10
+    tags: [signing]
+    conditions:
+      - field: signature_valid
+        operator: is_false
+
+  - id: HASH-006
+    title: Known signer with valid signature
+    description: >-
+      The file carries a valid signature from a well-known publisher.
+      This is a positive context signal that lowers the prior for
+      tampered binaries, though stolen certificates are a documented
+      exception.
+    severity: info
+    weight: 0
+    tags: [signing, positive]
+    conditions:
+      - field: signature_valid
+        operator: is_true
+      - field: signer
+        operator: in
+        value: [Microsoft Corporation, Adobe Inc., Google LLC,
+                Apple Inc., Mozilla Corporation, Oracle Corporation]
+
+  - id: HASH-007
+    title: Zero detections
+    description: >-
+      No engine flags the sample. Clean scans are weak evidence --
+      fresh or custom malware routinely passes every signature -- so
+      this is recorded as context, never as an all-clear.
+    severity: info
+    weight: 0
+    tags: [detection, context]
+    conditions:
+      - field: malicious_detections
+        operator: eq
+        value: 0
+
+  - id: HASH-008
+    title: Sample first seen days ago
+    description: >-
+      The sample was first submitted anywhere less than a fortnight
+      ago. Combined with detections this suggests an active campaign;
+      without detections it may simply be new software. Either way
+      prevalence data has had no time to accumulate.
+    severity: medium
+    weight: 10
+    tags: [age]
+    conditions:
+      - field: first_seen
+        operator: age_lt_days
+        value: 14
+
+  - id: HASH-009
+    title: Executable file type
+    description: >-
+      The hash corresponds to an executable format rather than data.
+      Executables execute attacker logic by definition, so every other
+      signal in this pack should be weighted more heavily for them.
+    severity: info
+    weight: 5
+    tags: [filetype]
+    conditions:
+      - field: file_type
+        operator: in
+        value: [pe, elf, macho, dll, sys]
+
+  - id: HASH-010
+    title: YARA rule matches
+    description: >-
+      At least one YARA rule matched the sample. Curated rules encode
+      specific attacker tooling and techniques, so a named match usually
+      identifies capability directly rather than inferring it from
+      behaviour.
+    severity: medium
+    weight: 15
+    tags: [detection, yara]
+    conditions:
+      - field: yara_rules
+        operator: not_empty
+        value: true

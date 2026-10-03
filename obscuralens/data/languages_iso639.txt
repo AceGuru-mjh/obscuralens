@@ -1,0 +1,493 @@
+# ObscuraLens offline data pack: ISO 639 language codes.
+# Source registries: ISO 639-1 / ISO 639-2 (Library of Congress registration
+# authority) and the IANA language subtag registry (BCP 47) - public registry
+# data.
+# Generated for ObscuraLens offline packs - see obscuralens/utils/data_packs.py.
+#
+# Format: code|English name
+# The file has two blocks, each sorted alphabetically by code:
+#   1) ISO 639-1 two-letter codes (184 current codes) - deprecated codes
+#      (in, iw, ji, jw, mo, bh, sh) are excluded
+#   2) ISO 639-2/639-3 three-letter codes - all codes of languages that also
+#      have a two-letter code (both bibliographic B and terminologic T
+#      variants, e.g. ger/deu, chi/zho) plus widely used three-letter-only
+#      codes (Chinese varieties yue/nan/hak/gan/wuu/hsn, regional languages
+#      gsw/nds/sco/szl/..., historical forms grc/ang/enm/..., sign languages
+#      ase/bfi, ...)
+# '#' starts a comment; blank lines are ignored.
+# --- ISO 639-1 two-letter codes ---
+aa|Afar
+ab|Abkhazian
+ae|Avestan
+af|Afrikaans
+ak|Akan
+am|Amharic
+an|Aragonese
+ar|Arabic
+as|Assamese
+av|Avaric
+ay|Aymara
+az|Azerbaijani
+ba|Bashkir
+be|Belarusian
+bg|Bulgarian
+bi|Bislama
+bm|Bambara
+bn|Bengali
+bo|Tibetan
+br|Breton
+bs|Bosnian
+ca|Catalan
+ce|Chechen
+ch|Chamorro
+co|Corsican
+cr|Cree
+cs|Czech
+cu|Church Slavic
+cv|Chuvash
+cy|Welsh
+da|Danish
+de|German
+dv|Dhivehi
+dz|Dzongkha
+ee|Ewe
+el|Modern Greek (1453-)
+en|English
+eo|Esperanto
+es|Spanish
+et|Estonian
+eu|Basque
+fa|Persian
+ff|Fulah
+fi|Finnish
+fj|Fijian
+fo|Faroese
+fr|French
+fy|Western Frisian
+ga|Irish
+gd|Scottish Gaelic
+gl|Galician
+gn|Guarani
+gu|Gujarati
+gv|Manx
+ha|Hausa
+he|Hebrew
+hi|Hindi
+ho|Hiri Motu
+hr|Croatian
+ht|Haitian
+hu|Hungarian
+hy|Armenian
+hz|Herero
+ia|Interlingua (IALA)
+id|Indonesian
+ie|Interlingue
+ig|Igbo
+ii|Sichuan Yi
+ik|Inupiaq
+io|Ido
+is|Icelandic
+it|Italian
+iu|Inuktitut
+ja|Japanese
+jv|Javanese
+ka|Georgian
+kg|Kongo
+ki|Kikuyu
+kj|Kuanyama
+kk|Kazakh
+kl|Kalaallisut
+km|Khmer
+kn|Kannada
+ko|Korean
+kr|Kanuri
+ks|Kashmiri
+ku|Kurdish
+kv|Komi
+kw|Cornish
+ky|Kirghiz
+la|Latin
+lb|Luxembourgish
+lg|Ganda
+li|Limburgan
+ln|Lingala
+lo|Lao
+lt|Lithuanian
+lu|Luba-Katanga
+lv|Latvian
+mg|Malagasy
+mh|Marshallese
+mi|Maori
+mk|Macedonian
+ml|Malayalam
+mn|Mongolian
+mr|Marathi
+ms|Malay (macrolanguage)
+mt|Maltese
+my|Burmese
+na|Nauru
+nb|Norwegian Bokmål
+nd|North Ndebele
+ne|Nepali (macrolanguage)
+ng|Ndonga
+nl|Dutch
+nn|Norwegian Nynorsk
+no|Norwegian
+nr|South Ndebele
+nv|Navajo
+ny|Chichewa
+oc|Occitan (post 1500)
+oj|Ojibwa
+om|Oromo
+or|Oriya (macrolanguage)
+os|Iron Ossetic
+pa|Panjabi
+pi|Pali
+pl|Polish
+ps|Pushto
+pt|Portuguese
+qu|Quechua
+rm|Romansh
+rn|Rundi
+ro|Romanian
+ru|Russian
+rw|Kinyarwanda
+sa|Sanskrit
+sc|Sardinian
+sd|Sindhi
+se|Northern Sami
+sg|Sango
+sh|Serbo-Croatian
+si|Sinhala
+sk|Slovak
+sl|Slovenian
+sm|Samoan
+sn|Shona
+so|Somali
+sq|Albanian
+sr|Serbian
+ss|Swati
+st|Southern Sotho
+su|Sundanese
+sv|Swedish
+sw|Swahili (macrolanguage)
+ta|Tamil
+te|Telugu
+tg|Tajik
+th|Thai
+ti|Tigrinya
+tk|Turkmen
+tl|Tagalog
+tn|Tswana
+to|Tonga (Tonga Islands)
+tr|Turkish
+ts|Tsonga
+tt|Tatar
+tw|Twi
+ty|Tahitian
+ug|Uighur
+uk|Ukrainian
+ur|Urdu
+uz|Uzbek
+ve|Venda
+vi|Vietnamese
+vo|Volapük
+wa|Walloon
+wo|Wolof
+xh|Xhosa
+yi|Yiddish
+yo|Yoruba
+za|Zhuang
+zh|Chinese
+zu|Zulu
+# --- ISO 639-2/3 three-letter codes (common) ---
+aar|Afar
+abk|Abkhazian
+ace|Achinese
+ady|Adyghe
+afr|Afrikaans
+aka|Akan
+alb|Albanian
+amh|Amharic
+ang|Old English (ca. 450-1100)
+ara|Arabic
+arb|Standard Arabic
+arg|Aragonese
+arm|Armenian
+ary|Moroccan Arabic
+ase|American Sign Language
+asm|Assamese
+ast|Asturian
+ava|Avaric
+ave|Avestan
+awa|Awadhi
+aym|Aymara
+aze|Azerbaijani
+bak|Bashkir
+bal|Baluchi
+bam|Bambara
+ban|Balinese
+baq|Basque
+bar|Bavarian
+bel|Belarusian
+ben|Bengali
+bfi|British Sign Language
+bho|Bhojpuri
+bis|Bislama
+bod|Tibetan
+bos|Bosnian
+bre|Breton
+bug|Buginese
+bul|Bulgarian
+bur|Burmese
+cat|Catalan
+ceb|Cebuano
+ces|Czech
+cha|Chamorro
+che|Chechen
+chi|Chinese
+chm|Mari (Russia)
+chu|Church Slavic
+chv|Chuvash
+cmn|Mandarin Chinese
+cor|Cornish
+cos|Corsican
+cre|Cree
+cym|Welsh
+cze|Czech
+dan|Danish
+deu|German
+div|Divehi
+doi|Dogri (macrolanguage)
+dsb|Lower Sorbian
+dut|Dutch
+dzo|Dzongkha
+egl|Emilian
+ell|Greek, Modern (1453-)
+eng|English
+enm|Middle English (1100-1500)
+epo|Esperanto
+est|Estonian
+eus|Basque
+ewe|Ewe
+ext|Extremaduran
+fao|Faroese
+fas|Persian
+fij|Fijian
+fin|Finnish
+fra|French
+fre|French
+frm|Middle French (ca. 1400-1600)
+fro|Old French (842-ca. 1400)
+frr|Northern Frisian
+frs|Eastern Frisian
+fry|Western Frisian
+ful|Fulah
+fur|Friulian
+gan|Gan Chinese
+geo|Georgian
+ger|German
+gla|Gaelic
+gle|Irish
+glg|Galician
+glv|Manx
+gmh|Middle High German (ca. 1050-1500)
+gml|Middle Low German
+goh|Old High German (ca. 750-1050)
+gom|Goan Konkani
+grc|Ancient Greek (to 1453)
+gre|Greek, Modern (1453-)
+grn|Guarani
+gsw|Swiss German
+guj|Gujarati
+hai|Haida
+hak|Hakka Chinese
+hat|Haitian
+hau|Hausa
+haw|Hawaiian
+heb|Hebrew
+her|Herero
+hil|Hiligaynon
+hin|Hindi
+hmo|Hiri Motu
+hne|Chhattisgarhi
+hrv|Croatian
+hsb|Upper Sorbian
+hsn|Xiang Chinese
+hun|Hungarian
+hye|Armenian
+ibo|Igbo
+ice|Icelandic
+ido|Ido
+iii|Sichuan Yi
+iku|Inuktitut
+ile|Interlingue
+ilo|Iloko
+ina|Interlingua ( International Auxiliary Language Association )
+ind|Indonesian
+inh|Ingush
+ipk|Inupiaq
+isl|Icelandic
+ita|Italian
+jav|Javanese
+jbo|Lojban
+jpn|Japanese
+kal|Kalaallisut
+kan|Kannada
+kas|Kashmiri
+kat|Georgian
+kau|Kanuri
+kaz|Kazakh
+kbd|Kabardian
+khm|Central Khmer
+kik|Kikuyu
+kin|Kinyarwanda
+kir|Kirghiz
+kok|Konkani (macrolanguage)
+kom|Komi
+kon|Kongo
+kor|Korean
+kpv|Komi-Zyrian
+krc|Karachay-Balkar
+ksh|Kölsch
+kua|Kuanyama
+kur|Kurdish
+lao|Lao
+lat|Latin
+lav|Latvian
+lez|Lezghian
+lia|West-Central Limba
+lim|Limburgan
+lin|Lingala
+lit|Lithuanian
+lld|Ladin
+ltg|Latgalian
+ltz|Luxembourgish
+lub|Luba-Katanga
+lug|Ganda
+luo|Luo (Kenya and Tanzania)
+lzh|Literary Chinese
+mac|Macedonian
+mad|Madurese
+mag|Magahi
+mah|Marshallese
+mai|Maithili
+mal|Malayalam
+mao|Maori
+mar|Marathi
+may|Malay
+mga|Middle Irish (900-1200)
+mhr|Eastern Mari
+min|Minangkabau
+mkd|Macedonian
+mlg|Malagasy
+mlt|Maltese
+mon|Mongolian
+mri|Maori
+msa|Malay
+mwl|Mirandese
+mya|Burmese
+myv|Erzya
+nan|Min Nan Chinese
+nau|Nauru
+nav|Navajo
+nbl|Ndebele, South
+nde|Ndebele, North
+ndo|Ndonga
+nds|Low German
+nep|Nepali
+new|Nepal Bhasa
+nld|Dutch
+nno|Norwegian Nynorsk
+nob|Norwegian Bokmål
+non|Old Norse
+nor|Norwegian
+nya|Chichewa
+oci|Occitan (post 1500)
+oji|Ojibwa
+ori|Oriya
+orm|Oromo
+oss|Ossetian
+ota|Ottoman Turkish (1500-1928)
+pag|Pangasinan
+pan|Panjabi
+pap|Papiamento
+peo|Old Persian (ca. 600-400 B.C.)
+per|Persian
+pes|Iranian Persian
+pfl|Pfaelzisch
+pli|Pali
+pol|Polish
+por|Portuguese
+prs|Dari
+pus|Pushto
+que|Quechua
+rgn|Romagnol
+roh|Romansh
+ron|Romanian
+rum|Romanian
+run|Rundi
+rus|Russian
+sag|Sango
+sah|Yakut
+san|Sanskrit
+sco|Scots
+sga|Old Irish (to 900)
+sin|Sinhala
+slk|Slovak
+slo|Slovak
+slv|Slovenian
+sme|Northern Sami
+smo|Samoan
+sna|Shona
+snd|Sindhi
+som|Somali
+sot|Sotho, Southern
+spa|Spanish
+sqi|Albanian
+srd|Sardinian
+srp|Serbian
+ssw|Swati
+sun|Sundanese
+swa|Swahili
+swe|Swedish
+swh|Swahili (individual language)
+szl|Silesian
+tah|Tahitian
+tam|Tamil
+tat|Tatar
+tel|Telugu
+tgk|Tajik
+tgl|Tagalog
+tha|Thai
+tib|Tibetan
+tir|Tigrinya
+ton|Tonga (Tonga Islands)
+tsn|Tswana
+tso|Tsonga
+tuk|Turkmen
+tur|Turkish
+twi|Twi
+udm|Udmurt
+uig|Uighur
+ukr|Ukrainian
+urd|Urdu
+uzb|Uzbek
+ven|Venda
+vie|Vietnamese
+vol|Volapük
+vro|Võro
+war|Waray (Philippines)
+wel|Welsh
+wln|Walloon
+wol|Wolof
+wuu|Wu Chinese
+xcl|Classical Armenian
+xho|Xhosa
+yid|Yiddish
+yor|Yoruba
+yue|Yue Chinese
+zha|Zhuang
+zho|Chinese
+zsm|Standard Malay
+zul|Zulu

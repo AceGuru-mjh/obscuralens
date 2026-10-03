@@ -169,47 +169,29 @@ def test_watch_add_invalid_target_is_400(client, tmp_env):
     assert resp.status_code == 400
 
 
-def test_serve_open_browser_waits_for_readiness(monkeypatch):
-    """`serve(open_browser=True)` opens the URL only after /api/health answers."""
+def test_serve_open_browser_opens_url(monkeypatch):
+    """`serve(open_browser=True)` schedules a browser open for the URL."""
     import sys
-    import threading
 
     import obscuralens.web.app as web_app
 
     opened = []
-    attempts = []
 
-    class FakeCM:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-    def fake_urlopen(*args, **kwargs):
-        attempts.append(True)
-        # First probe fails (server still booting), second succeeds.
-        if len(attempts) < 2:
-            raise OSError('connection refused')
-        return FakeCM()
-
-    class FakeThread:
-        def __init__(self, target=None, daemon=None):
+    class FakeTimer:
+        def __init__(self, delay, target):
             self._target = target
 
         def start(self):
             self._target()
 
-    monkeypatch.setattr('urllib.request.urlopen', fake_urlopen)
+    monkeypatch.setattr('threading.Timer', FakeTimer)
     monkeypatch.setattr('webbrowser.open', lambda url: opened.append(url))
-    monkeypatch.setattr(threading, 'Thread', FakeThread)
 
     fake_uvicorn = type(sys)('uvicorn')
     fake_uvicorn.run = lambda *a, **k: None
     monkeypatch.setitem(sys.modules, 'uvicorn', fake_uvicorn)
 
     web_app.serve(host='127.0.0.1', port=8123, open_browser=True)
-    assert len(attempts) >= 2
     assert opened == ['http://127.0.0.1:8123']
 
 
@@ -233,6 +215,8 @@ def test_serve_cli_accepts_open_flag():
     from obscuralens.commands import build_parser
 
     args = build_parser().parse_args(['serve', '--open'])
-    assert args.open is True
+    assert args.open_browser is True
+    args = build_parser().parse_args(['serve', '--no-open'])
+    assert args.open_browser is False
     args = build_parser().parse_args(['serve'])
-    assert args.open is False
+    assert args.open_browser is None

@@ -1,0 +1,165 @@
+# ObscuraLens explainable rule pack -- crypto
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the crypto tracker output: first_seen, tx_count, received,
+# sent, balance, mixer_tagged, tags... NOTE: crypto rules describe an
+# *activity profile* of an address, not a statement about its owner.
+# ---------------------------------------------------------------------------
+
+name: crypto-rules
+description: >-
+  Explainable activity-profile heuristics for cryptocurrency address
+  lookups; signals describe the address's transaction behaviour, never
+  its owner.
+version: 1
+rules:
+  - id: CRYPTO-001
+    title: First activity within a month
+    description: >-
+      The address was first seen on-chain less than 30 days ago. New
+      addresses have no history to judge, and scam funnels frequently
+      mint fresh addresses per victim to stay under heuristics' radar.
+    severity: low
+    weight: 10
+    tags: [age]
+    conditions:
+      - field: first_seen
+        operator: age_lt_days
+        value: 30
+
+  - id: CRYPTO-002
+    title: One-in-one-out pattern
+    description: >-
+      Funds arrive once and leave once in full. Pass-through behaviour
+      fits legitimate consolidation too, but it is the signature of
+      peel-chain structuring used to obscure a trail's origin.
+    severity: low
+    weight: 10
+    tags: [pattern]
+    conditions:
+      - field: one_in_one_out
+        operator: is_true
+
+  - id: CRYPTO-003
+    title: Dormant address
+    description: >-
+      The address never received anything on-chain. It may be a fresh
+      deposit address, an unused change address or simply a mistyped
+      string -- there is no activity to profile yet.
+    severity: info
+    weight: 5
+    tags: [activity]
+    conditions:
+      - field: received
+        operator: eq
+        value: 0
+
+  - id: CRYPTO-004
+    title: Mixer-tagged address
+    description: >-
+      Clustering attribution links the address to a mixing service.
+      Mixing is legal in many places and has legitimate privacy uses; the
+      tag means funds here were deliberately obfuscated, which raises the
+      cost of tracing, not proof of wrongdoing.
+    severity: high
+    weight: 25
+    tags: [mixer, attribution]
+    conditions:
+      - field: mixer_tagged
+        operator: is_true
+
+  - id: CRYPTO-005
+    title: High transaction count
+    description: >-
+      A thousand or more transactions touch the address. Volume of this
+      size points to a service (exchange hot wallet, payment processor)
+      rather than an individual, which changes how cluster attributions
+      should be read.
+    severity: info
+    weight: 5
+    tags: [volume]
+    conditions:
+      - field: tx_count
+        operator: gte
+        value: 1000
+
+  - id: CRYPTO-006
+    title: Dust received
+    description: >-
+      Trace amounts arrived from unknown addresses. Dusting is used both
+      for deanonymisation analytics and by spammers; it does not change
+      the address's own behaviour.
+    severity: info
+    weight: 5
+    tags: [privacy]
+    conditions:
+      - field: dust_received
+        operator: is_true
+
+  - id: CRYPTO-007
+    title: Ransomware cluster
+    description: >-
+      Attribution tags connect the address to a known ransomware
+      campaign. This is among the strongest address-level indicators
+      available and warrants immediate escalation of anything transacting
+      with it.
+    severity: critical
+    weight: 30
+    tags: [ransomware, attribution]
+    conditions:
+      - field: tags
+        operator: contains
+        value: ransomware
+
+  - id: CRYPTO-008
+    title: Dark-market cluster
+    description: >-
+      Attribution tags connect the address to a darknet marketplace.
+      Transacting with market clusters invites exchange freezes, and the
+      linkage is a direct, documented breadcrumb rather than a guess.
+    severity: high
+    weight: 25
+    tags: [darknet, attribution]
+    conditions:
+      - field: tags
+        operator: contains
+        value: darknet
+
+  - id: CRYPTO-009
+    title: Swept after activity
+    description: >-
+      The balance is zero after ten or more transactions. Everything
+      that arrived was forwarded onward -- consistent with an operational
+      funnel address rather than a store of value.
+    severity: low
+    weight: 10
+    tags: [pattern]
+    conditions:
+      - field: balance
+        operator: eq
+        value: 0
+      - field: tx_count
+        operator: gte
+        value: 10
+
+  - id: CRYPTO-010
+    title: Old, untouched holdings
+    description: >-
+      The address received funds long ago and never sent anything.
+      Long-dormant holdings may belong to lost keys or deliberate cold
+      storage; the privacy framing matters because owner identity cannot
+      be inferred from stillness.
+    severity: info
+    weight: 5
+    tags: [activity, privacy]
+    conditions:
+      - field: first_seen
+        operator: age_gt_days
+        value: 1095
+      - field: sent
+        operator: eq
+        value: 0

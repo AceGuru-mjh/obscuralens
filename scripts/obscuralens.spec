@@ -3,12 +3,22 @@
 
 Build with:  pyinstaller scripts/obscuralens.spec --noconfirm
 Output:      dist/obscuralens(.exe)
+
+Desktop beta notes:
+  * ``collect_data_files`` bundles every shipped package-data file
+    (offline data packs, risk rule packs, report templates, locale
+    catalogues) so the standalone exe behaves exactly like an install.
+  * ``collect_submodules`` keeps every tracker/source/module reachable
+    even when hidden imports are not statically detectable.
+  * The workflow that publishes the exe renames the artifact to
+    ``ObscuraLens-<version>-<platform>.exe`` at staging time, so the
+    spec itself keeps a stable output name.
 """
 
 import contextlib
 import os
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 # SPECPATH points at the directory containing this spec file; the repository
 # root is its parent. Adding it to pathex lets Analysis locate the package even
@@ -42,11 +52,19 @@ for _package in (
     with contextlib.suppress(Exception):
         hiddenimports += collect_submodules(_package)
 
+# Non-Python resources shipped inside the package:
+#   obscuralens/data/*.txt          offline data packs
+#   obscuralens/rules/packs/*.yaml  explainable risk rule packs
+#   obscuralens/reporting/templates/*.j2  report templates
+package_datas = collect_data_files('obscuralens',
+                                   include_py_files=False,
+                                   excludes=['**/__pycache__/*'])
+
 a = Analysis(
     [entry_script],
     pathex=[repo_root],
     binaries=[],
-    datas=[],
+    datas=package_datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],

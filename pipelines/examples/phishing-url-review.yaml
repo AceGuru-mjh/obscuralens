@@ -1,0 +1,108 @@
+# Phishing URL review pipeline
+# ----------------------------
+# End-to-end review of a suspected phishing URL: enrich the URL (redirect
+# chain, page verdicts, archive history), enrich the host domain (WHOIS
+# age, registrar, mail posture), score both, and correlate the run against
+# local query history to see whether this infrastructure was touched
+# before. Two escalation gates turn a passing run into findings.
+#
+# Typical starting point: a link reported by a user through the mail
+# gateway, or a look-alike domain flagged by brand monitoring.
+#
+# Run it with:
+#   obscuralens pipeline run phishing-url-review \
+#       --set target=https://secure-login.example-verify.com/ \
+#       --set domain=example-verify.com
+#
+# Useful variable overrides (--set key=value):
+#   target   the URL under investigation (any http/https URL)
+#   domain   the registrable host of that URL for the WHOIS pivot
+
+name: phishing-url-review
+description: Review a suspected phishing URL and its host domain together
+
+# Default values; every $token below is replaced at run time and callers
+# can override any variable from the CLI without editing this file.
+variables:
+  target: https://secure-login.example-verify.com/
+  domain: example-verify.com
+
+steps:
+  # 1. URL lookup: the redirect chain, final page title, urlscan.io and
+  #    VirusTotal verdicts, Google Safe Browsing status and the Wayback
+  #    Machine first-capture date. The kind is declared explicitly here
+  #    (a bare $target lookup would auto-detect it, but phishing kits
+  #    sometimes paste hostnames that look like domains - being explicit
+  #    keeps the URL tracker in charge).
+  - lookup:
+      kind: url
+      target: $target
+
+  # 2. Registrant side: enrich the host domain. Phishing kits are usually
+  #    hosted on freshly registered look-alike domains, so a young
+  #    registration age plus privacy-protected WHOIS here is the strongest
+  #    corroborating signal this pipeline can produce.
+  - lookup:
+      kind: domain
+      target: $domain
+
+  # 3. Attach heuristic risk scores to both results. The URL scorer
+  #    weighs redirect depth, IP-literal hosts, punycode and engine
+  #    verdicts; the domain scorer weighs age, typosquat matches and
+  #    mail-security posture.
+  - risk: true
+
+  # 4. Escalation gate #1: flag the run when Google Safe Browsing reports
+  #    the URL as malicious (SOCIAL_ENGINEERING / PHISHING threat match).
+  #    A passing assertion becomes a finding in the exported report.
+  - assert:
+      field: gsb_malicious
+      op: '=='
+      value: true
+      message: URL flagged as phishing by Google Safe Browsing
+
+  # 5. Escalation gate #2: flag days-old registrations. Campaign domains
+  #    are registered and burned within days; a week-old host carrying a
+  #    login form is effectively a confirmed lure pending content review.
+  - assert:
+      field: domain_age_days
+      op: '<='
+      value: 7
+      message: host domain registered within the last week
+
+  # 6. Correlate both results against each other and the local query
+  #    history. Repeat infrastructure lights up here: the same IP or ASN
+  #    seen in an earlier investigation links this campaign to previous
+  #    tickets even after the domain itself is burned and dropped.
+  - correlate: true
+
+  # 7. Build an event timeline from dated fields (registration dates,
+  #    certificate sightings, first archive capture, scan timestamps) so
+  #    the takedown request can state when the infrastructure appeared.
+  - timeline: true
+
+  # 8. Export a Markdown summary for the brand-protection folder. Relative
+  #    paths resolve under the configured report directory; the file name
+  #    folds in the host so parallel cases do not collide.
+  - output:
+      format: markdown
+      path: phishing-$domain.md
+
+  # 9. Export the full JSON document for the case management system -
+  #    every field, both risk scorings, the correlation graph summary,
+  #    the timeline and both findings in one artefact.
+  - output:
+      format: json
+      path: phishing-$domain.json
+
+# Follow-up commands worth documenting in the ticket:
+#   obscuralens report --format html      full HTML report of this run
+#   obscuralens export graphml            correlation graph for Gephi
+#   obscuralens case add --note "phishing kit confirmed"   case update
+#
+# Escalation guidance:
+#   * both gates passing  -> treat as confirmed lure; start takedown
+#   * only gate #2        -> young domain, content unverified; schedule a
+#                            re-scan and watch the redirect chain
+#   * neither gate        -> keep the JSON artefact; history correlation
+#                            may still link it to earlier campaigns

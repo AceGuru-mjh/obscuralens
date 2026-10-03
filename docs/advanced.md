@@ -2,13 +2,15 @@
 
 v4.0 turns stored lookups into an investigation workflow: entity graphs and
 pivots, correlation across history, chronological timelines, explainable
-risk scoring, case management, YAML pipelines and graph exports. This guide
-walks through each piece with concrete commands.
+risk scoring, case management, YAML pipelines and graph exports. v5.0 adds
+the **advanced analysis package**: batch fan-out, webhook alerts,
+pattern-of-life reports, geospatial profiling and self-contained HTML
+reports. This guide walks through each piece with concrete commands.
 
 ## The investigation graph and pivots
 
-`obscuralens investigate <target>` auto-detects the target kind (all ten are
-recognised), runs the matching tracker and follows a **bounded** set of
+`obscuralens investigate <target>` auto-detects the target kind (all fourteen
+are recognised), runs the matching tracker and follows a **bounded** set of
 pivots to related entities, building an entity/relationship graph that can
 be rendered as a table, JSON, Mermaid or exported for external tools.
 
@@ -292,6 +294,148 @@ dot -Tpng graph.dot -o graph.png
 
 ...or open the `.graphml`/`.gexf` file directly in Gephi.
 
+## Advanced analysis (v5.0)
+
+The `obscuralens/advanced/` package holds five engines that operate on live
+lookups and your stored history. Programmatic entry points are importable
+as `obscuralens.advanced.<module>`; every one is also wired to a CLI command,
+the REST API and (where useful) MCP.
+
+### Batch fan-out
+
+`advanced/batch.py` runs one tracker kind over many targets with a bounded
+thread pool:
+
+```python
+from obscuralens.advanced.batch import run_batch
+
+results = run_batch('ip', ['8.8.8.8', '1.1.1.1', '45.148.10.99'],
+                    risk=True, max_workers=4)
+# {'results': [{'target': '8.8.8.8', 'result': {…tracker envelope…}}, …],
+#  'summary': {'total': 3, 'ok': 3, 'failed': 0, 'skipped': 0, …}}
+```
+
+- **`run_batch(kind, targets=None, risk=False, max_workers=6, progress=None,
+  stop_flag=None)`** — each target gets the standard tracker envelope
+  (fields, provenance, sources OK/failed, plus an optional `risk` block);
+  individual failures never abort the batch, they mark that target's
+  result. The engine caps at **200 targets** (`MAX_TARGETS` — the surplus
+  is skipped and counted in the summary) and defaults to 6 worker threads;
+  `progress`/`stop_flag` let a UI observe and cancel a long run.
+- The existing `obscuralens batch ip targets.txt -f csv -o results.csv`
+  command now routes through this engine (and accepts all 14 kinds).
+- The REST surface is `POST /api/tools/batch {"kind": …, "targets": […],
+  "risk": bool}` — capped at **25 targets per request** so an oversized
+  payload cannot pin the server; use the CLI for longer lists. The MCP
+  `tools_batch` wrapper is stricter still (10 targets, summary + one-line
+  entries only) to keep assistant context small.
+
+### Alerts
+
+`advanced/alerts.py` delivers webhook notifications when notable events
+happen. Configure once, then leave the server (or scheduled checks)
+running:
+
+```powershell
+obscuralens alerts show                                  # current config + log
+obscuralens alerts set --url https://hooks.example/ol `
+  --events risk_high,watch_diff,source_tripped
+obscuralens alerts test                                  # fire a test event
+```
+
+Canonical events (the programmatic surface is `alerts.configure`,
+`alerts.notify`, `alerts.recent`, `alerts.test`):
+
+| Event | Fires when |
+|---|---|
+| `lookup_failed` | a lookup errored or returned no data |
+| `watch_diff` | a watched target changed between snapshots |
+| `risk_high` | a lookup scored as high risk |
+| `source_tripped` | a source tripped its failure circuit breaker |
+
+Each notification is a small JSON POST to your `webhook_url`, and recent
+notifications are logged (that log is what `alerts show` prints and what
+`GET /api/alerts` returns, alongside the configuration).
+
+> **Privacy — read this first.** A webhook forwards event data **off your
+> machine** to a URL you choose. Point it at an endpoint you control (a
+> self-hosted receiver, an internal relay) unless you are comfortable with
+> the destination seeing alert payloads naming your targets. Leave the
+> webhook empty and the feature stays dormant — nothing is sent anywhere.
+
+### Pattern-of-life
+
+`advanced/patterns.py` answers "when is this target active?" from the
+stored history: `pattern_report(kind, value, records=None)` aggregates that
+target's past lookups into a behavioural summary — total observations,
+first/last seen, inter-observation gaps, burstiness (are lookups clustered
+or evenly spread), busiest weekday/hour buckets and a plain-language
+interpretation. `value` is a case-insensitive *substring* match, so
+`'DE89'` picks up every German IBAN you have looked up.
+
+```powershell
+obscuralens patterns username johndoe
+obscuralens patterns ip 45.148.10.99 -f json
+# {'kind': 'ip', 'target': '45.148.10.99', 'observations': 14,
+#  'first_seen': '…', 'last_seen': '…', 'gaps': {…},
+#  'bursts': 3, 'weekday_histogram': […], 'hour_histogram': [...],
+#  'interpretation': '…', …}
+```
+
+The REST surface is `GET /api/patterns?kind=&value=`; the MCP surface is the
+`tools_patterns` tool. The report only describes **your own observation
+history** — it is a schedule of when you looked, not telemetry from the
+target itself. Say that aloud in any report you paste it into.
+
+### Geospatial profiling
+
+`advanced/geospatial.py` aggregates the geographic footprint of everything
+in your stored history (country fields from IP lookups, reverse-geocoded
+countries and lat/lon from coords lookups, registration countries from
+RDAP):
+
+| Function | Returns |
+|---|---|
+| `country_breakdown(records=None)` | per-country histogram with lookup counts, `total_records` and an `unknown` bucket for unresolvable IP records |
+| `targets_by_country(country, records=None)` | stored IP targets that resolved into a country — case-insensitive substring match, so `'fr'`, `'FR'` and `'France'` all work |
+| `geohash_clusters(records=None, precision=4)` | coordinate lookups clustered by shared geohash prefix (~20 × 20 km at the default precision), each with its centre and member targets |
+| `most_looked_up_regions(records=None, limit=10)` | top state/subdivision-level regions with counts and contributing targets |
+| `to_geojson(breakdown)` | a `country_breakdown` result as a GeoJSON `FeatureCollection` (centroid pins, `[lon, lat]` order — drops into Leaflet / mapbox-gl / deck.gl) |
+| `geo_profile_summary(records=None)` | the one-call analyst summary: distinct countries, top country/region, coords lookup count, geohash cluster count, history span in days |
+
+Every function accepts an optional pre-loaded `records=` list (pure and
+offline-testable); without one they read the stored history (capped at 800
+rows, plus the coordinate lookups the correlation engine skips).
+
+```powershell
+obscuralens geo profile      # distinct countries, top region, span
+obscuralens geo clusters     # geohash clusters
+obscuralens geo regions      # top countries and regions
+# deeper shapes: -f json; GeoJSON export via the to_geojson() API
+```
+
+The MCP `tools_geo_profile` tool exposes the summary. Like every
+history-based feature, the profile is only as good as the lookups you have
+run — and it describes where your *targets* are, not where you are.
+
+### Report builder
+
+`advanced/report_builder.py` renders a **self-contained HTML investigation
+report** for one target: `build_report(kind, target, result=None,
+payload=None)` runs the lookup (or reuses a result you already hold) and
+returns a single HTML document with embedded CSS, no external assets, no
+scripts — safe to email, archive or open in an air-gapped browser.
+
+```powershell
+obscuralens report domain example.com            # writes reports/<slug>.html
+obscuralens report ip 45.148.10.99 --output triage.html
+```
+
+The REST surface is `GET /api/report/{kind}/{target}` (returns the HTML
+document directly — a browser pointed at it renders the report). The report
+reuses the merged-fields + provenance layout of the console output, so every
+fact names its source.
+
 ## Source health and circuit breaker
 
 Every gather records per-source success/failure into a `source_health`
@@ -396,13 +540,18 @@ invocation when the workflow stabilises.
 
 ## AI assistants: the MCP surface
 
-`obscuralens mcp` exposes the same building blocks as 18 stdio tools for
+`obscuralens mcp` exposes the same building blocks as 34 stdio tools for
 MCP clients (Claude Desktop, Cursor, …):
 
 `ip_lookup`, `phone_lookup`, `username_lookup`, `email_lookup`,
 `domain_lookup`, `url_lookup`, `crypto_lookup`, `hash_lookup`, `cve_lookup`,
-`asn_lookup`, `investigate`, `risk_report`, `correlate` (pair or `all`),
-`timeline`, `threat_intel`, `source_health`, `watch_list`, `watch_check`.
+`asn_lookup`, `mac_lookup`, `iban_lookup`, `imei_lookup`, `coords_lookup`,
+`investigate`, `risk_report`, `correlate` (pair or `all`), `timeline`,
+`threat_intel`, `source_health`, `watch_list`, `watch_check`, plus the v5.0
+toolbox wrappers `tools_encode`, `tools_decode`, `tools_jwt`,
+`tools_hash_id`, `tools_extract`, `tools_squat`, `tools_exif`, `tools_stego`,
+`tools_coords_convert`, `tools_geo_profile`, `tools_patterns` and
+`tools_batch`.
 
 The web API mirrors them as HTTP endpoints — see [docs/api.md](api.md).
 
@@ -410,6 +559,8 @@ The web API mirrors them as HTTP endpoints — see [docs/api.md](api.md).
 
 - [docs/sources.md](sources.md) — the complete data source catalog.
 - [docs/experimental.md](experimental.md) — LLM summaries, permutations,
-  crawler and phishing score.
+  crawler, phishing score and the v5.0 analyst toolbox.
 - [docs/api.md](api.md) — REST API reference.
+- [docs/web-ui.md](web-ui.md) — the web UI tour.
+- [docs/v5.md](v5.md) — the v5.0 release overview.
 - [docs/plugins.md](plugins.md) — writing your own sources.

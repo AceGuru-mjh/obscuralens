@@ -1,0 +1,76 @@
+name: Desktop Nightly Build
+
+# Rolling nightly build of the ObscuraLens Desktop Beta for Windows.
+#
+# Runs every night at 03:00 UTC on the default branch and refreshes the
+# "nightly" pre-release with a freshly built executable so testers always
+# have a download matching the latest committed code. The nightly channel
+# is completely separate from tagged beta releases (desktop-beta.yml).
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-nightly
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    name: Build nightly Windows exe
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install with exe extra
+        run: pip install ".[exe]"
+
+      - name: Build single-file executable
+        run: pyinstaller scripts/obscuralens.spec --noconfirm
+
+      - name: Smoke-test the executable
+        run: dist/obscuralens.exe --version
+
+      - name: Stage versioned artifact + checksum
+        shell: bash
+        env:
+          NIGHTLY_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${NIGHTLY_SHA:0:7}"
+          STAMP="$(date -u +%Y%m%d)"
+          ASSET="ObscuraLens-nightly-${STAMP}-${SHORT_SHA}-win-x64.exe"
+          mkdir -p release
+          cp dist/obscuralens.exe "release/${ASSET}"
+          cd release
+          sha256sum "${ASSET}" > "${ASSET}.sha256"
+          echo "asset=${ASSET}" >> "$GITHUB_ENV"
+          ls -lh .
+
+      - name: Refresh the rolling nightly pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: "ObscuraLens Desktop Nightly"
+          prerelease: true
+          make_latest: "false"
+          files: release/*
+          append_body: true
+          body: |
+            Automatic nightly build refreshed from the latest commit.
+
+            **Latest asset:** `${{ env.asset }}`
+
+            Nightly builds are for testing only — prefer the tagged
+            [desktop beta releases](https://github.com/${{ github.repository }}/releases)
+            for anything serious.

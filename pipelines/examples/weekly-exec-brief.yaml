@@ -1,0 +1,103 @@
+# Weekly executive brief pipeline
+# -------------------------------
+# Aggregation workflow for the Monday-morning executive brief: refresh
+# one focus indicator, then let the correlation engine pull the week's
+# local query history into a graph so recurring infrastructure, repeat
+# offenders and cross-case pivots become visible in a single artefact.
+#
+# Run this AFTER the week's daily pipelines (triage, sweeps, screenings)
+# have populated the local history - the correlation step is where the
+# weekly value comes from, and it reads the history database.
+#
+# Run it with:
+#   obscuralens pipeline run weekly-exec-brief --set focus=example.com
+#
+# Useful variable overrides (--set key=value):
+#   focus   the headline indicator for this week (defaults to the most
+#           newsworthy target of the previous week)
+
+name: weekly-exec-brief
+description: Aggregate the week's investigations into one executive brief
+
+# Default values; every $token below is replaced at run time and callers
+# can override any variable from the CLI without editing this file.
+variables:
+  focus: example.com
+
+steps:
+  # 1. Refresh the focus indicator so this week's brief carries current
+  #    data for the headline item (risk feeds drift fast; last week's
+  #    scores are stale by definition). The kind is auto-detected from
+  #    the target's shape.
+  - lookup: $focus
+
+  # 2. Attach heuristic risk scores to the refreshed result. The scorer
+  #    writes an explainable signal list into the payload that both
+  #    exports below carry through to the brief.
+  - risk: true
+
+  # 3. Escalation gate: only headline-worthy weeks produce a finding.
+  #    Any score-side field that crosses the threshold records a finding
+  #    with the message executives actually read - short and actionable.
+  #    Adjust the field/op/value to the focus kind your org tracks most
+  #    (abuse_confidence for IPs, domain_age_days for look-alikes,
+  #    epss for CVEs).
+  - assert:
+      field: risk_score
+      op: '>='
+      value: 50
+      message: focus indicator crossed the briefing threshold
+
+  # 4. Build the event timeline for the refreshed result plus everything
+  #    the correlation step surfaces from history - first/last seen
+  #    across the week's lookups gives the brief its "what changed"
+  #    narrative.
+  - timeline: true
+
+  # 5. Correlate against the local query history - the heart of the
+  #    brief. The graph joins this week's lookups with every previous
+  #    one: shared IPs, ASNs, registrars and platforms connect separate
+  #    cases into campaigns, and repeat offenders stand out as hubs.
+  - correlate: true
+
+  # 6. Export the Markdown brief: summary grid, step log, findings and
+  #    warnings from this run, with the focus indicator's score up
+  #    front. Relative paths resolve under the configured report
+  #    directory; the fixed file name makes the weekly series easy to
+  #    archive (rename per ISO week in your archive step).
+  - output:
+      format: markdown
+      path: weekly-exec-brief.md
+
+  # 7. Export the JSON form for the metrics dashboard: durations, source
+  #    health, findings counts and the full correlation summary feed the
+  #    trend charts leadership actually looks at.
+  - output:
+      format: json
+      path: weekly-exec-brief.json
+
+  # 8. Print the compact table to the console so the analyst assembling
+  #    the brief sees the run shape (kinds, targets, findings) at a
+  #    glance without opening the artefacts.
+  - output:
+      format: table
+      path: ''
+
+# Follow-up commands worth documenting in the brief:
+#   obscuralens report --format html     full HTML report (attach to the
+#                                        executive mail or the intranet)
+#   obscuralens export graphml           correlation graph for the deck
+#   obscuralens history --days 7         raw week of lookups for numbers
+#
+# Suggested weekly ritual:
+#   1. run the daily pipelines all week (triage / sweeps / screenings)
+#   2. Monday 09:00 - run this pipeline with the week's focus target
+#   3. render the HTML report and attach it to the exec mail
+#   4. archive weekly-exec-brief.{md,json} with the ISO week number
+#
+# Reading the findings:
+#   * threshold gate passing -> the focus item leads the brief; include
+#                              the explainable signal list verbatim
+#   * no findings            -> the brief leads with the correlation
+#                              graph's biggest hubs instead (repeat
+#                              infrastructure across the week's cases)
