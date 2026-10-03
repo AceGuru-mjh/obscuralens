@@ -1,0 +1,148 @@
+# ObscuraLens explainable rule pack -- imei
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the IMEI tracker output: checksum_valid, valid_format,
+# tac, tac_known, reporting_body, type, length... IMEI rules are
+# identifier-integrity signals about device type allocations.
+# ---------------------------------------------------------------------------
+
+name: imei-rules
+description: >-
+  Explainable identifier-integrity heuristics for IMEI lookups built on
+  check digits, TAC registry hits and reporting-body data.
+version: 1
+rules:
+  - id: IMEI-001
+    title: Luhn check digit invalid
+    description: >-
+      The final check digit fails the Luhn computation. Real IMEIs pass
+      by construction, so a failure means the identifier was mistyped,
+      fabricated or altered -- the standard signature of a cloned or
+      spoofed device identity.
+    severity: medium
+    weight: 15
+    tags: [validity]
+    references: ["3GPP TS 23.003"]
+    conditions:
+      - field: checksum_valid
+        operator: is_false
+
+  - id: IMEI-002
+    title: TAC not in the registry
+    description: >-
+      The 8-digit type allocation code is absent from the shipped TAC
+      data pack. Unregistered TACs indicate prototype hardware,
+      grey-market devices or simply an unknown-but-legitimate recent
+      allocation; the registry cannot confirm either way.
+    severity: low
+    weight: 10
+    tags: [registry]
+    conditions:
+      - field: tac_known
+        operator: is_false
+
+  - id: IMEI-003
+    title: Demo or test type allocation
+    description: >-
+      The device type is flagged as a demonstration or test unit. Test
+      IMEIs circulate in fraud chains precisely because they validate
+      structurally while never mapping to a retail device.
+    severity: low
+    weight: 10
+    tags: [validity, fraud]
+    conditions:
+      - field: type
+        operator: in
+        value: [demo, test, lab, reference design]
+
+  - id: IMEI-004
+    title: Fails format validation
+    description: >-
+      The string is not a well-formed IMEI at all (wrong length or
+      non-digit characters). Scoring anything further on a malformed
+      identifier is meaningless until the input itself is corrected.
+    severity: low
+    weight: 10
+    tags: [validity]
+    references: ["3GPP TS 23.003"]
+    conditions:
+      - field: valid_format
+        operator: is_false
+
+  - id: IMEI-005
+    title: Reporting body unknown
+    description: >-
+      No reporting body (BABT, CETECOM and peers) is recorded for the
+      TAC. Allocation data is incomplete for some small vendors, so this
+      is weak evidence of an unregistered device rather than proof.
+    severity: info
+    weight: 5
+    tags: [registry]
+    conditions:
+      - field: reporting_body
+        operator: empty
+        value: true
+
+  - id: IMEI-006
+    title: Unexpected identifier length
+    description: >-
+      The identifier is neither 15 digits (IMEI) nor 16 (IMEISV with
+      software version). Odd lengths usually mean a digit was dropped
+      during transcription -- the most common IMEI data-entry error.
+    severity: low
+    weight: 10
+    tags: [validity]
+    references: ["3GPP TS 23.003"]
+    conditions:
+      - field: length
+        operator: not_in
+        value: [15, 16]
+
+  - id: IMEI-007
+    title: Non-digit characters present
+    description: >-
+      The identifier contains characters outside the decimal digits the
+      spec allows. Almost always a pasted serial with separators that
+      must be stripped before any registry lookup makes sense.
+    severity: low
+    weight: 10
+    tags: [validity]
+    conditions:
+      - field: imei
+        operator: regex
+        value: '[^0-9]'
+
+  - id: IMEI-008
+    title: Unregistered and unclassified
+    description: >-
+      The TAC is unknown AND no device type resolves. A completely
+      unattributable identifier is the strongest soft signal in this
+      pack that the IMEI was never allocated by a regional body.
+    severity: low
+    weight: 10
+    tags: [registry]
+    conditions:
+      - field: tac_known
+        operator: is_false
+      - field: type
+        operator: empty
+        value: true
+
+  - id: IMEI-009
+    title: Valid, registered device identifier
+    description: >-
+      Check digit, format and TAC registry all agree -- a well-formed
+      identifier mapping to a real type allocation. Positive context
+      that documents what a clean IMEI looks like in this pack.
+    severity: info
+    weight: 0
+    tags: [validity, positive]
+    conditions:
+      - field: checksum_valid
+        operator: is_true
+      - field: tac_known
+        operator: is_true

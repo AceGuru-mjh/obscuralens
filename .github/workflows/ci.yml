@@ -105,6 +105,30 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  desktop:
+    # Focused check for the v5.1 desktop beta surface: the desktop module,
+    # i18n catalogues, offline data packs, SDK and rule packs. These are all
+    # stdlib(+yaml/jinja2) modules, so the plain dev install suffices.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: pip install -e ".[dev]"
+      - name: Desktop beta surface tests
+        run: |
+          pytest tests/test_desktop.py tests/test_i18n.py tests/test_data_catalog.py \
+                 tests/test_sdk.py tests/test_rules.py tests/test_templates.py -q
+      - name: Desktop CLI smoke test
+        run: |
+          python -m obscuralens desktop --diagnostics | head -40
+          python -m obscuralens data country US
+          python -m obscuralens data port 22
+          python -m obscuralens i18n list
+          python -m obscuralens data stats
+
   exe:
     # Best-effort standalone Windows executable; the artifact is uploaded even
     # if a future PyInstaller/hook regression breaks the build.

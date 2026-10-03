@@ -284,6 +284,68 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(p_mcp)
     add_common(p_plugins)
 
+    # -- v5.1 desktop beta commands ------------------------------------
+    p_desktop = sub.add_parser(
+        'desktop', help='launch the desktop beta (local web UI in a browser)')
+    p_desktop.add_argument('--host', default='127.0.0.1',
+                           help='interface to bind (default: loopback only)')
+    p_desktop.add_argument('--port', type=int, default=8000,
+                           help='preferred port; free ports are probed upward')
+    p_desktop.add_argument('--no-browser', action='store_true',
+                           help='start the server without opening a browser')
+    p_desktop.add_argument('--channel', default=None,
+                           help='release channel to report/check (beta default)')
+    p_desktop.add_argument('--diagnostics', action='store_true',
+                           help='print a desktop diagnostics report and exit')
+    p_desktop.add_argument('--check-update', action='store_true',
+                           help='check GitHub Releases for a newer beta and exit')
+
+    p_update = sub.add_parser('update',
+                              help='desktop beta update checks (no auto-download)')
+    update_sub = p_update.add_subparsers(dest='update_command', metavar='<action>')
+    p_update_check = update_sub.add_parser(
+        'check', help='check GitHub Releases for a newer desktop beta')
+    p_update_check.add_argument('--channel', default=None,
+                                help='channel to check (beta default)')
+    add_common(p_update)
+
+    p_i18n = sub.add_parser('i18n', help='language catalogues (14 languages)')
+    i18n_sub = p_i18n.add_subparsers(dest='i18n_command', metavar='<action>')
+    i18n_list = i18n_sub.add_parser('list', help='list supported languages')
+    i18n_list.add_argument('--completion', action='store_true',
+                           help='include key coverage per locale')
+    i18n_show = i18n_sub.add_parser('show', help='show one translated key')
+    i18n_show.add_argument('key', help='dot-separated catalogue key')
+    i18n_show.add_argument('--lang', default=None, help='locale code (default: en)')
+    i18n_show.add_argument('--all', action='store_true', dest='all_langs',
+                           help='print the key in every locale')
+    i18n_match = i18n_sub.add_parser('match', help='resolve an Accept-Language header')
+    i18n_match.add_argument('header', help='e.g. "zh-CN,zh;q=0.9,en;q=0.8"')
+    add_common(p_i18n)
+
+    p_data = sub.add_parser('data', help='query the offline data catalog')
+    data_sub = p_data.add_subparsers(dest='data_command', metavar='<query>')
+    data_country = data_sub.add_parser('country', help='ISO 3166 country lookup')
+    data_country.add_argument('code', help='alpha-2 or alpha-3 code, or search term')
+    data_port = data_sub.add_parser('port', help='IANA port/service lookup')
+    data_port.add_argument('number', type=int, help='port number')
+    data_port.add_argument('--protocol', default='tcp', choices=['tcp', 'udp'])
+    data_tld = data_sub.add_parser('tld', help='check a TLD against the IANA list')
+    data_tld.add_argument('tld', help='TLD with or without the leading dot')
+    data_cwe = data_sub.add_parser('cwe', help='CWE weakness lookup')
+    data_cwe.add_argument('id', help='e.g. CWE-79 or 79')
+    data_status = data_sub.add_parser('status', help='HTTP status phrase lookup')
+    data_status.add_argument('code', type=int, help='status code')
+    data_ua = data_sub.add_parser('ua', help='draw a random user-agent string')
+    data_ua.add_argument('--family', default=None, help='Chrome, Firefox, curl ...')
+    data_ua.add_argument('--platform', default=None, help='Windows 11, macOS ...')
+    data_ua.add_argument('--seed', type=int, default=None,
+                         help='deterministic draw')
+    data_mime = data_sub.add_parser('mime', help='MIME type lookup by extension')
+    data_mime.add_argument('ext', help='extension with or without the dot')
+    data_sub.add_parser('stats', help='catalog pack statistics')
+    add_common(p_data)
+
     p_batch = sub.add_parser('batch', help='look up many targets from a file')
     p_batch.add_argument('kind', choices=KINDS, help='target type')
     p_batch.add_argument('file', help='text file with one target per line')
@@ -2956,6 +3018,209 @@ def _cmd_alerts(args: argparse.Namespace) -> int:
     return 2
 
 
+# ---------------------------------------------------------------------------
+# v5.1 desktop beta commands
+# ---------------------------------------------------------------------------
+
+def _cmd_desktop(args: argparse.Namespace) -> int:
+    """Launch the desktop beta experience (single-instance web UI)."""
+    from .desktop import diagnostics_report
+    from .desktop.launcher import LaunchOptions, launch
+
+    if getattr(args, 'diagnostics', False):
+        print(diagnostics_report(check_network=False))
+        return 0
+    if getattr(args, 'check_update', False):
+        return _run_update_check(getattr(args, 'channel', None))
+
+    options = LaunchOptions(
+        host=getattr(args, 'host', '127.0.0.1'),
+        port=getattr(args, 'port', 8000),
+        no_browser=getattr(args, 'no_browser', False),
+        channel=getattr(args, 'channel', None),
+    )
+    return launch(options)
+
+
+def _run_update_check(channel: Optional[str]) -> int:
+    """Check GitHub Releases for a newer desktop beta; never auto-downloads."""
+    from .desktop.updater import check_for_updates
+
+    info = check_for_updates(channel=channel)
+    if info is None:
+        _info('Update check failed or offline — the desktop beta never '
+              'raises here; try again later or visit the Releases page.')
+        return 1
+    print(str(info))
+    if info.is_newer:
+        print()
+        _info('Download: ' + (info.download_url or 'see the Releases page'))
+    return 0
+
+
+def _cmd_update(args: argparse.Namespace) -> int:
+    """`obscuralens update check` entry point."""
+    action = getattr(args, 'update_command', None) or 'check'
+    if action != 'check':  # argparse enforces choices; defensive fallback
+        _err(f"unknown update action: {action}")
+        return 2
+    return _run_update_check(getattr(args, 'channel', None))
+
+
+def _cmd_i18n(args: argparse.Namespace) -> int:
+    """Inspect the shipped language catalogues (14 locales)."""
+    from .i18n import available_locales, best_match, language_name, list_languages, set_language, t
+
+    action = getattr(args, 'i18n_command', None) or 'list'
+
+    if action == 'list':
+        show_completion = getattr(args, 'completion', False)
+        rows = []
+        for info in list_languages():
+            row = [info.code, info.english_name, info.native_name,
+                   info.direction]
+            if show_completion:
+                row.append(f"{info.completion * 100:.0f}%")
+            rows.append(row)
+        header = ['code', 'english', 'native', 'dir']
+        if show_completion:
+            header.append('coverage')
+        print(render_table(rows, headers=header))
+        _info(f"{len(available_locales())} languages; "
+              "set one with `obscuralens i18n show <key> --lang <code>`")
+        return 0
+
+    if action == 'show':
+        key = args.key
+        lang = getattr(args, 'lang', None)
+        if getattr(args, 'all_langs', False):
+            rows = []
+            for code in available_locales():
+                set_language(code)
+                rows.append([code, t(key)])
+            set_language('en')
+            print(render_table(rows, headers=['locale', 'value']))
+            return 0
+        code = lang or 'en'
+        try:
+            set_language(code)
+        except Exception as e:  # unknown locale code
+            _err(str(e))
+            return 2
+        value = t(key)
+        print(f"{key} [{code}] = {value}")
+        _info(f"native name: {language_name(code)}")
+        return 0
+
+    if action == 'match':
+        header = args.header
+        print(f"accept-language: {header}")
+        print(f"best supported: {best_match(header)}")
+        return 0
+
+    _err(f"unknown i18n action: {action}")
+    return 2
+
+
+def _cmd_data(args: argparse.Namespace) -> int:
+    """Query the offline data catalog (ISO registries, ports, TLDs, ...)."""
+    from .utils import data_catalog
+
+    action = getattr(args, 'data_command', None) or 'stats'
+
+    if action == 'country':
+        code = args.code
+        entry = data_catalog.country(code)
+        if entry is not None:
+            print(render_table(
+                [['alpha-2', entry.code], ['alpha-3', entry.code3],
+                 ['numeric', entry.numeric], ['name', entry.name],
+                 ['capital', entry.capital]],
+                headers=['field', 'value']))
+            return 0
+        results = data_catalog.search_countries(code)
+        if results:
+            print(render_table(
+                [[c.code, c.code3, c.numeric, c.name, c.capital]
+                 for c in results[:25]],
+                headers=['alpha-2', 'alpha-3', 'numeric', 'name', 'capital']))
+            _info(f"{len(results)} matches")
+            return 0
+        _err(f"no country matches {code!r}")
+        return 1
+
+    if action == 'port':
+        entry = data_catalog.port_service(args.number, args.protocol)
+        if entry is None:
+            cat = data_catalog.port_category(args.number)
+            _info(f"port {args.number}/{args.protocol} is unassigned "
+                  f"({cat} range)")
+            return 1
+        print(render_table(
+            [['port', str(entry.port)], ['protocol', entry.protocol],
+             ['service', entry.service], ['description', entry.description],
+             ['category', data_catalog.port_category(entry.port)]],
+            headers=['field', 'value']))
+        return 0
+
+    if action == 'tld':
+        tld = args.tld
+        if data_catalog.is_iana_tld(tld):
+            clean = tld.lstrip('.').lower()
+            print(f".{clean} is a delegated IANA root-zone TLD "
+                  f"(of {data_catalog.tld_count()} tracked)")
+            return 0
+        _info(f"{tld!r} is NOT in the IANA root-zone list "
+              f"(possible abuse signal in lookups)")
+        return 1
+
+    if action == 'cwe':
+        entry = data_catalog.cwe(args.id)
+        if entry is None:
+            _err(f"unknown CWE id: {args.id}")
+            return 1
+        print(render_table([['id', entry.cwe_id], ['name', entry.name]],
+                           headers=['field', 'value']))
+        return 0
+
+    if action == 'status':
+        entry = data_catalog.http_status(args.code)
+        if entry is None:
+            _err(f"no HTTP status phrase for {args.code}")
+            return 1
+        print(render_table(
+            [['code', str(entry.code)], ['phrase', entry.phrase],
+             ['category', entry.category]],
+            headers=['field', 'value']))
+        return 0
+
+    if action == 'ua':
+        agent = data_catalog.random_user_agent(
+            family=getattr(args, 'family', None),
+            platform=getattr(args, 'platform', None),
+            seed=getattr(args, 'seed', None))
+        print(agent)
+        return 0
+
+    if action == 'mime':
+        entry = data_catalog.mime_for_extension(args.ext)
+        if entry is None:
+            _err(f"no MIME mapping for .{args.ext.lstrip('.')}")
+            return 1
+        print(render_table(
+            [['extension', entry.extension], ['mime', entry.mime],
+             ['description', entry.description]],
+            headers=['field', 'value']))
+        return 0
+
+    if action == 'stats':
+        print(data_catalog.catalog_summary())
+        return 0
+
+    _err(f"unknown data query: {action}")
+    return 2
+
+
 _HANDLERS = {
     'ip': _cmd_ip,
     'phone': _cmd_phone,
@@ -3001,6 +3266,11 @@ _HANDLERS = {
     'patterns': _cmd_patterns,
     'geo': _cmd_geo,
     'alerts': _cmd_alerts,
+    # v5.1 desktop beta commands
+    'desktop': _cmd_desktop,
+    'update': _cmd_update,
+    'i18n': _cmd_i18n,
+    'data': _cmd_data,
 }
 
 

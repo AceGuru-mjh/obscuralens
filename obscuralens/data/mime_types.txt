@@ -1,0 +1,923 @@
+# ObscuraLens offline data pack: MIME media types.
+# Source registry: IANA Media Types registry (iana.org/assignments/media-types)
+# and widely used unregistered types (x- prefixed) - public registry data.
+# Generated for ObscuraLens offline packs - see obscuralens/utils/data_packs.py
+# and obscuralens/utils/data_catalog.py.
+#
+# Format: mime|extension|description
+#   - sorted by mime type; lowercase
+#   - first entry per extension wins in the reverse index
+application/atom+xml|atom|Atom syndication feed
+application/atomcat+xml|atomcat|Atom Publishing Protocol category
+application/base64|base64|Base64-encoded binary
+application/cms|cms|Cryptographic Message Syntax
+application/epub+zip|epub|Electronic publication (e-book)
+application/font-woff|woff|Web Open Font Format
+application/font-woff2|woff2|Web Open Font Format 2
+application/geo+json|geojson|GeoJSON geographic data
+application/gzip|gz|Gzip compressed archive
+application/http|http|HTTP message
+application/java-archive|jar|Java archive
+application/java-serialized-object|ser|Java serialized object
+application/java-vm|class|Java bytecode
+application/javascript|js|JavaScript source
+application/json|json|JSON data
+application/json-seq|jsons|JSON text sequences (RFC 7464)
+application/jwt|jwt|JSON Web Token
+application/ld+json|jsonld|JSON-LD linked data
+application/lgr|lgr|Language tag registry
+application/marc|mrc|MARC bibliographic record
+application/mathematica|nb|Mathematica notebook
+application/mathml+xml|mml|MathML mathematical markup
+application/mbox|mbox|MBOX mailbox archive
+application/mediaservercontrol+xml|msc|Media Server Control
+application/metalink4+xml|metalink4|Metalink download descriptor
+application/msaccess|mdb|Microsoft Access database
+application/msword|doc|Microsoft Word document
+application/mxf|mxf|Material Exchange Format
+application/n-quads|nq|RDF N-Quads
+application/n-triples|nt|RDF N-Triples
+application/octet-stream|bin|Unspecified binary data
+application/oda|oda|Office Document Architecture
+application/ogg|ogg|Ogg container (generic)
+application/onenote|one|Microsoft OneNote
+application/opc-nodeset+xml|opc|OPC UA nodeset
+application/ovs|ovs|Open vSwitch flow data
+application/pdf|pdf|Portable Document Format
+application/pgp-encrypted|pgp|PGP encrypted data
+application/pgp-keys|key|PGP key block
+application/pgp-signature|sig|PGP detached signature
+application/pkcs10|p10|PKCS#10 certification request
+application/pkcs7-mime|p7c|PKCS#7 MIME (S/MIME)
+application/pkcs7-signature|p7s|PKCS#7 detached signature
+application/pkcs8|key|PKCS#8 private key
+application/pkix-attr-cert|ac|Attribute certificate
+application/pkix-cert|cer|X.509 certificate
+application/pkix-crl|crl|Certificate revocation list
+application/postscript|ps|PostScript document
+application/problem+json|problem|API problem details (RFC 7807)
+application/protobuf|protobuf|Protocol Buffers binary
+application/raml+yaml|raml|RESTful API Modeling Language
+application/rdf+xml|rdf|RDF/XML resource description
+application/reginfo+xml|rif|Registration information
+application/rss+xml|rss|RSS syndication feed
+application/rtf|rtf|Rich Text Format
+application/sbml+xml|sbml|Systems Biology Markup
+application/sdp|sdp|Session Description Protocol
+application/sep-exi|exi|Efficient XML Interchange
+application/sgml|sgml|SGML document
+application/sieve|siv|Sieve mail filter
+application/smil+xml|smil|Synchronized Multimedia
+application/soap+xml|soap|SOAP message
+application/sql|sql|SQL script
+application/sqlite3|sqlite|SQLite database
+application/srgs|gram|Speech recognition grammar
+application/tar|tar|Tape Archive
+application/taxii+json|taxii|TAXII threat intelligence
+application/thraud+xml|thraud|Threat report exchange
+application/timestamped-data|tst|Timestamped data token
+application/ubjson|ubj|Universal Binary JSON
+application/urc-ress+xml|urc|User Interface Resource
+application/vcard+json|vcard|vCard (JSON variant)
+application/vnd.3gpp.pic-large|plb|3GPP large picture
+application/vnd.3m.post-it-notes|pwn|Post-it notes
+application/vnd.accpac.simply.aso|aso|Simply Accounting
+application/vnd.acucobol|acu|ACUCOBOL data
+application/vnd.adobe.air-application-installer-package+zip|air|Adobe AIR app
+application/vnd.adobe.formscentral.fcdt|fcdt|FormsCentral design
+application/vnd.adobe.fxp|fxp|Flash project
+application/vnd.adobe.xdp+xml|xdp|XML Data Package
+application/vnd.adobe.xfdf|xfdf|XML Forms Data
+application/vnd.ahead.space|ahead|Ahead space data
+application/vnd.airzip.filesecure.azf|azf|AirZip secure file
+application/vnd.amazon.ebook|azw|Kindle e-book
+application/vnd.americandynamics.acc|acc|American Dynamics video
+application/vnd.amiga.ami|ami|Amiga document
+application/vnd.android.package-archive|apk|Android application package
+application/vnd.anser-web-certificate-issue-initiation|cii|ANSER certificate
+application/vnd.antix.game-component|atx|AntiX game
+application/vnd.apple.installer+xml|mpkg|Apple installer package
+application/vnd.apple.keynote|key|Apple Keynote presentation
+application/vnd.apple.mpegurl|m3u8|HTTP Live Streaming playlist
+application/vnd.apple.numbers|numbers|Apple Numbers spreadsheet
+application/vnd.apple.pages|pages|Apple Pages document
+application/vnd.apple.pkpass|pkpass|Apple Passbook pass
+application/vnd.arbortext.arbortext-epub|atc|ArborText e-book
+application/vnd.audiograph|aep|Audiograph
+application/vnd.blueice.multipass|mpm|Blueice multipass
+application/vnd.bmi|bmi|BMI drawing
+application/vnd.businessobjects|rep|BusinessObjects report
+application/vnd.chemdraw+xml|cdxml|ChemDraw XML
+application/vnd.chipnuts.karaoke-mmd|mmd|Chipnuts karaoke
+application/vnd.cinderella|cdy|Cinderella geometry
+application/vnd.claymore|cla|Claymore data
+application/vnd.clonk.c4group|c4g|Clonk game group
+application/vnd.cluetrust.cartomobile-config|c11amc|CartoMobile config
+application/vnd.cluetrust.cartomobile-config-pkg|c11amz|CartoMobile package
+application/vnd.coffeescript|coffee|CoffeeScript source
+application/vnd.comicbook+zip|cbz|Comic book archive (ZIP)
+application/vnd.comicbook-rar|cbr|Comic book archive (RAR)
+application/vnd.contact.cmsg|cdbcmsg|Contact message
+application/vnd.coreos.ignition+json|ign|Container Linux ignition
+application/vnd.criticaltools.wbs+xml|wbs|Project work breakdown
+application/vnd.ctc-posml|pml|POSML
+application/vnd.cups-ppd|ppd|CUPS printer description
+application/vnd.curl.car|car|Curl applet
+application/vnd.dart|dart|Dart source
+application/vnd.data-vision.rdz|rdz|DataVision report
+application/vnd.dece.data|uvf|DECE data
+application/vnd.dece.ttml+xml|uvt|DECE timed text
+application/vnd.dece.unspecified|uvx|DECE unspecified
+application/vnd.dece.zip|uvz|DECE zip
+application/vnd.denovo.fcselayout-link|fe_launch|FCS layout link
+application/vnd.dna|dna|DNA data
+application/vnd.dolby.mobile|dlb|Dolby mobile
+application/vnd.dolby.mobile.2|dd2|Dolby mobile 2
+application/vnd.doremir.scorecloud-binary|sc|ScoreCloud binary
+application/vnd.dpgraph|dpg|DPGraph
+application/vnd.dvb.ait|ait|DVB application info
+application/vnd.dvb.service|svc|DVB service
+application/vnd.dynageo|geo|Dynageo geometry
+application/vnd.dzr|dzr|Draze document
+application/vnd.ecowin.chart|mag|Ecowin chart
+application/vnd.enliven|nml|Enliven document
+application/vnd.epson.esf|esf|Epson quick reference
+application/vnd.epson.msf|msf|Epson sheet file
+application/vnd.epson.quickanime|qam|Epson quick anime
+application/vnd.epson.salt|slt|Epson salt
+application/vnd.epson.ssf|ssf|Epson simplified sheet
+application/vnd.eszigno3+xml|es3|eSigner signature
+application/vnd.ezpix-album|ez2|EZPix album
+application/vnd.ezpix-package|ez3|EZPix package
+application/vnd.fdf|fdf|Acrobat forms data
+application/vnd.fhir+json|fhir|FHIR healthcare resource
+application/vnd.fints|fints|FinTS banking protocol
+application/vnd.flographit|gph|Flographit
+application/vnd.fluxtime.clip|ftc|FluxTime clip
+application/vnd.framemaker|fm|FrameMaker document
+application/vnd.frogans.frogans-ltx|ltx|Frogans LTX
+application/vnd.frogans.flash|sfd|Frogans Flash
+application/vnd.fsc.weblaunch|fsc|FSC launch
+application/vnd.fujitsu.oasys|oas|Fujitsu OASYS
+application/vnd.fujitsu.oasys2|oa2|Fujitsu OASYS 2
+application/vnd.fujitsu.oasys3|oa3|Fujitsu OASYS 3
+application/vnd.fujitsu.oasysprs|bh2|OASYS presenter
+application/vnd.fujitsu.oasyssgs|fg5|OASYS generic
+application/vnd.fujitsu.oasyswp|oas2|OASYS word processing
+application/vnd.fujixerox.art4|art|Xerox ART4 image
+application/vnd.fujixerox.art-ex|artx|Xerox ART EX
+application/vnd.fujixerox.ddd|ddd|Xerox document download
+application/vnd.fujixerox.docuworks|xdw|DocuWorks document
+application/vnd.fujixerox.docuworks.binder|xbd|DocuWorks binder
+application/vnd.fuzzysheet|fzs|Fuzzy sheet
+application/vnd.genomatix.tuxedo|txd|Genomatix Tuxedo
+application/vnd.geogebra.file|ggb|GeoGebra worksheet
+application/vnd.geogebra.slides|ggs|GeoGebra slides
+application/vnd.geogebra.tool|ggt|GeoGebra tool
+application/vnd.geometry-explorer|gex|Geometry Explorer
+application/vnd.geonext|gxt|Geonext
+application/vnd.geoplan|g2w|Geoplan
+application/vnd.geospace|g3w|Geospace
+application/vnd.gmx|gmx|GMX data
+application/vnd.google-earth.kml+xml|kml|Google Earth KML
+application/vnd.google-earth.kmz|kmz|Google Earth KMZ
+application/vnd.grafeq|gqf|Grafeq
+application/vnd.groove-account|gac|Groove account
+application/vnd.groove-help|ghf|Groove help
+application/vnd.groove-identity-message|gim|Groove identity
+application/vnd.groove-injector|grv|Groove injector
+application/vnd.groove-tool-message|gtm|Groove tool message
+application/vnd.groove-tool-template|tpl2|Groove template
+application/vnd.groove-vcard|vcg|Groove vCard
+application/vnd.hal+xml|hal|Hypertext Application Language
+application/vnd.handheld-entertainment+xml|zir|Handheld entertainment
+application/vnd.hbci|hbci|Home banking (HBCI)
+application/vnd.hcl-bireports|rpm2|HCL bi-reports
+application/vnd.hhe.lesson-player|les|Lesson player
+application/vnd.hp-hpgl|hpgl|HP Graphics Language
+application/vnd.hp-hpid|hpid|HP e-imaging
+application/vnd.hp-hps|hps|HP Web print
+application/vnd.hp-jlyt|jlt|HP JetSend
+application/vnd.hp-pcl|pcl|HP Printer Command Language
+application/vnd.hp-pclxl|pclxl|HP PCL XL
+application/vnd.hydrostatix.sof-data|sfd-hdstx|Hydrostatix data
+application/vnd.hzn-3d-crossword|hxc|3D crossword
+application/vnd.ibm.afplinedata|afp|AFP linedata
+application/vnd.ibm.electronic-media|emm|IBM electronic media
+application/vnd.ibm.mptools.toolsmulti|mpt|IBM tools
+application/vnd.ibm.secure-container|sc|IBM secure container
+application/vnd.iccprofile|icc|ICC color profile
+application/vnd.igloader|igl|iGLoader
+application/vnd.immervision-ivp|ivp|ImmerVision panorama
+application/vnd.immervision-ivu|ivu|ImmerVision universal
+application/vnd.ims.imsccv1p1|imscc|IMS Common Cartridge
+application/vnd.insync.inkd.xml|ink|InSync ink
+application/vnd.intu.qbo|qbo|Intuit QuickBooks
+application/vnd.intu.qfx|qfx|Intuit Quicken
+application/vnd.iptc.g2.newsmessage|iptc|IPTC news message
+application/vnd.ipunplugged.rcprofile|rcprofile|IP profile
+application/vnd.irepository.package+xml|irp|iRepository package
+application/vnd.is-xpr|xpr|Image Systems
+application/vnd.isac.fcs|fcs|ISAC flow cytometry
+application/vnd.jam|jam|JAM archive
+application/vnd.jcp.javame.midlet-rms|rms|Java MIDlet record store
+application/vnd.jisp|jisp|JISP package
+application/vnd.joost.joda-archive|joda|Joda archive
+application/vnd.kahootz|ktz|Kahootz archive
+application/vnd.kde.karbon|karbon|Karbon vector image
+application/vnd.kde.kchart|chrt|KChart chart
+application/vnd.kde.kformula|kfo|KFormula formula
+application/vnd.kde.kivio|flw|Kivio flowchart
+application/vnd.kde.kontour|kon|Kontour drawing
+application/vnd.kde.kpresenter|kpr|KPresenter presentation
+application/vnd.kde.kspread|ksp|KSpread spreadsheet
+application/vnd.kde.kword|kwd|KWord document
+application/vnd.kenameaapp|htke|Kenamea app
+application/vnd.kidspiration|kia|Kidspiration
+application/vnd.kinar|kne|Kinar NLE data
+application/vnd.koan|skd|Koan audio
+application/vnd.kodak-descriptor|sds|Kodak descriptor
+application/vnd.las.las+xml|las|Link-Aware Service
+application/vnd.llamagraphics.life-balance.desktop|lbd|Life Balance desktop
+application/vnd.llamagraphics.life-balance.exchange+xml|lbe|Life Balance exchange
+application/vnd.lotus-1-2-3|123|Lotus 1-2-3 spreadsheet
+application/vnd.lotus-approach|apr|Lotus Approach
+application/vnd.lotus-freelance|pre|Lotus Freelance
+application/vnd.lotus-notes|nsf|Lotus Notes database
+application/vnd.lotus-organizer|org|Lotus Organizer
+application/vnd.lotus-screencam|scm|Lotus ScreenCam
+application/vnd.lotus-wordpro|lwp|Lotus WordPro
+application/vnd.macports.portpkg|portpkg|MacPorts package
+application/vnd.marlin.drm.actiontoken|mrtt|Marlin action token
+application/vnd.marlin.drm.conftoken|mct|Marlin config token
+application/vnd.mcd|mcd|MathCAD document
+application/vnd.medcalcdata|mc1|MedCalc data
+application/vnd.mediastation.cdkey|cdkey|MediaStation key
+application/vnd.mfer|mfer|Waveform (MFER)
+application/vnd.mfmp|mfm|Multimedia Floppy
+application/vnd.micrografx.flo|flo|Micrografx flowchart
+application/vnd.micrografx.igx|igx|iGraphics
+application/vnd.mif|mif|FrameMaker MIF
+application/vnd.mophun.application|mpn|Mophun app
+application/vnd.mophun.certificate|mpc|Mophun certificate
+application/vnd.moxy.mxl|mxl|Moxy chart
+application/vnd.ms-artgalry|cil|Art Gallery
+application/vnd.ms-asf|asf|Advanced Streaming Format
+application/vnd.ms-cab-compressed|cab|Microsoft Cabinet archive
+application/vnd.ms-excel|xls|Excel spreadsheet
+application/vnd.ms-excel.addin.macroenabled.12|xlam|Excel add-in
+application/vnd.ms-excel.sheet.binary.macroenabled.12|xlsb|Excel binary workbook
+application/vnd.ms-excel.sheet.macroenabled.12|xlsm|Excel macro workbook
+application/vnd.ms-excel.template.macroenabled.12|xltm|Excel macro template
+application/vnd.ms-fontobject|eot|Embedded OpenType font
+application/vnd.ms-htmlhelp|chm|Compiled HTML help
+application/vnd.ms-ims|ims|Class Server data
+application/vnd.ms-lrm|lrm|Learning Resource Module
+application/vnd.ms-office.activeX+xml|axct|Office ActiveX
+application/vnd.ms-officetheme|thmx|Office theme
+application/vnd.ms-playready.initiator+xml|ppi|PlayReady initiator
+application/vnd.ms-powerpoint|ppt|PowerPoint presentation
+application/vnd.ms-powerpoint.addin.macroenabled.12|ppam|PowerPoint add-in
+application/vnd.ms-powerpoint.presentation.macroenabled.12|pptm|PowerPoint macro
+application/vnd.ms-powerpoint.slide.macroenabled.12|sldm|PowerPoint slide
+application/vnd.ms-powerpoint.slideshow.macroenabled.12|ppsm|PowerPoint show
+application/vnd.ms-powerpoint.template.macroenabled.12|potm|PowerPoint template
+application/vnd.ms-project|mpp|Microsoft Project plan
+application/vnd.ms-publisher|pub|Publisher document
+application/vnd.ms-tnef|tnef|Outlook transport-neutral encapsulation
+application/vnd.ms-wmdrm.license-challenge.req|wmd|DRM license request
+application/vnd.ms-works|wps|Works document
+application/vnd.ms-wpl|wpl|Windows playlist
+application/vnd.ms-xpsdocument|xps|XPS document
+application/vnd.mseq|mus|MSEQ data
+application/vnd.musician|mus|Musician score
+application/vnd.muvee.style|msty|muvie style
+application/vnd.mynfc|mynfc|Mynfc data
+application/vnd.neurolanguage.nlu|nlu|NeuroLanguage
+application/vnd.nintendo.snes.rom|sfc|Super NES ROM
+application/vnd.nitf|ntf|National Imagery Transmission
+application/vnd.noblenet-directory|nnd|NobleNet directory
+application/vnd.noblenet-sealer|nns|NobleNet sealer
+application/vnd.nokia.n-gage.data|ngdat|N-Gage data
+application/vnd.nokia.n-gage.symbian.install|n-gage|N-Gage installer
+application/vnd.nokia.radio-preset|rpst|Radio preset
+application/vnd.nokia.radio-presets|rpss|Radio presets
+application/vnd.novadom.edm|edm|NOVADOM EDM
+application/vnd.nutanix.vdi|vdi2|Nutanix VDI
+application/vnd.oasis.docbook+xml|dbk|DocBook XML
+application/vnd.oasis.opendocument.chart|odc|OpenDocument chart
+application/vnd.oasis.opendocument.chart-template|otc|Chart template
+application/vnd.oasis.opendocument.database|odb|OpenDocument database
+application/vnd.oasis.opendocument.formula|odf2|OpenDocument formula
+application/vnd.oasis.opendocument.formula-template|odft|Formula template
+application/vnd.oasis.opendocument.graphics|odg|OpenDocument graphics
+application/vnd.oasis.opendocument.graphics-template|otg|Graphics template
+application/vnd.oasis.opendocument.image|odi|OpenDocument image
+application/vnd.oasis.opendocument.image-template|oti|Image template
+application/vnd.oasis.opendocument.presentation|odp|OpenDocument presentation
+application/vnd.oasis.opendocument.presentation-template|otp|Presentation template
+application/vnd.oasis.opendocument.spreadsheet|ods|OpenDocument spreadsheet
+application/vnd.oasis.opendocument.spreadsheet-template|ots|Spreadsheet template
+application/vnd.oasis.opendocument.text|odt|OpenDocument text
+application/vnd.oasis.opendocument.text-master|odm|Master document
+application/vnd.oasis.opendocument.text-template|ott|Text template
+application/vnd.oasis.opendocument.text-web|oth|Web page template
+application/vnd.olpc-sugar|xo|Sugar activity
+application/vnd.oma.dd2+xml|dd2|OMA download descriptor
+application/vnd.oma.drm.risd+xml|rif2|OMA DRM risd
+application/vnd.openofficeorg.extension|oxt|OpenOffice extension
+application/vnd.openxmlformats-officedocument.presentationml.presentation|pptx|PowerPoint Open XML
+application/vnd.openxmlformats-officedocument.presentationml.slide|sldx|PowerPoint slide
+application/vnd.openxmlformats-officedocument.presentationml.slideshow|ppsx|PowerPoint show
+application/vnd.openxmlformats-officedocument.presentationml.template|potx|PowerPoint template
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet|xlsx|Excel Open XML
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.macroenabled.12|xlsm2|Excel macro (alt)
+application/vnd.openxmlformats-officedocument.spreadsheetml.template|xltx|Excel template
+application/vnd.openxmlformats-officedocument.wordprocessingml.document|docx|Word Open XML
+application/vnd.openxmlformats-officedocument.wordprocessingml.template|dotx|Word template
+application/vnd.osgi.bundle|obr|OSGi bundle repository
+application/vnd.osgi.dp|dp|OSGi deployment package
+application/vnd.osgi.subsystem|esa|OSGi subsystem
+application/vnd.otps.ct-kip-xml|otp2|CT-KIP
+application/vnd.palm|pdb|Palm database
+application/vnd.panoply|plp|Panoply
+application/vnd.paos.xml|paos|PAOS message
+application/vnd.pawaafile|paw|Pawaa file
+application/vnd.pg.format|str|PG format
+application/vnd.pg.osasli|ei6|OSASLI
+application/vnd.picsel|pic|Picsel document
+application/vnd.pmi.widget|wg|PMI widget
+application/vnd.pocketlearn|plf|PocketLearn
+application/vnd.powerbuilder6|pbd|PowerBuilder
+application/vnd.preminet.application|pnm|Preminet
+application/vnd.previewsystems.box|box|Preview box
+application/vnd.proteus.magazine|mgz|Proteus magazine
+application/vnd.publishare-delta-tree|qps|Publishare tree
+application/vnd.pvi.ptid1|ptid|Praxis live
+application/vnd.quark.quarkxpress|qxd|QuarkXPress
+application/vnd.rar|rar|RAR archive
+application/vnd.realvnc.topo|topo|RealVNC topo
+application/vnd.recordare.musicxml+xml|musicxml|MusicXML
+application/vnd.recordare.musicxml.zip|mxl2|MusicXML (zip)
+application/vnd.rn-realmedia|rm|RealMedia
+application/vnd.route66.link66+xml|link66|Route66 link
+application/vnd.sailingtracker.track|st|Sailing tracker
+application/vnd.sarus.training|sar2|Sarus training
+application/vnd.seemail|see|Seemail
+application/vnd.sema|sema|Sema data
+application/vnd.semd|semd|Semd data
+application/vnd.semf|semf|Semf data
+application/vnd.shana.informed.formdata|ifm|Shana form data
+application/vnd.shana.informed.formtemplate|itp|Shana form template
+application/vnd.shana.informed.interchange|iif|Shana interchange
+application/vnd.shana.informed.package|ipk|Shana package
+application/vnd.simtech-mindmapper|twd|SimTech mindmap
+application/vnd.siren-json|sire|Siren hypermedia
+application/vnd.smaf|mmf|SMAF audio
+application/vnd.smart.notebook|notebook|Smart notebook
+application/vnd.smart.teacher|teacher|Smart teacher
+application/vnd.software602.filler.form+xml|fo|602 form
+application/vnd.solent.sdkm+xml|sdkm|Solent SDKM
+application/vnd.spotfire.dxp|dxp|Spotfire
+application/vnd.spotfire.sfs|sfs|Spotfire safe
+application/vnd.stardivision.calc|sdc|StarDivision calc
+application/vnd.stardivision.draw|sda|StarDivision draw
+application/vnd.stardivision.impress|sdd|StarDivision impress
+application/vnd.stardivision.math|smf2|StarDivision math
+application/vnd.stardivision.writer|sdw|StarDivision writer
+application/vnd.stardivision.writer-global|sgl|StarDivision global
+application/vnd.stepmania.stepchart|sm|StepMania chart
+application/vnd.sun.wadl+xml|wadl|WADL description
+application/vnd.sun.xml.calc|sxc2|OpenOffice Calc (legacy)
+application/vnd.sun.xml.calc.template|stc|Calc template (legacy)
+application/vnd.sun.xml.draw|sxd2|OpenOffice Draw (legacy)
+application/vnd.sun.xml.draw.template|std|Draw template (legacy)
+application/vnd.sun.xml.impress|sxi2|OpenOffice Impress (legacy)
+application/vnd.sun.xml.impress.template|sti|Impress template (legacy)
+application/vnd.sun.xml.math|sxm|Math (legacy)
+application/vnd.sun.xml.writer|sxw2|OpenOffice Writer (legacy)
+application/vnd.sun.xml.writer.global|sxg|Writer global (legacy)
+application/vnd.sun.xml.writer.template|stw|Writer template (legacy)
+application/vnd.sus-calendar|sus|Suspicious calendar
+application/vnd.svd|svd|SVD data
+application/vnd.symbian.install|sis|Symbian installer
+application/vnd.syncml.dm.notification|bdm|SyncML DM notification
+application/vnd.syncml.dm+xml|xdf|SyncML DM
+application/vnd.syncml.rdf+xml|sds2|SyncML RDF
+application/vnd.syncml.xml|syncml|SyncML
+application/vnd.tao.intent-module-archive|tao|TAO module
+application/vnd.tcpdump.pcap|pcap|Packet capture (libpcap)
+application/vnd.tcpdump.pcapng|pcapng|Packet capture next generation
+application/vnd.tmobile-livetv|tmo|T-Mobile live TV
+application/vnd.trid.tpt|tpt|TrID template
+application/vnd.triscape.mxs|mxs|Triscape
+application/vnd.trueapp|tra|TrueApp
+application/vnd.truedoc|ttc2|TrueDoc font
+application/vnd.ubisoft.webplayer|ubd|Ubisoft player
+application/vnd.ufdl|xfd|UFDL form
+application/vnd.uiq.theme|utz|UIQ theme
+application/vnd.umajin|umj|Umajin
+application/vnd.unity|unityweb|Unity web player
+application/vnd.uoml+xml|uoml|UOML
+application/vnd.valve.source.material|vmt|Source material
+application/vnd.vd-study|mstudy|VD study
+application/vnd.visionary|vis|Visionary
+application/vnd.vsf|vsf|VSF data
+application/vnd.wap.wbxml|wbxml|WAP binary XML
+application/vnd.wap.wmlc|wmlc|WML compiled
+application/vnd.wap.wmlscriptc|wmlsc|WMLScript compiled
+application/vnd.webturbo|wtb|WebTurbo
+application/vnd.wolfram.player|nbp2|Wolfram player
+application/vnd.wordperfect|wpd|WordPerfect document
+application/vnd.wqd|wqd|Wqd data
+application/vnd.wt.stf|stf|Worldtalk form
+application/vnd.wv.csp+wbxml|wv|WV CSP
+application/vnd.xara|xar|Xara document
+application/vnd.xfdl|xfdl2|XFDL form
+application/vnd.yamaha.hv-dic|hvd|Yamaha dictionary
+application/vnd.yamaha.hv-script|hvs|Yamaha script
+application/vnd.yamaha.hv-voice|hvp|Yamaha voice
+application/vnd.yamaha.openscoreformat|osf|OpenScore
+application/vnd.yamaha.openscoreformat.osfpvg+xml|osfpvg|OpenScore preview
+application/vnd.yamaha.remote-setup|rsp|Yamaha setup
+application/vnd.yamaha.smaf-audio|saf|SMAF audio
+application/vnd.yamaha.smaf-phrase|spf|SMAF phrase
+application/vnd.yamaha.through-ngn|tn2|Yamaha through
+application/vnd.yamaha.tunnel-udp|rtc|Yamaha tunnel
+application/vnd.yellowriver-custom-menu|cmp|Yellow River menu
+application/vnd.zul|zir|ZUL archive
+application/vnd.zzazz.deck+xml|zz|Zzazz deck
+application/voicexml+xml|vxml|VoiceXML
+application/vq-rtcpxr|vqr|RTCP XR report
+application/watcherinfo+xml|wif|Watcher info
+application/webpush-options+json|webpush|Web Push options
+application/whoispp-query|wqy|WHOIS++ query
+application/widget|wgt|Widget package
+application/winhlp|hlp2|Windows help (legacy)
+application/wspolicy+xml|wspolicy|WS-Policy
+application/x-7z-compressed|7z|7-Zip archive
+application/x-abiword|abw|AbiWord document
+application/x-ace-compressed|ace|ACE archive
+application/x-apple-diskimage|dmg|Apple disk image
+application/x-arj|arj|ARJ archive
+application/x-authorware-bin|aab|Authorware binary
+application/x-authorware-map|aam|Authorware map
+application/x-authorware-seg|aas|Authorware segment
+application/x-bcpio|bcpio|Binary cpio archive
+application/x-bittorrent|torrent|BitTorrent metainfo
+application/x-blorb|blb|Blorb interactive fiction
+application/x-bzip|bz2 2|Bzip2 archive (alt)
+application/x-bzip2|bz2|Bzip2 archive
+application/x-cbr|cbr2|Comic book (RAR alt)
+application/x-cdlink|vcd|CD link
+application/x-chat|chat|Pichat
+application/x-chess-pgn|pgn|Chess game record
+application/x-chrome-package|crx|Chrome extension
+application/x-compress|z|UNIX compress archive
+application/x-conference|nsc|Conference
+application/x-cpio|cpio|Cpio archive
+application/x-csh|csh|C shell script
+application/x-debian-package|deb|Debian package
+application/x-dgc-compressed|dgc|DGC archive
+application/x-director|dir2|Shockwave Director
+application/x-doom|wad|Doom game data
+application/x-dtbncx+xml|ncx|Digital talking book
+application/x-dtbook+xml|dtb|Digital talking book
+application/x-dtbresource|res2|DTB resource
+application/x-dvi|dvi2|TeX DVI document
+application/x-envoy|env2|Envoy document
+application/x-eva|eva|EVA data
+application/x-font-adobe-metrics|afm|Adobe font metrics
+application/x-font-linux-psf|psf|Linux PSF console font
+application/x-font-pcp|pcf|Portable compiled font
+application/x-font-snf|snf|Server normal font
+application/x-font-ttf|ttf2|TrueType font (unregistered)
+application/x-font-type1|pfa2|Type 1 font (unregistered)
+application/x-freearc|arc|FreeArc archive
+application/x-futuresplash|spl|FutureSplash
+application/x-gca-compressed|gca|GCA archive
+application/x-glulx|ulx|Glulx interactive fiction
+application/x-gnumeric|gnumeric|Gnumeric spreadsheet
+application/x-gramps-xml|gramps|Gramps genealogy
+application/x-gtar|gtar|GNU tar archive
+application/x-hdf|hdf|Hierarchical Data Format
+application/x-httpd-php|php2|PHP server page
+application/x-install-instructions|install|Install instructions
+application/x-iso9660-appimage|appimage|AppImage application
+application/x-iso9660-image|iso2|ISO disc image
+application/x-java-jnlp-file|jnlp|Java network launch
+application/x-latex|latex|LaTeX source
+application/x-lzh-compressed|lzh|LZH archive
+application/x-mie|mie|MIE data
+application/x-mobipocket-ebook|mobi|Mobipocket e-book
+application/x-ms-application|application|ClickOnce manifest
+application/x-ms-shortcut|lnk|Windows shortcut
+application/x-ms-wmd|wmd|Windows media download
+application/x-ms-wmz|wmz|Windows media skin
+application/x-msaccess2|mdb2|Access database (unregistered)
+application/x-msdownload|exe|DOS/Windows executable (unregistered)
+application/x-msi|msi|Windows Installer (unregistered)
+application/x-netcdf|nc|NetCDF data
+application/x-nzb|nzb|Newzbin index
+application/x-pkcs12|p12|PKCS#12 keystore
+application/x-pkcs7-certificates|p7b|PKCS#7 certificates
+application/x-pkcs7-certreqresp|p7r|PKCS#7 request response
+application/x-rar-compressed|rar2|RAR archive (unregistered)
+application/x-research-info-systems|ris|RIS bibliography
+application/x-sh|sh2|Shell script (unregistered)
+application/x-shar|shar2|Shell archive (unregistered)
+application/x-shockwave-flash|swf2|Flash movie (unregistered)
+application/x-silverlight-app|xap|Silverlight app
+application/x-sqlite3|sqlite2|SQLite database (unregistered)
+application/x-tar|tar2|Tape archive (unregistered)
+application/x-tcl|tcl2|Tcl script (unregistered)
+application/x-tex|tex2|TeX source (unregistered)
+application/x-texinfo|texinfo|GNU Texinfo
+application/x-troff|roff|Troff document
+application/x-troff-man|man|Manual page (roff)
+application/x-tzo|tzo|Compressed tar (lzop)
+application/x-virtualbox-hdd|hdd|VirtualBox disk
+application/x-virtualbox-ova|ova2|VirtualBox appliance
+application/x-virtualbox-vbox|vbox2|VirtualBox machine
+application/x-virtualbox-vdi|vdi|VirtualBox disk image
+application/x-virtualbox-vhd|vhd2|Virtual Hard Disk
+application/x-virtualbox-vhdx|vhdx2|Virtual Hard Disk v2
+application/x-virtualbox-vmdk|vmdk2|VMware virtual disk
+application/x-wais-source|src2|WAIS source
+application/x-web-app-manifest+json|webmanifest|Web app manifest
+application/x-www-form-urlencoded|urlenc|URL-encoded form data
+application/x-x509-ca-cert|crt|CA certificate (PEM)
+application/x-x509-user-cert|usercrt|User certificate
+application/x-xfig|fig|XFig drawing
+application/x-xliff+xml|xlf|Translation exchange
+application/x-xpinstall|xpi|Mozilla installer
+application/x-xz|xz|XZ archive
+application/x-zmachine|z1|Z-machine fiction
+application/xaml+xml|xaml|XAML interface
+application/xcap-att+xml|xda|XCAP attributes
+application/xcap-caps+xml|xca|XCAP capabilities
+application/xcap-diff+xml|xdf2|XCAP diff
+application/xcap-el+xml|xel|XCAP element
+application/xcap-error+xml|xer|XCAP error
+application/xcap-ns+xml|xns|XCAP namespace
+application/xfdf|xfdf2|XML Forms Data (alt)
+application/xhtml+xml|xhtml|Extensible HTML
+application/xliff+xml|xliff|Translation exchange (registered)
+application/xml|xml|XML document (generic)
+application/xml-dtd|dtd2|Document Type Definition
+application/xml-external-parsed-entity|ent|External entity
+application/xop+xml|xop|XML-binary packaging
+application/xproc+xml|xpl|XProc pipeline
+application/xslt+xml|xsl2|XSLT stylesheet
+application/xspf+xml|xspf|Shared playlist
+application/xv+xml|mxml|XV document
+application/yaml|yaml|YAML data (unregistered)
+application/yang|yang|YANG module
+application/yin+xml|yin|YIN module
+application/zip|zip|ZIP archive
+application/zlib|zz2|Zlib stream
+audio/3gpp|3gp|3GPP audio
+audio/3gpp2|3g2|3GPP2 audio
+audio/aac|aac|Advanced Audio Coding
+audio/adpcm|adp|Adaptive differential PCM
+audio/amr|amr|Adaptive multi-rate
+audio/basic|au|Basic audio (mu-law)
+audio/midi|midi|MIDI sequence
+audio/mobile-xmf|mxmf|Mobile XMF
+audio/mp4|m4a|MPEG-4 audio (unregistered)
+audio/mpeg|mp3|MPEG audio (layer III common)
+audio/ogg|oga2|Ogg audio (unregistered)
+audio/opus|opus2|Opus audio (in Ogg)
+audio/pcma|pcma|G.711 A-law audio
+audio/pcmu|pcmu|G.711 mu-law audio
+audio/prs.sid|sid|Commodore SID chiptune
+audio/silk|sil|Skype SILK audio
+audio/telephone-event|telephone|Telephony tones
+audio/tetra_acip|tetra|TETRA codec
+audio/tone|tone|Tone (MF/DTMF)
+audio/vnd.audiokmaz|Aur|KMAZ audio
+audio/vnd.dece.audio|uva|DECE audio
+audio/vnd.digital-winds|eol|Digital Winds
+audio/vnd.dra|dra|DRA audio
+audio/vnd.dts|dts|DTS surround audio
+audio/vnd.dts.hd|dtshd|DTS HD
+audio/vnd.everplay.plp|plp2|Everplay
+audio/vnd.lucent.voice|lvp|Lucent voice
+audio/vnd.ms-playready.media.pya|pya|PlayReady audio
+audio/vnd.nortel.vbk|vbk|Nortel voice
+audio/vnd.nuera.ecelp4800|ecelp4800|Nuera ECELP 4800
+audio/vnd.nuera.ecelp7470|ecelp7470|Nuera ECELP 7470
+audio/vnd.nuera.ecelp9600|ecelp9600|Nuera ECELP 9600
+audio/vnd.octel.sbc|sbc|Octel SBC
+audio/vnd.qcelp|qcp|Qualcomm CELP
+audio/vnd.rhetorex.32kadpcm|rhx|Rhetorex ADPCM
+audio/vnd.sealedmedia.softseal.mpeg|smp3|Sealed MPEG
+audio/vnd.vmx.cvsd|cvsd|VMX CVSD
+audio/vorbis|vorbis|Vorbis audio stream
+audio/wav|wav|Waveform audio (unregistered)
+audio/webm|weba|WebM audio
+audio/x-aac|aac2|AAC audio (unregistered)
+audio/x-aiff|aiff2|AIFF audio (unregistered)
+audio/x-caf|caf|Core Audio Format
+audio/x-flac|flac|FLAC audio (unregistered)
+audio/x-matroska|mka|Matroska audio
+audio/x-mpegurl|m3u|MPEG audio playlist
+audio/x-ms-wax|wax|Windows Media audio redirector
+audio/x-ms-wma|wma2|Windows Media audio (unregistered)
+audio/x-pn-realaudio|ram2|RealAudio (unregistered)
+audio/x-pn-realaudio-plugin|rmp|RealAudio plugin
+font/collection|ttc|Font collection (TTC)
+font/otf|otf|OpenType font
+font/sfnt|sfnt|Spline font container
+font/ttf|ttf|TrueType font (registered)
+font/woff|woff3|Web Open Font Format (registered)
+font/woff2|woff22|WOFF2 (registered)
+image/aces|exr|Academy Color Encoding
+image/apng|apng|Animated PNG
+image/avci|avci|Advanced Video Coding image
+image/avcs|avcs|AVC still image
+image/bmp|bmp|Bitmap image (unregistered)
+image/cgm|cgm2|Computer Graphics Metafile
+image/dicom-rle|dicomrle|DICOM RLE
+image/emf|emf2|Enhanced Metafile (unregistered)
+image/example|sample|Example image
+image/fits|fits|Flexible Image Transport
+image/g3fax|g3|Group 3 fax
+image/gif|gif|GIF image
+image/heic|heic2|HEIF container
+image/heic-sequence|heics|HEIF sequence
+image/heif|heif2|HEIF image
+image/heif-sequence|heifs|HEIF sequence
+image/hej2k|hej2k|JPEG 2000 (HTJ2K)
+image/hsj2k|hsj2k|JPEG 2000 (HS)
+image/ief|ief2|Image Exchange Format
+image/jls|jls|JPEG-LS
+image/jp2|jp22|JPEG 2000 image
+image/jpeg|jpg|JPEG image
+image/jph|jph|JPEG-HDR
+image/jphc|jphc|JPEG-HDR codestream
+image/jpm|jpm|JPEG 2000 compound
+image/jpx|jpx|JPEG 2000 extended
+image/jxl|jxl2|JPEG XL
+image/jxr|jxr|JPEG XR
+image/jxra|jxra|JPEG XR alpha
+image/jxrs|jxrs|JPEG XR alpha swap
+image/jxs|jxs|JPEG XS
+image/jxsc|jxsc|JPEG XS codestream
+image/jxsi|jxsi|JPEG XS lossless
+image/jxss|jxss|JPEG XS lossy
+image/ktx|ktx|Khronos texture
+image/ktx2|ktx2|Khronos texture 2
+image/naplps|naplps|North American video text
+image/png|png|PNG image
+image/prs.btif|btif|BTIF image
+image/prs.pti|pti|PTI image
+image/pwg-raster|pwg|PWG raster
+image/svg+xml|svg|SVG vector image
+image/t38|t38|T.38 fax
+image/tiff|tiff|TIFF image
+image/tiff-fx|tiffx|TIFF fax
+image/vnd.adobe.photoshop|psd|Photoshop document
+image/vnd.airzip.accelerator.azv|azv|AirZip image
+image/vnd.cns.inf2|cns2|CNS image
+image/vnd.dece.graphic|uvi|DECE graphic
+image/vnd.djvu|djvu2|DjVu document
+image/vnd.dvb.subtitle|sub|DVB subtitle
+image/vnd.dwg|dwg2|AutoCAD drawing
+image/vnd.dxf|dxf2|Drawing Exchange Format
+image/vnd.fastbidsheet|fbs|FastBid sheet
+image/vnd.fpx|fpx|FlashPix
+image/vnd.fst|fst2|FAST image
+image/vnd.fujixerox.edmics-mmr|mmr|EDMICS MMR
+image/vnd.fujixerox.edmics-rlc|rlc|EDMICS RLC
+image/vnd.globalgraphics.pgb|pgb|PGB image
+image/vnd.microsoft.icon|ico|Windows icon
+image/vnd.mix|mix|PowerPoint mix
+image/vnd.ms-dds|dds|DirectDraw Surface
+image/vnd.ms-modi|mdi|Microsoft Document Imaging
+image/vnd.ms-photo|wdp|HD Photo
+image/vnd.net-fpx|npx|Net FlashPix
+image/vnd.radiance|hdr|Radiance HDR
+image/vnd.sealed.png|spng|Sealed PNG
+image/vnd.sealedmedia.softseal.gif|sgif|Sealed GIF
+image/vnd.sealedmedia.softseal.jpg|sjpg|Sealed JPEG
+image/vnd.svf|svf|Simple Vector Format
+image/vnd.tencent.tap|tap|Tencent tap
+image/vnd.valve.source.texture|vtf|Source texture
+image/vnd.wap.wbmp|wbmp|Wireless bitmap
+image/vnd.xiff|xif|XIFF image
+image/vnd.zbrush.pcx|pcx2|ZBrush PCX
+image/webp|webp|WebP image
+image/wmf|wmf2|Windows Metafile (unregistered)
+image/x-3ds|max3ds|3D Studio scene
+image/x-cmu-raster|ras|CMU raster
+image/x-cmx|cmx|Corel Metafile exchange
+image/x-freehand|fh|FreeHand drawing
+image/x-icon|ico2|Icon (unregistered)
+image/x-jng|jng|JPEG Network Graphics
+image/x-mrsid-image|sid2|MrSID image
+image/x-ms-bmp|bmp3|Bitmap (unregistered)
+image/x-pcx|pcx3|PC Paintbrush (unregistered)
+image/x-pict|pict2|PICT image
+image/x-portable-anymap|pnm|Portable any map
+image/x-portable-bitmap|pbm|Portable bitmap
+image/x-portable-graymap|pgm|Portable graymap
+image/x-portable-pixmap|ppm|Portable pixmap
+image/x-rgb|rgb2|Silicon Graphics RGB
+image/x-tga|tga|Truevision TARGA
+image/x-xbitmap|xbm|X bitmap
+image/x-xcf|xcf|GIMP image
+image/x-xpixmap|xpm|X pixmap
+image/x-xwindowdump|xwd|X window dump
+message/cpim|cpim|Common Presence and IM
+message/delivery-status|dsn|Delivery status
+message/disposition-notification|mdn|Disposition notification
+message/example|sample2|Example message
+message/feedback-report|feedback|Feedback report
+message/global|u8msg|Global MDN
+message/global-delivery-status|u8dsn|Global delivery status
+message/global-disposition-notification|u8mdn|Global disposition
+message/http|http2|HTTP message (unregistered)
+message/s-http|s-http|Secure HTTP message
+message/sip|sip|SIP message
+message/sipfrag|sipfrag|SIP fragment
+message/tracking-status|tracking|Tracking status
+message/vnd.wcap|wcap|WCAL scheduling
+model/3mf|3mf|3D manufacturing
+model/e57|e57|LIDAR point cloud
+model/gltf-binary|glb|Binary glTF
+model/gltf+json|gltf|GL transmission format
+model/iges|igs|IGES CAD
+model/mesh|mesh|Mesh data
+model/mtl|mtl|Material template
+model/obj|obj2|Wavefront 3D object
+model/step|step|STEP CAD data
+model/stl|stl2|Stereolithography
+model/vnd.collada+xml|dae|Collada
+model/vnd.dwf|dwf|Design Web Format
+model/vnd.gdl|gdl2|Geometric description
+model/vnd.gtw|gtw|Gen-Trix
+model/vnd.moml+xml|moml|MOML
+model/vnd.mts|mts2|Multipart
+model/vnd.opengex|ogex|OpenGEX
+model/vnd.parasolid.transmit.binary|x_b|Parasolid binary
+model/vnd.parasolid.transmit.text|x_t|Parasolid text
+model/vnd.rosette-annotated-3dmodel|r3d|Rosette 3D
+model/vnd.usdz+zip|usdz|Universal Scene Description
+model/vnd.valve.source.compiled-map|bsp|Source engine map
+model/vrml|wrl|VRML world
+multipart/encrypted|mpenc|Multipart encrypted
+multipart/form-data|form|Form data upload
+multipart/related|rel|Multipart related
+multipart/report|report2|Multipart report
+multipart/signed|mpsig|Multipart signed
+multipart/voice-message|vmsg|Voice message
+text/1d-interleaved-parityfec|p1d|Interleaved parity
+text/cache-manifest|appcache|App cache manifest
+text/calendar|ics|iCalendar data
+text/css|css|Cascading Style Sheet
+text/csv|csv|Comma-separated values
+text/csv-schema|csvs|CSV schema
+text/directory|vcard2|Directory data
+text/dns|soa|DNS zone (text)
+text/ecmascript|es|ECMAScript source
+text/encaprtp|encaprtp|RTP encapsulation
+text/enriched|enriched|Enriched text
+text/fwdred|fwred|Forwarded redaction
+text/grammar-refined|grammar|Grammar
+text/hjson|hjson|Human JSON
+text/html|html|HTML document
+text/jcr-cnd|cnd|Content repository notation
+text/markdown|md|Markdown document
+text/mizar|mizar|Mizar proof
+text/n3|n32|Notation3
+text/parameters|params|Parameter block
+text/parityfec|pfec|Parity FEC
+text/plain|txt|Plain text
+text/provenance-xml|provx|Provenance
+text/rfc822-headers|hdr2|Email headers
+text/richtext|rtx|Rich text
+text/rtf|rtf2|Rich Text Format (unregistered)
+text/sgml|sgml2|SGML (unregistered)
+text/shex|shex|Shape expressions
+text/spdx|spdx|SPDX license
+text/tab-separated-values|tsv|Tab-separated values
+text/troff|t|Troff text
+text/turtle|ttl|RDF Turtle
+text/ulpfec|ulpfec|ULP FEC
+text/uri-list|uris|URI list
+text/vcard|vcard3|vCard
+text/vnd.a|a|A text
+text/vnd.abc|abc|ABC notation
+text/vnd.ascii-art|ascii|ASCII art
+text/vnd.curl|curl|Curl source
+text/vnd.debian.copyright|copyright|Debian copyright
+text/vnd.DMClientScript|dms|DM client script
+text/vnd.dvb.subtitle|sub2|DVB subtitle (alt)
+text/vnd.esmertec.theme|moc|Mig theme
+text/vnd.ficlab.troff|fm|Ficlab troff
+text/vnd.fly|fly|Fly drawing
+text/vnd.fmi.flexstor|flx|Flexstor
+text/vnd.graphviz|gv|Graphviz source
+text/vnd.in3d.3dml|3dml|In3D 3DML
+text/vnd.in3d.spot|spot|In3D spot
+text/vnd.latex-z|lx|Latex-z
+text/vnd.motorola.reflex|r Reflex|Motorola reflex
+text/vnd.ms-mediapackage|mpf|Media package
+text/vnd.net2phone.commcenter.command|cct|Net2phone
+text/vnd.radisys.msml-basic-layout|txt2|MSML layout
+text/vnd.si.uricatalogue|uris2|URI catalogue
+text/vnd.sun.j2me.app-descriptor|jad|J2ME descriptor
+text/vnd.trolltech.linguist|ts|Qt translation
+text/vnd.wap.si|si|Service info
+text/vnd.wap.sl|sl|Service loading
+text/vnd.wap.wml|wml|Wireless Markup Language
+text/vnd.wap.wmlscript|wmls|WMLScript
+text/whoispp-response|wpy|WHOIS++ response
+text/xml-external-parsed-entity|ent2|External entity (text)
+video/1d-interleaved-parityfec|v1d|Video parity
+video/3gpp|3gp2|3GPP video
+video/3gpp2|3g22|3GPP2 video
+video/3gpp-tt|3gptt|3GPP timed text
+video/bmp|bmpv|BMP video
+video/dv|dv|Digital video
+video/encaprtp|encapv|RTP encapsulated video
+video/example|samplev|Example video
+video/h261|h261|H.261 video
+video/h263|h263|H.263 video
+video/h264|h2642|H.264 video
+video/h265|h265|HEVC video
+video/iso.segment|mp4s|ISO media segment
+video/jpeg|jpgv|JPEG video
+video/jpm|jpmv|JPEG 2000 compound
+video/mj2|mjp2|Motion JPEG 2000
+video/mp4|mp4v|MPEG-4 video
+video/mp4-generic|mpg4v|Generic MPEG-4
+video/mpeg|mpegv|MPEG video
+video/mpeg4-generic|mp4g|MPEG-4 generic
+video/mpv|mpv|MPEG variable
+video/nv|nv|NerWorking video
+video/ogg|ogv|Ogg video
+video/parityfec|pv|Parity FEC video
+video/pointer|pt|Pointer video
+video/quicktime|mov|QuickTime video
+video/raptorfec|rf|Raptor FEC
+video/raw|rawv|Raw video
+video/rtp-enc-aescm128|aes|rtp AES-CM
+video/rtploopback|rtp|RTP loopback
+video/rtx|rtx|RTP retransmission
+video/smpte292m|s292m|SMPTE 292M
+video/ulpfec|uv|ULP FEC video
+video/vc1|vc1|SMPTE VC-1
+video/vnd.CCTV|cctv|CCTV video
+video/vnd.dece.hd|uvh|DECE HD
+video/vnd.dece.mobile|uvm|DECE mobile
+video/vnd.dece.mp4|uvu|DECE MP4
+video/vnd.dece.pd|uvp|DECE PD
+video/vnd.dece.sd|uvs|DECE SD
+video/vnd.dece.video|uvv|DECE video
+video/vnd.directv.mpeg|mpe|DirectTV MPEG
+video/vnd.dlna.mpeg-tts|tts2|MPEG transport stream
+video/vnd.dvb.file|dvb|DVB file
+video/vnd.fvt|fvt|FVT video
+video/vnd.hns.video|hns|HNS video
+video/vnd.iptvforum.1dinterleavedparityfec|1dfe|IPTV FEC
+video/vnd.iptvforum.2dinterleavedparityfec|2dfe|IPTV FEC 2D
+video/vnd.iptvforum.ttsavc|ttsav|IPTV AVC
+video/vnd.iptvforum.ttsmpeg2|ttsm|IPTV MPEG2
+video/vnd.motorola.video|mot|Motorola video
+video/vnd.motorola.videop|vp|Motorola videop
+video/vnd.mpegurl|mxu|MPEG URL playlist
+video/vnd.ms-playready.media.pyv|pyv|PlayReady video
+video/vnd.nokia.interleaved-multimedia|nim|Nokia multimedia
+video/vnd.nokia.videovoip|nvv|Nokia videovoip
+video/vnd.objectvideo|ov|Object video
+video/vnd.radgametools.bink|bik|Bink video
+video/vnd.radgametools.smacker|smk|Smacker video
+video/vnd.sealed.mpeg1|smpg|Sealed MPEG1
+video/vnd.sealed.mp4|smp4|Sealed MP4
+video/vnd.sealed.swf|sswf|Sealed SWF
+video/vnd.sealedmedia.softseal.mov|smov|Sealed MOV
+video/vnd.uvvu.mp4|uvvu|UVVU MP4
+video/vnd.vivo|viv|Vivo video
+video/vp8|vp8|VP8 video
+video/webm|webm|WebM video (registered)
+video/x-f4v|f4v|Flash video (unregistered)
+video/x-fli|fli|FLI animation
+video/x-flv|flv2|Flash video (unregistered)
+video/x-matroska|mkv|Matroska video
+video/x-mng|mng|Multiple-image Network Graphics
+video/x-ms-asf|asf2|ASF (unregistered)
+video/x-ms-vob|vob2|DVD video object
+video/x-ms-wmv|wmv2|Windows Media video
+video/x-msvideo|avi2|AVI (unregistered)
+video/x-sgi-movie|movie|SGI movie
+image/jpeg|jpeg|jpeg (canonical mapping)
+font/woff|woff|woff (canonical mapping)
+font/woff2|woff2|woff2 (canonical mapping)
+image/tiff|tif|tiff (canonical mapping)
+application/x-tar|tar|x-tar (canonical mapping)
+text/html|htm|html (canonical mapping)
+application/wasm|wasm|wasm (canonical mapping)
+application/yaml|yml|yaml (canonical mapping)
+message/rfc822|eml|rfc822 (canonical mapping)

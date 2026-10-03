@@ -1,0 +1,418 @@
+# ObscuraLens offline data pack: file extensions and formats.
+# Source registries: IANA media type registry (for extensions of registered
+# types) plus widely recognised filename conventions for common formats -
+# public registry data.
+# Generated for ObscuraLens offline packs - see obscuralens/utils/data_packs.py
+# and obscuralens/utils/data_catalog.py.
+#
+# Format: ext|category|description
+#   - ext: extension without leading dot, lowercase
+#   - category: one of archive, audio, document, image, video, code, data,
+#     security, font, cad, disk, executable, config, spreadsheet,
+#     presentation, database, ebook, geographic, model, certificate,
+#     forensic, system, log, temp
+#   - first occurrence wins for duplicate extensions
+7z|archive|7-Zip compressed archive
+ace|archive|WinACE compressed archive
+aif|audio|Audio Interchange File Format audio
+aifc|audio|Compressed AIFF audio
+aiff|audio|Audio Interchange File Format audio
+ape|audio|Monkey's Audio lossless audio
+asf|video|Advanced Streaming Format media
+asx|video|Advanced Stream Redirector playlist
+avi|video|Audio Video Interleave video
+bafl|archive|BAFL compressed archive
+bash|code|Bash shell script
+bat|code|Windows batch script
+bin|disk|Binary disk image or generic binary data
+bmp|image|Bitmap image
+bok|forensic|Pegasus Mail address book
+bplist|data|Binary property list (Apple)
+bz2|archive|Bzip2 compressed archive
+cab|archive|Microsoft Cabinet archive
+c|code|C source code
+cc|code|C++ source code
+cdf|data|Channel Definition Format
+cdr|image|CorelDRAW vector image
+cer|certificate|X.509 certificate (DER or PEM)
+cfg|config|Configuration file (generic)
+cgm|image|Computer Graphics Metafile
+class|code|Java bytecode class file
+cli|forensic|Magellan GPS log
+cmd|code|Windows command script
+cnf|config|Configuration file (generic)
+conf|config|Configuration file (generic)
+cpp|code|C++ source code
+cs|code|C# source code
+css|code|Cascading Style Sheet
+csv|data|Comma-separated values
+cur|image|Windows cursor image
+dat|data|Generic data file
+db|database|Generic database file (SQLite and others)
+dbf|database|dBase/FoxPro database table
+deb|archive|Debian software package
+der|certificate|X.509 certificate (DER encoding)
+dex|code|Dalvik Executable (Android)
+dgn|cad|MicroStation CAD drawing
+dif|data|Data Interchange Format
+dir|database|Movie directory data (Adobe Director)
+djvu|document|DjVu scanned document
+dll|executable|Windows dynamic-link library
+dmg|disk|Apple disk image
+dmp|forensic|Memory/process dump file
+doc|document|Microsoft Word document (legacy binary)
+docm|document|Word macro-enabled document
+docx|document|Office Open XML Word document
+dot|document|Word document template
+dsk|disk|Generic disk image
+dtd|data|Document Type Definition
+dts|code|Device Tree Source
+dvi|document|Device Independent document (TeX)
+dwg|cad|AutoCAD drawing
+dxf|cad|Drawing Exchange Format (CAD)
+edb|database|Exchange/Extensible Storage Engine database
+elf|executable|Executable and Linkable Format binary
+emf|image|Enhanced Metafile image
+eml|document|RFC 822 email message
+enc|security|Encrypted or encoded file (generic)
+env|config|Environment variable definition file
+eot|font|Embedded OpenType font
+eps|image|Encapsulated PostScript
+erl|code|Erlang source code
+etl|forensic|Event Trace Log (Windows)
+evtx|forensic|Windows Event Log (XML-based)
+exe|executable|Windows executable program
+exp|data|Oracle export data
+flac|audio|Free Lossless Audio Codec audio
+flv|video|Flash video
+fnt|font|Font file (generic)
+fon|font|Windows font library
+foss|forensic|Fossil repository database
+fs|code|F# source code
+fst|forensic|Forensic image metadata
+ftl|code|FreeMarker template
+fu|log|Saved debugger session data
+gbk|data|GenBank sequence data
+geojson|geographic|GeoJSON geographic data
+gif|image|Graphics Interchange Format image
+gml|geographic|Geography Markup Language
+go|code|Go source code
+gpkg|geographic|OGC GeoPackage
+gpg|security|GPG public keyring or exported key
+gra|data|SigmaPlot graph
+gz|archive|Gzip compressed archive
+h|code|C/C++ header file
+h264|video|Raw H.264 video stream
+hdp|image|HD Photo / JPEG XR image
+heic|image|High Efficiency Image Container (HEIF)
+heif|image|High Efficiency Image File Format
+hlp|document|Windows help file
+hprof|forensic|Java heap profile dump
+hs|code|Haskell source code
+htm|document|HyperText Markup Language (short)
+html|document|HyperText Markup Language
+hwp|document|Hangul Word Processor document
+ica|config|Citrix Independent Computing Architecture
+icns|image|Apple icon image
+ico|image|Windows icon image
+ics|data|iCalendar calendar data
+idl|data|Interface Definition Language
+ief|forensic|Internet Evidence Finder data
+iff|data|Interchange File Format
+img|disk|Generic disk image
+ini|config|Windows INI configuration
+iso|disk|ISO 9660 disc image
+iso6660|disk|ISO disc image (alternate)
+jar|code|Java archive (application)
+java|code|Java source code
+jfif|image|JPEG File Interchange Format image
+jks|security|Java KeyStore
+jp2|image|JPEG 2000 image
+jpe|image|JPEG image (alternate extension)
+jpeg|image|JPEG image
+jpg|image|JPEG image
+js|code|JavaScript source code
+json|data|JavaScript Object Notation data
+jsonl|data|JSON Lines (newline-delimited JSON)
+jsp|code|JavaServer Pages template
+jxl|image|JPEG XL image
+key|security|Private or public key (PEM)
+kml|geographic|Keyhole Markup Language (geographic)
+kmz|geographic|Compressed KML geographic data
+ko|system|Linux kernel module object
+ksh|code|Korn shell script
+las|geographic|LiDAR point cloud data
+laz|geographic|Compressed LiDAR data
+ldif|data|LDAP Data Interchange Format
+lha|archive|LHA compressed archive
+lib|code|Static library or import library
+lnk|forensic|Windows shortcut file
+log|log|Log file (generic)
+lua|code|Lua source code
+lzh|archive|LHA compressed archive (LZH)
+m2ts|video|MPEG-2 transport stream
+m4a|audio|MPEG-4 audio
+m4b|audio|Audiobook (MPEG-4)
+m4p|audio|Protected MPEG-4 audio
+m4v|video|MPEG-4 video
+mab|forensic|Mozilla address book
+magneto|forensic|Magnet Forensic artifact
+mak|code|Makefile include
+md|document|Markdown document
+mdb|database|Microsoft Access database
+mde|database|Compiled Access database
+mdf|disk|Alcohol 120%/SQL Server data (context dependent)
+mdx|data|Multi-dimensional expression (or disk image)
+mbox|data|MBOX mailbox file
+mcp|system|MS-DCP driver
+mdb|database|Access database (duplicate-safe first wins)
+mdb2|database|Access database (unused variant)
+mdump|forensic|Memory dump (generic)
+mft|forensic|NTFS Master File Table
+mht|document|MIME HTML archive of a web page
+mhtml|document|MIME HTML archive of a web page
+mid|audio|MIDI sequence
+midi|audio|MIDI sequence
+mkv|video|Matroska video
+mobi|ebook|Mobipocket e-book
+moov|video|QuickTime movie data
+mov|video|QuickTime video
+mp2|audio|MPEG-1 layer II audio
+mp3|audio|MPEG-1 layer III audio
+mp4|video|MPEG-4 video
+mpa|audio|MPEG audio elementary stream
+mpeg|video|MPEG video
+mpg|video|MPEG video
+mpg4|video|MPEG-4 video (variant)
+mpl|video|Blu-ray movie playlist
+msg|document|Outlook message item
+msi|executable|Windows Installer package
+msix|executable|Windows modern app package
+mso|data|Microsoft Office OLE data
+msv|video|Monster video capture
+mws|data|Maple worksheet
+n3|data|Notation3 RDF
+nb|data|Mathematica notebook
+nfo|document|Release information text (warez convention)
+nix|code|Nix expression
+nk2|forensic|Outlook autocomplete cache
+npk|archive|NetPark archive
+nrg|disk|Nero disc image
+numbers|spreadsheet|Apple Numbers spreadsheet
+numbers-te|spreadsheet|Numbers template
+nupkg|archive|NuGet package
+nvram|system|Non-volatile RAM image
+nxt|code|NXT firmware image
+o|code|Compiled object file
+obj|code|3D model or object file
+oda|document|Office document architecture
+odb|database|OpenDocument database
+odc|data|OpenDocument chart
+odf|document|OpenDocument formula
+odg|image|OpenDocument graphics
+odi|image|OpenDocument image
+odm|document|OpenDocument master document
+odp|presentation|OpenDocument presentation
+ods|spreadsheet|OpenDocument spreadsheet
+odt|document|OpenDocument text document
+oga|audio|Ogg audio
+ogg|audio|Ogg Vorbis audio
+ogv|video|Ogg video
+ogx|data|Ogg application
+one|document|Microsoft OneNote notebook
+opus|audio|Opus compressed audio
+orf|image|Olympus raw image
+ost|data|Outlook offline storage table
+ots|spreadsheet|OpenDocument spreadsheet template
+ott|document|OpenDocument text template
+ova|archive|Open Virtual Appliance
+ovf|config|Open Virtualization Format descriptor
+p12|security|PKCS#12 certificate and key container
+p7b|certificate|PKCS#7 certificate (DER/PEM)
+p7c|certificate|PKCS#7 certificate
+p7r|security|PKCS#7 certificate request response
+package|archive|OS X package (generic)
+pages|document|Apple Pages document
+pas|code|Pascal source code
+pcap|forensic|Packet capture file (libpcap)
+pcapng|forensic|Packet capture next generation
+pcd|image|Photo CD image
+pcx|image|ZSoft PC Paintbrush image
+pdb|database|Program database (debug symbols) or Palm database
+pdf|document|Portable Document Format
+pef|executable|OS X PowerPC executable
+pem|security|Privacy Enhanced Mail (certificate/key)
+pfa|font|PostScript Type 1 font (ASCII)
+pfb|font|PostScript Type 1 font (binary)
+pfm|font|Printer Font Metrics
+pgp|security|PGP encrypted/signed data
+php|code|PHP source code
+php3|code|PHP source code (legacy)
+phps|code|PHP source (highlighted)
+pict|image|QuickDraw PICT image
+pkg|archive|OS X installer package or generic package
+pl|code|Perl source code
+plb|data|Oracle binary library
+plist|data|Apple property list
+pm|code|Perl module
+png|image|Portable Network Graphics image
+po|data|Portable Object (gettext translations)
+por|data|SPSS portable data
+pot|data|Portable Object template (gettext)
+pps|presentation|PowerPoint slide show
+ppsx|presentation|PowerPoint slide show (Open XML)
+ppt|presentation|PowerPoint presentation (legacy)
+pptm|presentation|PowerPoint macro-enabled
+pptx|presentation|PowerPoint Open XML presentation
+prf|config|Outlook profile settings
+prt|model|CAD part model (Pro/ENGINEER)
+ps|document|PostScript document
+psafe3|security|Password Safe database
+psd|image|Adobe Photoshop document
+pspimage|image|Paint Shop Pro image
+pst|data|Outlook personal storage table
+ptx|forensic|Forensic Toolkit image log
+py|code|Python source code
+pyc|code|Python compiled bytecode
+pyd|code|Python dynamic module (Windows)
+pyo|code|Python optimized bytecode (legacy)
+qbb|database|QuickBooks backup company file
+qdf|database|QuickBooks company file
+qcow|disk|QEMU copy-on-write disk image
+qcow2|disk|QEMU copy-on-write v2 disk image
+qt|video|QuickTime movie
+qtm|video|QuickTime movie (variant)
+ra|audio|RealAudio
+raf|image|Fujifilm raw image
+ram|audio|RealAudio metadata
+rar|archive|Roshal Archive compressed archive
+raw|image|Raw camera image (many vendors)
+rb|code|Ruby source code
+reg|config|Windows registry export
+res|data|Windows resource data
+rgb|image|Silicon Graphics RGB image
+rm|video|RealMedia
+rms|security|RealMedia secured media
+rmvb|video|RealMedia variable bitrate
+rom|system|ROM image
+rpm|archive|Red Hat Package Manager package
+rs|code|Rust source code
+rtf|document|Rich Text Format document
+run|executable|Self-extracting installer (Linux)
+rv|video|RealVideo
+rw2|image|Panasonic raw image
+s3db|database|SQLite3 database (alternate)
+sar|archive|SAR archive (SAP)
+sas|code|SAS program
+sav|data|SPSS data file
+scala|code|Scala source code
+scn|model|3D scene file
+scr|system|Windows screen saver (executable)
+se|security|SE Linux policy module
+sea|archive|Self-extracting archive (Mac)
+sed|code|Stream editor script
+ses|config|Session file (generic)
+sfv|data|Simple File Verification checksums
+sh|code|POSIX shell script
+shar|archive|Shell archive
+shp|geographic|ESRI shapefile geometry
+shx|geographic|ESRI shapefile index
+sig|security|PGP/GnuPG detached signature
+sit|archive|StuffIt archive
+sitx|archive|StuffIt X archive
+sqlite|database|SQLite database
+sqlite3|database|SQLite3 database
+src|code|Source file (Borland convention)
+ssf|data|Semantic web spreadsheet
+stl|model|Stereolithography 3D model
+svg|image|Scalable Vector Graphics
+svgz|image|Compressed SVG
+swf|video|Shockwave Flash movie
+sxc|spreadsheet|OpenOffice Calc (legacy)
+sxd|image|OpenOffice Draw (legacy)
+sxi|presentation|OpenOffice Impress (legacy)
+sxw|document|OpenOffice Writer (legacy)
+tar|archive|Tape Archive
+tbz|archive|Bzip2-compressed tar archive
+tcap|forensic|Packet capture (variant)
+tcl|code|Tcl source code
+tex|document|LaTeX source
+text|document|Plain text
+tgz|archive|Gzip-compressed tar archive
+thmx|document|Office theme file
+tif|image|Tagged Image File Format
+tiff|image|Tagged Image File Format
+tk|code|Tk script
+tmp|temp|Temporary file
+toast|disk|Roxio Toast disc image
+torrent|data|BitTorrent metainfo
+tpl|code|Template file (generic)
+trm|forensic|Windows trace log
+ts|code|TypeScript source code
+tsv|data|Tab-separated values
+tta|audio|True Audio lossless codec
+ttf|font|TrueType font
+txt|document|Plain text
+uax|forensic|Unicode text artifact
+udif|disk|Universal Disk Image Format
+url|config|Internet shortcut file
+usdz|model|Universal Scene Description (Apple AR)
+vbs|code|VBScript source file
+vbox|config|VirtualBox machine definition
+vdi|disk|VirtualBox disk image
+vhd|disk|Virtual Hard Disk (Microsoft)
+vhdx|disk|Virtual Hard Disk v2 (Microsoft)
+vmdk|disk|VMware virtual disk
+vob|video|DVD video object
+vsd|document|Visio drawing (legacy)
+vsdx|document|Visio drawing (Open XML)
+vss|system|Volume Shadow Copy snapshot data
+vsto|executable|Visual Studio Tools for Office add-in
+wab|forensic|Windows Address Book
+wav|audio|Waveform audio
+wax|audio|Windows Media audio redirector
+wbk|document|Word backup document
+wbmp|image|Wireless bitmap image
+webarchive|document|Safari web archive
+webm|video|WebM video
+webp|image|WebP image
+wim|archive|Windows Imaging Format archive
+wks|spreadsheet|Lotus 1-2-3 / Works spreadsheet
+wma|audio|Windows Media audio
+wmdb|database|Windows Media database
+wmf|image|Windows Metafile image
+wmv|video|Windows Media video
+woff|font|Web Open Font Format
+woff2|font|Web Open Font Format 2
+wps|document|Works/WordPad document
+wri|document|Windows Write document
+wsc|code|Windows script component
+wsdl|data|Web Services Description Language
+wsp|archive|Windows SharePoint solution package
+wtx|document|Text document (Windows convention)
+xhtml|document|Extensible HTML
+xht|xhtml|Extensible HTML (short)
+xla|spreadsheet|Excel add-in (legacy)
+xlam|spreadsheet|Excel add-in (Open XML)
+xls|spreadsheet|Excel spreadsheet (legacy binary)
+xlsb|spreadsheet|Excel binary spreadsheet
+xlsm|spreadsheet|Excel macro-enabled spreadsheet
+xlsx|spreadsheet|Excel Open XML spreadsheet
+xlt|spreadsheet|Excel template (legacy)
+xltx|spreadsheet|Excel template (Open XML)
+xml|data|Extensible Markup Language
+xpi|archive|Mozilla extension package
+xps|document|XML Paper Specification document
+xsd|data|XML Schema Definition
+xsl|code|XSLT stylesheet
+xslt|code|XSLT stylesheet
+xz|archive|XZ compressed archive
+yaml|config|YAML Ain't Markup Language
+yml|config|YAML Ain't Markup Language
+z|archive|UNIX compress archive
+z01|archive|Split archive part 1
+z64|image|Nintendo 64 ROM
+zip|archive|ZIP compressed archive
+zipx|archive|Extended ZIP archive
+zsh|code|Z shell script
+zz|temp|Temporary file (Windows convention)

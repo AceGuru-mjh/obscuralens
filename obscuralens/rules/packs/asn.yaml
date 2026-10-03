@@ -1,0 +1,167 @@
+# ObscuraLens explainable rule pack -- asn
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the ASN tracker output: announced_prefixes, country_code,
+# holder, abuse_email, bogon_prefixes, rpki_invalid, irr_records, peers...
+# ---------------------------------------------------------------------------
+
+name: asn-rules
+description: >-
+  Explainable routing, accountability and abuse-readiness heuristics for
+  autonomous system lookups.
+version: 1
+rules:
+  - id: ASN-001
+    title: Macro announcer
+    description: >-
+      The AS announces 5,000 or more prefixes. Transit providers and
+      large clouds announce at this scale, so per-prefix abuse signals
+      dilute: an attack hosted here says little about the operator and
+      remediation runs through their abuse desk only.
+    severity: low
+    weight: 10
+    tags: [routing, scale]
+    conditions:
+      - field: announced_prefixes
+        operator: gte
+        value: 5000
+
+  - id: ASN-002
+    title: Jurisdiction on watch statistics
+    description: >-
+      The registry country appears disproportionately in public routing
+      and spam abuse statistics. This is context about reporting and
+      cooperation difficulty, never about any individual operator, and
+      should never be scored on its own.
+    severity: info
+    weight: 5
+    tags: [geolocation, context]
+    conditions:
+      - field: country_code
+        operator: in
+        value: [CN, RU, IR, KP, SY, BY]
+
+  - id: ASN-003
+    title: Bulletproof-style holder name
+    description: >-
+      The holder name matches naming patterns associated with
+      abuse-tolerant hosting marketing. Combined with missing abuse
+      contacts this is the practical definition of bulletproof hosting
+      -- infrastructure where reports go to die.
+    severity: high
+    weight: 20
+    tags: [hosting, reputation]
+    conditions:
+      - field: holder
+        operator: regex
+        value: '(?i)(bullet\s?proof|no\s?abuse|anonymous|offshore|ignore\s?abuse)'
+
+  - id: ASN-004
+    title: No abuse contact
+    description: >-
+      No abuse mailbox or web form is published or resolvable for this
+      network. Without an abuse contact there is no sanctioned path to
+      report misuse, which is precisely why hostile infrastructure
+      operators omit one.
+    severity: medium
+    weight: 10
+    tags: [accountability]
+    references: ["RIPE Database abuse-c documentation"]
+    conditions:
+      - field: abuse_email
+        operator: empty
+        value: true
+
+  - id: ASN-005
+    title: Tiny announcing AS
+    description: >-
+      Two or fewer prefixes are announced. Small announcements are
+      legitimate for stub networks, but they are also how hijacked or
+      rented space is blended into the table cheaply; compare with RPKI
+      coverage before trusting the space.
+    severity: info
+    weight: 0
+    tags: [routing, scale]
+    conditions:
+      - field: announced_prefixes
+        operator: lte
+        value: 2
+
+  - id: ASN-006
+    title: Bogon prefixes announced
+    description: >-
+      The AS announces address space that should never be routed --
+      RFC 1918, loopback or unallocated ranges. Bogon announcements are
+      accidental route leaks at best and deliberate hijack
+      infrastructure at worst; either way the traffic needs scrutiny.
+    severity: high
+    weight: 20
+    tags: [routing, hijack]
+    references: ["RFC 1918", "Team Cymru bogon reference"]
+    conditions:
+      - field: bogon_prefixes
+        operator: gte
+        value: 1
+
+  - id: ASN-007
+    title: RPKI-invalid announcements
+    description: >-
+      At least one announced prefix fails RPKI origin validation.
+      Invalid ROAs mean either misconfiguration or deliberate origin
+      manipulation, and major networks already drop such routes --
+      attackers exploit the ones that do not.
+    severity: medium
+    weight: 15
+    tags: [routing, rpki]
+    references: ["RFC 6811"]
+    conditions:
+      - field: rpki_invalid
+        operator: gte
+        value: 1
+
+  - id: ASN-008
+    title: No IRR records
+    description: >-
+      The AS has no routing-policy objects in the Internet Routing
+      Registries. Missing IRR data makes filter generation impossible
+      and is typical of short-lived or deliberately opaque networks.
+    severity: info
+    weight: 5
+    tags: [routing, irr]
+    conditions:
+      - field: irr_records
+        operator: empty
+        value: true
+
+  - id: ASN-009
+    title: Isolated AS (few peers)
+    description: >-
+      Five or fewer visible peers connect this AS to the table. Extreme
+      isolation fits small regional networks, but also stealthy attack
+      ranges deliberately kept off the major backbones.
+    severity: info
+    weight: 5
+    tags: [routing, topology]
+    conditions:
+      - field: peers
+        operator: lte
+        value: 5
+
+  - id: ASN-010
+    title: Holder registered in a secrecy jurisdiction
+    description: >-
+      The holder's registration country is one where corporate secrecy
+      makes operator identification slow. Useful context for
+      attribution effort estimates; it is a jurisdictional fact, not
+      suspicion of the operator itself.
+    severity: low
+    weight: 10
+    tags: [geolocation, accountability]
+    conditions:
+      - field: registration_country
+        operator: in
+        value: [PA, KY, LI, SC, BZ, VU, MH, BS, CK]

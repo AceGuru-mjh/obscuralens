@@ -1,0 +1,139 @@
+# ObscuraLens explainable rule pack -- mac
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the MAC tracker output: vendor, locally_administered,
+# is_multicast, oui_known... MAC rules are identifier-integrity signals
+# (hardware vs virtual vs randomised), never device-owner statements.
+# ---------------------------------------------------------------------------
+
+name: mac-rules
+description: >-
+  Explainable identifier-integrity heuristics for MAC address lookups:
+  virtualisation vendors, randomised local bits and malformed OUIs.
+version: 1
+rules:
+  - id: MAC-001
+    title: VMware virtual NIC
+    description: >-
+      The OUI belongs to VMware. A VMware MAC means the identifier comes
+      from a virtual machine, so it identifies a software container that
+      can be cloned or re-created at will, not a physical network card.
+    severity: info
+    weight: 0
+    tags: [virtualisation]
+    conditions:
+      - field: vendor
+        operator: startswith
+        value: VMware
+
+  - id: MAC-002
+    title: Locally administered address
+    description: >-
+      The second-least-significant bit of the first octet marks this as a
+      locally administered address rather than a burned-in one. Modern
+      client OSes randomise this bit per network for privacy, so the
+      address cannot be tied to the hardware's factory OUI.
+    severity: info
+    weight: 5
+    tags: [randomisation]
+    references: ["IEEE 802 overview of locally administered addresses"]
+    conditions:
+      - field: locally_administered
+        operator: is_true
+
+  - id: MAC-003
+    title: Randomised client address
+    description: >-
+      The address is locally administered and unicast -- the exact
+      combination iOS, Android and Windows generate when MAC
+      randomisation is on. Tracking a device by this address works only
+      until the client rotates it.
+    severity: low
+    weight: 10
+    tags: [randomisation]
+    conditions:
+      - field: locally_administered
+        operator: is_true
+      - field: is_multicast
+        operator: is_false
+
+  - id: MAC-004
+    title: Unknown OUI
+    description: >-
+      No vendor is registered for the prefix in the shipped IEEE OUI
+      pack. Unregistered prefixes come from virtual switches, custom
+      firmware and deliberately spoofed cards, so the vendor attribution
+      layer simply has nothing to say.
+    severity: info
+    weight: 5
+    tags: [registry]
+    conditions:
+      - field: vendor
+        operator: empty
+        value: true
+
+  - id: MAC-005
+    title: Virtualisation vendor pattern
+    description: >-
+      The vendor string matches virtualisation stacks (VirtualBox, QEMU/
+      KVM, Xen, Hyper-V, Parallels). As with VMware MACs, the identifier
+      describes a VM -- useful for infrastructure triage, useless for
+      hardware-level attribution.
+    severity: info
+    weight: 5
+    tags: [virtualisation]
+    conditions:
+      - field: vendor
+        operator: regex
+        value: '(?i)(virtual|qemu|kvm|xen|hyper|parallels|virtualbox)'
+
+  - id: MAC-006
+    title: Multicast bit set
+    description: >-
+      The least-significant bit of the first octet marks a multicast
+      destination, which a real source interface never uses as its own
+      address. Seeing one as a device identifier means it was typed
+      manually or generated as a placeholder.
+    severity: info
+    weight: 5
+    tags: [validity]
+    conditions:
+      - field: is_multicast
+        operator: is_true
+
+  - id: MAC-007
+    title: Randomised plus unknown vendor
+    description: >-
+      The address is locally administered AND no vendor resolves -- a
+      fully synthetic identifier. Hosts that present synthetic MACs are
+      usually containers or anti-fingerprinting setups, and neither
+      should be correlated with hardware inventory.
+    severity: low
+    weight: 10
+    tags: [randomisation, registry]
+    conditions:
+      - field: locally_administered
+        operator: is_true
+      - field: vendor
+        operator: empty
+        value: true
+
+  - id: MAC-008
+    title: Valid registered hardware OUI
+    description: >-
+      A real vendor is registered and the address is globally
+      administered -- a normal burned-in identifier. Positive context
+      that keeps this kind of rule set honest about non-findings.
+    severity: info
+    weight: 0
+    tags: [registry, positive]
+    conditions:
+      - field: vendor
+        operator: not_empty
+        value: true
+      - field: locally_administered
+        operator: is_false

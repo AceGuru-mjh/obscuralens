@@ -1,0 +1,196 @@
+# ObscuraLens explainable rule pack -- url
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the URL tracker output: redirect_chain_length, host, tld,
+# scheme, path, query, urlscan_verdict, first_archive, port...
+# ---------------------------------------------------------------------------
+
+name: url-rules
+description: >-
+  Explainable phishing-lure heuristics for URL lookups: redirection,
+  obfuscation and content-verdict signals.
+version: 1
+rules:
+  - id: URL-001
+    title: Long redirect chain
+    description: >-
+      The final page is reached through five or more redirects. Long
+      chains are used to launder referrers, defeat blocklists and A/B
+      test victims between phishing kits and clean fallback pages.
+    severity: medium
+    weight: 15
+    tags: [redirect, phishing]
+    conditions:
+      - field: redirect_chain_length
+        operator: gte
+        value: 5
+
+  - id: URL-002
+    title: Raw IP address as host
+    description: >-
+      The URL points straight at an IP literal. No certificate name
+      validation, no WHOIS trail and no reputation history apply --
+      hosting a lure on a bare IP is standard short-lived phishing
+      practice.
+    severity: high
+    weight: 20
+    tags: [obfuscation, phishing]
+    references: ["MITRE ATT&CK T1566.002"]
+    conditions:
+      - field: host
+        operator: regex
+        value: '^\d{1,3}(\.\d{1,3}){3}$'
+
+  - id: URL-003
+    title: Punycode host
+    description: >-
+      The hostname contains punycode (xn--), i.e. non-ASCII characters
+      rendered into ASCII. Homoglyph domains like these imitate well-known
+      brands character-by-character and defeat casual visual inspection.
+    severity: high
+    weight: 20
+    tags: [homoglyph, phishing]
+    references: ["RFC 3492", "MITRE ATT&CK T1566.002"]
+    conditions:
+      - field: host
+        operator: contains
+        value: xn--
+
+  - id: URL-004
+    title: Frequently abused TLD
+    description: >-
+      The URL's extension is one where cheap registration keeps abuse
+      rates persistently high in phishing feed statistics. One more
+      input for the lure prior, not a verdict on the content.
+    severity: medium
+    weight: 15
+    tags: [tld, phishing]
+    conditions:
+      - field: tld
+        operator: in
+        value: [xyz, top, gq, cf, tk, ml, ga, work, click, country]
+
+  - id: URL-005
+    title: Scanner verdict malicious
+    description: >-
+      urlscan.io classified the page as malicious. This is automated
+      confirmation of hostile content at this exact URL rather than a
+      neighbourhood or age signal.
+    severity: high
+    weight: 25
+    tags: [reputation, scanners]
+    conditions:
+      - field: urlscan_verdict
+        operator: eq
+        value: malicious
+
+  - id: URL-006
+    title: First archived days ago
+    description: >-
+      The earliest archive.org capture is under 30 days old. Either the
+      site is genuinely new or it recently changed hands; both fit the
+      short lifetime of campaign infrastructure.
+    severity: medium
+    weight: 15
+    tags: [age]
+    conditions:
+      - field: first_archive
+        operator: age_lt_days
+        value: 30
+
+  - id: URL-007
+    title: Credential parameters in query
+    description: >-
+      The query string carries parameter names like password=, passwd=
+      or login= on a GET request. Credentials in URLs end up in logs,
+      referrers and browser history -- a hallmark of naive phishing kits
+      and a privacy leak even on legitimate sites.
+    severity: high
+    weight: 20
+    tags: [credentials, phishing]
+    references: ["MITRE ATT&CK T1552", "RFC 9110"]
+    conditions:
+      - field: query
+        operator: regex
+        value: '(?i)(password|passwd|pwd|login|account|user|email)='
+
+  - id: URL-008
+    title: Login form over plain HTTP
+    description: >-
+      An http:// URL serves a path that looks like a login form. The
+      credentials will cross the network in cleartext, and no padlock
+      identity check is possible -- legitimate logins abandoned this
+      years ago.
+    severity: medium
+    weight: 15
+    tags: [credentials, tls]
+    references: ["RFC 9110", "MITRE ATT&CK T1557"]
+    conditions:
+      - field: scheme
+        operator: eq
+        value: http
+      - field: path
+        operator: contains
+        value: login
+
+  - id: URL-009
+    title: Non-standard port
+    description: >-
+      The URL names a port outside the usual web set. Odd ports often
+      hide control panels, bulletproof hosting panels or deliberately
+      unindexed services.
+    severity: low
+    weight: 10
+    tags: [obfuscation]
+    conditions:
+      - field: port
+        operator: not_in
+        value: [80, 443, 8080, 8443]
+
+  - id: URL-010
+    title: Deeply nested subdomains
+    description: >-
+      Four or more labels sit before the registrable domain. Campaign
+      infrastructure pads hostnames (secure.login.pay.example.com) so the
+      trusted-looking name appears early and the real domain hides at
+      the end.
+    severity: low
+    weight: 10
+    tags: [obfuscation, phishing]
+    conditions:
+      - field: host
+        operator: regex
+        value: '([a-z0-9-]+\.){4,}[a-z0-9-]+\.[a-z]{2,}'
+
+  - id: URL-011
+    title: Extremely long URL
+    description: >-
+      The URL is 150 characters or longer. Kit URLs encode tracking IDs
+      and victim selection into the path; sheer length is a weak but
+      cheap discriminator for manual review queues.
+    severity: info
+    weight: 5
+    tags: [pattern]
+    conditions:
+      - field: url_length
+        operator: gte
+        value: 150
+
+  - id: URL-012
+    title: Direct executable download
+    description: >-
+      The path ends in an executable extension. Drive-by droppers and
+      fake-update pages deliver payloads this way, and the pattern alone
+      justifies sandboxing before anyone clicks.
+    severity: high
+    weight: 20
+    tags: [malware, delivery]
+    references: ["MITRE ATT&CK T1204.002"]
+    conditions:
+      - field: path
+        operator: regex
+        value: '\.(exe|scr|bat|cmd|js|vbs|ps1|hta|jar|msi)$'
