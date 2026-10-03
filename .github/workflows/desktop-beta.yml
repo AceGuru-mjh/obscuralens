@@ -1,0 +1,212 @@
+name: Desktop Beta Release
+
+# Publishes the ObscuraLens Desktop Beta.
+#
+# Triggers:
+#   * pushing a tag matching "v*-beta*" (e.g. v5.1.0-beta.1)
+#   * manual dispatch (pick the branch to build from, provide the tag)
+#
+# Produces one GitHub Release (marked as a pre-release) with:
+#   * ObscuraLens-<version>-win-x64.exe   (primary desktop beta artifact)
+#   * ObscuraLens-<version>-linux-x64     (convenience binary)
+#   * ObscuraLens-<version>-macos-arm64   (convenience binary)
+#   * checksums.sha256
+#
+# The Windows executable is a single-file PyInstaller build: download it,
+# open a terminal next to it and run `ObscuraLens-...exe desktop` for the
+# desktop experience (local web UI in your browser) or `--help` for the CLI.
+
+on:
+  push:
+    tags:
+      - "v*-beta*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Beta tag to publish under (must look like v5.1.0-beta.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-beta-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win-x64
+            ext: .exe
+            smoke: dist/obscuralens.exe --version
+          - os: ubuntu-latest
+            platform: linux-x64
+            ext: ""
+            smoke: dist/obscuralens --version
+          - os: macos-latest
+            platform: macos-arm64
+            ext: ""
+            smoke: dist/obscuralens --version
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout (tagged commit or branch)
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Derive tag and version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building ${TAG} (version ${VERSION}) on ${{ matrix.platform }}"
+
+      - name: Install with exe extra
+        run: pip install ".[exe]"
+
+      - name: Build single-file executable
+        run: pyinstaller scripts/obscuralens.spec --noconfirm
+
+      - name: Smoke-test the executable
+        run: ${{ matrix.smoke }}
+
+      - name: Stage versioned artifact + checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          ASSET="ObscuraLens-${{ steps.ver.outputs.version }}-${{ matrix.platform }}${{ matrix.ext }}"
+          cp "dist/obscuralens${{ matrix.ext }}" "release/${ASSET}"
+          cd release
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${ASSET}" > "${ASSET}.sha256"
+          else
+            shasum -a 256 "${ASSET}" > "${ASSET}.sha256"
+          fi
+          ls -lh .
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Merge checksums
+        run: |
+          cd release
+          cat *.sha256 > checksums.sha256 || true
+          rm -f *.sha256
+          ls -lh .
+
+      - name: Derive tag and version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create the Desktop Beta release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ObscuraLens Desktop Beta ${{ steps.ver.outputs.tag }}
+          prerelease: true
+          make_latest: "false"
+          files: release/*
+          generate_release_notes: true
+          body: |
+            ## ObscuraLens Desktop — Beta channel
+
+            This is a **pre-release beta** build of the ObscuraLens desktop
+            edition. It bundles the full CLI, the 14-kinder investigation
+            engine, the local web UI and the desktop launcher into a single
+            portable executable — no Python installation required.
+
+            ### Downloads
+
+            | File | Platform | How to run |
+            |---|---|---|
+            | `ObscuraLens-${{ steps.ver.outputs.version }}-win-x64.exe` | Windows 10/11 x64 | download, then run it from a terminal |
+            | `ObscuraLens-${{ steps.ver.outputs.version }}-linux-x64` | Linux x64 | `chmod +x` then run |
+            | `ObscuraLens-${{ steps.ver.outputs.version }}-macos-arm64` | macOS 13+ (Apple Silicon) | `chmod +x` then run |
+            | `checksums.sha256` | all | SHA-256 digests for every asset |
+
+            ### Quick start (Windows)
+
+            1. Download `ObscuraLens-${{ steps.ver.outputs.version }}-win-x64.exe`
+               from the assets below.
+            2. Open PowerShell or Windows Terminal in your Downloads folder.
+            3. Launch the desktop experience:
+
+               ```powershell
+               .\ObscuraLens-${{ steps.ver.outputs.version }}-win-x64.exe desktop
+               ```
+
+               Your browser opens the local web UI at `http://127.0.0.1:8000`.
+               Everything stays on your machine — the app only talks to the
+               public OSINT data sources you query.
+
+            4. Prefer the terminal? The same exe is the full CLI:
+
+               ```powershell
+               .\ObscuraLens-${{ steps.ver.outputs.version }}-win-x64.exe ip 8.8.8.8 -f json
+               .\ObscuraLens-${{ steps.ver.outputs.version }}-win-x64.exe --help
+               ```
+
+            ### Verify the download
+
+            ```powershell
+            Get-FileHash .\ObscuraLens-${{ steps.ver.outputs.version }}-win-x64.exe -Algorithm SHA256
+            ```
+
+            Compare against `checksums.sha256`.
+
+            ### Notes for beta testers
+
+            * First launch can take a few seconds (single-file unpack).
+            * API keys are optional — every tracker works keyless first.
+            * Run `obscuralens update check` (or the in-app About view) to see
+              whether a newer beta is available.
+            * Found something odd? Open an issue and tag it `desktop-beta`.
+
+            ### System requirements
+
+            * Windows 10/11 (x64), macOS 13+ (arm64) or a modern Linux x64.
+            * ~250 MB free RAM for typical lookups; ~150 MB disk.
+            * Internet access for live lookups (offline packs work without).
