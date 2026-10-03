@@ -35,7 +35,8 @@ def test_module_singleton_and_helpers():
     assert cases_path() == Path(os.environ['OBSCURALENS_SQLITE_PATH'])
     assert cases_enabled() is True
     assert KNOWN_KINDS == ('ip', 'phone', 'username', 'email', 'domain',
-                           'crypto', 'hash', 'url', 'cve', 'asn', 'other')
+                           'crypto', 'hash', 'url', 'cve', 'asn', 'mac',
+                           'iban', 'imei', 'coords', 'other')
 
 
 def test_create_case_and_duplicate(manager):

@@ -22,3 +22,8 @@ reportlab>=3.6.0
 # Development / testing: pip install -e ".[dev]"
 # pytest>=7.0
 # ruff>=0.4
+
+# Web UI + REST API (served by ./start.sh; pip install -e ".[web]" equivalent)
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9

@@ -19,6 +19,11 @@ Result shape::
 Verdict bands: 0-14 clean, 15-39 low, 40-69 medium, 70-89 high, 90+
 critical. A payload without populated fields scores 'unknown'. Crypto and
 username scores are framed as activity/exposure profiles, not risk.
+
+v5.0 adds identifier-integrity scorers for the mac / iban / imei / coords
+kinds: they weigh checksum verdicts, randomized/virtualization bits,
+curated-pack misses and unresolved reverse geocoding - still technical
+signals about identifiers, never statements about people.
 """
 
 import contextlib
@@ -51,6 +56,22 @@ _FLAVOR = {'crypto': 'activity profile', 'username': 'exposure profile'}
 _NEW_DOMAIN_DAYS = 30
 _VERY_NEW_DOMAIN_DAYS = 7
 _RECENT_BREACH_DAYS = 90
+
+#: Virtualization NIC vendors: a VM's MAC says nothing about a physical
+#: device, so it is surfaced as an informational signal, not suspicion.
+_VIRTUALIZATION_VENDORS = ('vmware', 'virtualbox', 'qemu', 'kvm', 'hyper-v', 'xen')
+
+#: Heuristic list of issuer countries whose banking secrecy makes an IBAN
+#: worth a second look (classic shell-company jurisdictions). This is a
+#: reputation heuristic, NOT an allegation: legitimate accounts exist everywhere.
+_SECRECY_JURISDICTIONS = frozenset((
+    'panama', 'cayman islands', 'liechtenstein', 'seychelles', 'belize',
+    'vanuatu', 'marshall islands', 'cyprus', 'bahamas', 'cook islands',
+))
+
+#: Geohash precision at or beyond which a position is meter-level (7 chars
+#: ~ 150 m cells, 9 chars ~ 5 m cells).
+_METER_PRECISION_GEOHASH = 7
 
 
 # ---------------------------------------------------------------------------
@@ -563,6 +584,134 @@ def _score_asn(info: Dict[str, Any], payload: Dict[str, Any]) -> List[Dict[str, 
     return signals
 
 
+def _score_mac(info: Dict[str, Any], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    # NIC provenance and address-class signals: who burned the OUI and
+    # whether the bits say "real hardware NIC" at all.
+    signals: List[Dict[str, Any]] = []
+
+    def add(sid: str, weight: int, detail: str) -> None:
+        signals.append({'id': sid, 'weight': weight, 'detail': detail})
+
+    if info.get('is_multicast') is True:
+        add('multicast_bit', 10,
+            'multicast/broadcast address, not a device NIC')
+
+    if info.get('is_locally_administered') is True:
+        add('locally_administered', 8,
+            'randomized/privacy MAC or virtual NIC - vendor from OUI pack '
+            'may be arbitrary')
+
+    vendor = _text(info.get('vendor'))
+    if vendor:
+        lowered = vendor.lower()
+        if any(name in lowered for name in _VIRTUALIZATION_VENDORS):
+            add('virtualization_vendor', 3,
+                f"virtualization NIC ({vendor})")
+    else:
+        add('unknown_vendor', 2,
+            'OUI not in curated pack (offline IEEE subset miss)')
+
+    return signals
+
+
+def _score_iban(info: Dict[str, Any], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    # Structural integrity plus issuer context; jurisdiction weight is a
+    # heuristic about commonly-abused secrecy centres, never an allegation.
+    signals: List[Dict[str, Any]] = []
+
+    def add(sid: str, weight: int, detail: str) -> None:
+        signals.append({'id': sid, 'weight': weight, 'detail': detail})
+
+    # The tracker gates on mod-97 before any source runs, so checksum_valid
+    # is normally True; structure_ok alone (openiban-style payloads) still
+    # earns the informational verdict.
+    if info.get('checksum_valid') is True \
+            or (info.get('checksum_valid') is None
+                and info.get('structure_ok') is True):
+        add('checksum_valid', 0,
+            'mod-97 checksum verified - structurally genuine')
+
+    bank = _text(info.get('bank_name'))
+    if bank:
+        add('bank_identified', 0, f"issuing bank identified: {bank}")
+
+    country = _text(info.get('country_name'))
+    if country:
+        if country.strip().lower() in _SECRECY_JURISDICTIONS:
+            add('high_risk_jurisdiction', 10,
+                f"issuer country {country} is a commonly-abused secrecy "
+                'jurisdiction (heuristic)')
+    else:
+        add('unknown_country', 5, 'issuer country unresolved '
+            '(prefix not in the structure pack)')
+
+    return signals
+
+
+def _score_imei(info: Dict[str, Any], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    # Identifier integrity: a failed Luhn check is the classic marker of a
+    # re-stamped or fabricated handset identity.
+    signals: List[Dict[str, Any]] = []
+
+    def add(sid: str, weight: int, detail: str) -> None:
+        signals.append({'id': sid, 'weight': weight, 'detail': detail})
+
+    luhn = info.get('luhn_valid')
+    if luhn is True:
+        add('luhn_valid', 0, 'passes the Luhn check digit')
+    elif luhn is False:
+        expected = _text(info.get('expected_check_digit'))
+        detail = 'checksum mismatch - altered or fabricated IMEI'
+        if expected:
+            detail += f" (expected check digit {expected})"
+        add('luhn_invalid', 15, detail)
+
+    if not _text(info.get('manufacturer')):
+        add('tac_unknown', 4,
+            'TAC not in curated pack - rare or modified device')
+
+    body = _text(info.get('reporting_body'))
+    if body:
+        identifier = _text(info.get('reporting_body_identifier'))
+        add('reporting_body', 0,
+            f"certified by reporting body {body}"
+            + (f" (RBI {identifier})" if identifier else ''))
+
+    return signals
+
+
+def _score_coords(info: Dict[str, Any], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    # Position precision and reverse-geocode coverage: descriptive signals
+    # about the coordinate, not about anyone standing there.
+    signals: List[Dict[str, Any]] = []
+
+    def add(sid: str, weight: int, detail: str) -> None:
+        signals.append({'id': sid, 'weight': weight, 'detail': detail})
+
+    geohash = _text(info.get('geohash'))
+    if len(geohash) >= _METER_PRECISION_GEOHASH:
+        add('precision', 0,
+            f"geohash {geohash} carries {len(geohash)} characters - "
+            'meter-level precision')
+
+    elevation = _num(info.get('elevation_m'))
+    if elevation is not None:
+        add('elevation_present', 0,
+            f"terrain elevation {_fmt(elevation)} m above sea level")
+
+    place = _text(info.get('formatted_address')) or _text(info.get('place_name')) \
+        or _text(info.get('city')) or _text(info.get('locality'))
+    country = _text(info.get('country')) or _text(info.get('nearest_country'))
+    if place or country:
+        add('resolved_place', 0,
+            'reverse-geocoded to ' + (country or place))
+    else:
+        add('unresolved_place', 3,
+            'reverse geocoding failed - remote/ocean position or service down')
+
+    return signals
+
+
 _SCORERS = {
     'ip': _score_ip,
     'domain': _score_domain,
@@ -573,6 +722,10 @@ _SCORERS = {
     'username': _score_username,
     'cve': _score_cve,
     'asn': _score_asn,
+    'mac': _score_mac,
+    'iban': _score_iban,
+    'imei': _score_imei,
+    'coords': _score_coords,
 }
 
 
@@ -598,7 +751,8 @@ def score(kind: str, payload: Any) -> Dict[str, Any]:
 
     Args:
         kind: tracker kind ('ip', 'domain', 'email', 'username', 'url',
-            'hash', 'crypto', 'cve', 'asn'); other kinds score 0/clean
+            'hash', 'crypto', 'cve', 'asn', 'mac', 'iban', 'imei',
+            'coords'); other kinds score 0/clean
         payload: tracker result payload in any shape (never raises)
 
     Returns:

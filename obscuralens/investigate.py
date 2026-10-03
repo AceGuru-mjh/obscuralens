@@ -13,6 +13,11 @@ v4.0 pivots:
   * domain  -> the first A record's ASN is looked up as an AS number
   * cve     -> no pivot (reference data)
 
+v5.0 kinds (mac / iban / imei / coords) are reference data too: the MAC
+vendor, the IBAN bank, the IMEI manufacturer and the coordinates' place are
+all attributes of the target itself, so they surface as graph facts instead
+of pivot lookups (like cve and hash).
+
 The result is a self-contained payload with per-kind tracker results plus an
 entity list and a relationship list, renderable as a table, JSON or a Mermaid
 graph.
@@ -24,20 +29,24 @@ from typing import Any, Callable, Dict, List, Optional
 from .reporting.sections import sections_for
 from .utils.validators import (
     normalize_cve,
+    normalize_iban,
+    normalize_imei,
     validate_asn,
+    validate_coords,
     validate_crypto_address,
     validate_cve,
     validate_domain,
     validate_email,
     validate_hash,
     validate_ip,
+    validate_mac,
     validate_phone,
     validate_url,
     validate_username,
 )
 
 KINDS = ('ip', 'phone', 'username', 'email', 'domain', 'url', 'crypto',
-         'hash', 'cve', 'asn')
+         'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords')
 
 
 def detect_kind(target: str) -> Optional[str]:
@@ -60,8 +69,35 @@ def detect_kind(target: str) -> Optional[str]:
     if value.lower().startswith(('as',)) and validate_asn(value)[0] \
             and re.match(r'^as\d+$', value.strip(), re.I):
         return 'asn'
+    # v5.0 MAC: after url/cve/hash (longer, unambiguous shapes) but before
+    # domain and phone - a Cisco dotted MAC "b827.ebdc.aabb" is also a
+    # syntactically valid domain, and a digits-only MAC such as
+    # "12-34-56-78-90-12" matches the phone validator once its dashes are
+    # stripped. validate_mac accepts colon, dash and dot notations.
+    if validate_mac(value)[0]:
+        return 'mac'
+    # v5.0 IBAN: after email (emails carry '@') and after url, and before
+    # username (an IBAN is alphanumeric and would otherwise classify as a
+    # username). SHAPE ONLY - normalize_iban, not the mod-97 checksum - so a
+    # typo'd IBAN still classifies as iban and the tracker reports the
+    # checksum failure instead of the kind silently changing.
+    if normalize_iban(value):
+        return 'iban'
     if '.' in value and validate_domain(value)[0]:
         return 'domain'
+    # v5.0 IMEI: before phone because validate_phone happily accepts a bare
+    # 15-digit string. After domain so a purely numeric dotted host stays a
+    # domain; dash/space separated and bare IMEIs carry no dot and land here.
+    # Shape only (normalize_imei) - the Luhn verdict belongs to the tracker.
+    if normalize_imei(value):
+        return 'imei'
+    # v5.0 coords: before phone because the DD pair separator class includes
+    # spaces ("48.8584 2.2945") and validate_phone strips spaces and dots
+    # before counting digits, so a space-separated pair would otherwise be
+    # classified as a phone number. Barely anything else can look like DD,
+    # DMS, UTM or MGRS shapes, so this stays near the end of the chain.
+    if validate_coords(value)[0]:
+        return 'coords'
     if validate_phone(value)[0]:
         return 'phone'
     if validate_crypto_address(value)[0]:
@@ -75,12 +111,16 @@ def _default_checker(kind: str, target: str) -> Dict[str, Any]:
     """Run the real tracker for a kind (imported lazily to avoid cycles)."""
     from .trackers import (
         ASNTracker,
+        CoordsTracker,
         CryptoTracker,
         CVETracker,
         DomainTracker,
         EmailTracker,
         HashTracker,
+        IBANTracker,
+        IMEITracker,
         IPTracker,
+        MACTracker,
         PhoneTracker,
         URLTracker,
         UsernameTracker,
@@ -90,6 +130,8 @@ def _default_checker(kind: str, target: str) -> Dict[str, Any]:
         'email': EmailTracker, 'domain': DomainTracker,
         'url': URLTracker, 'crypto': CryptoTracker, 'hash': HashTracker,
         'cve': CVETracker, 'asn': ASNTracker,
+        'mac': MACTracker, 'iban': IBANTracker,
+        'imei': IMEITracker, 'coords': CoordsTracker,
     }
     return trackers[kind]().track(target)
 
@@ -282,6 +324,58 @@ def _add_asn_facts(graph: _Graph, result: Dict[str, Any]) -> None:
         graph.link(node, graph.add_entity('prefix', prefix), 'announces')
 
 
+def _add_mac_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity('mac', result.get('mac'),
+                            label=f"{info.get('vendor', 'MAC')}: "
+                                  f"{result.get('mac', '')}")
+    if not node:
+        return
+    graph.link(node, graph.add_entity('organisation', info.get('vendor')),
+               'made_by')
+
+
+def _add_iban_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity('iban', result.get('iban'),
+                            label=f"{info.get('country_name', 'IBAN')}: "
+                                  f"{result.get('iban', '')}")
+    if not node:
+        return
+    graph.link(node, graph.add_entity('country', info.get('country_name')),
+               'issued_in')
+    graph.link(node, graph.add_entity('bank', info.get('bank_name')),
+               'held_at')
+
+
+def _add_imei_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity('imei', result.get('imei'),
+                            label=f"{info.get('manufacturer', 'IMEI')}: "
+                                  f"{result.get('imei', '')}")
+    if not node:
+        return
+    graph.link(node, graph.add_entity('organisation', info.get('manufacturer')),
+               'made_by')
+    graph.link(node, graph.add_entity('device', info.get('model')),
+               'model_family')
+
+
+def _add_coords_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity('coords', result.get('coords'),
+                            label=info.get('formatted_address')
+                            or info.get('place_name')
+                            or result.get('coords', ''))
+    if not node:
+        return
+    country = info.get('country') or info.get('nearest_country')
+    graph.link(node, graph.add_entity('country', country), 'located_in')
+    place = info.get('formatted_address') or info.get('place_name') \
+        or info.get('city') or info.get('locality')
+    graph.link(node, graph.add_entity('place', place), 'near')
+
+
 _GRAPH_BUILDERS = {
     'domain': _add_domain_facts,
     'ip': _add_ip_facts,
@@ -293,6 +387,10 @@ _GRAPH_BUILDERS = {
     'hash': _add_hash_facts,
     'cve': _add_cve_facts,
     'asn': _add_asn_facts,
+    'mac': _add_mac_facts,
+    'iban': _add_iban_facts,
+    'imei': _add_imei_facts,
+    'coords': _add_coords_facts,
 }
 
 
@@ -303,7 +401,9 @@ def investigate(target: str, pivot: bool = True, max_pivots: int = 3,
     Investigate any supported target and follow bounded pivots.
 
     Args:
-        target: IP / domain / email / phone / username
+        target: any supported kind value (IP / domain / email / phone /
+            username / url / crypto / hash / cve / asn / mac / iban /
+            imei / coords)
         pivot: follow related targets (email->domain, domain->A, ip->PTR)
         max_pivots: maximum related lookups of each kind
         checker: injectable ``callable(kind, value) -> result`` for tests
@@ -376,6 +476,9 @@ def investigate(target: str, pivot: bool = True, max_pivots: int = 3,
             domain = primary.get('domain') or (primary.get('info') or {}).get('domain')
             if domain and validate_domain(str(domain))[0]:
                 pivot_to('domain', str(domain))
+        # v5.0 mac / iban / imei / coords need no pivot branches: like cve
+        # and hash they are reference data whose attributes (vendor, bank,
+        # manufacturer, place) surface as graph facts, not as new lookups.
 
     graph = _Graph(value, kind)
     for kind_name, result in payload['results'].items():

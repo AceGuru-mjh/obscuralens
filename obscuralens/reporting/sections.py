@@ -426,6 +426,113 @@ def asn_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [s for s in sections if s.get('data') or s.get('rows')]
 
 
+# ---------------------------------------------------------------------------
+# v5.0 kinds
+# ---------------------------------------------------------------------------
+
+def mac_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Identity', ('vendor', 'oui', 'vendor_country', 'vendor_address',
+                      'assignment_type', 'eui64_expansion')),
+        ('Network Hints', ('is_multicast', 'is_locally_administered',
+                           'transmission', 'assignment', 'randomization_hint',
+                           'reserved_block', 'virtualization_hint',
+                           'embedded_ipv4', 'ipv6_interface_id',
+                           'ipv6_link_local_hint')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def iban_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Issuing Bank', ('country_name', 'country_code', 'bank_code',
+                          'bank_name', 'bic')),
+        ('Structure & Format', ('structure_ok', 'checksum_valid',
+                                'expected_length', 'length', 'check_digits',
+                                'formatted', 'masked_iban', 'bban',
+                                'account_number')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def imei_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Decomposition (3GPP TS 23.003)',
+         ('imei_type', 'tac', 'reporting_body_identifier', 'reporting_body',
+          'serial_number', 'check_digit', 'expected_check_digit',
+          'software_version', 'luhn_valid', 'formatted')),
+        ('Device', ('manufacturer', 'model')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def coords_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Position', ('latitude', 'longitude', 'coords_display',
+                      'latitude_dms', 'longitude_dms', 'coords_ddm', 'utm',
+                      'mgrs', 'geohash', 'maidenhead', 'hemisphere')),
+        ('Place & Terrain', ('formatted_address', 'place_name', 'city',
+                             'locality', 'county', 'region', 'postcode',
+                             'road', 'house_number', 'country', 'country_code',
+                             'elevation_m', 'nearest_country',
+                             'nearest_country_code',
+                             'nearest_country_distance_km',
+                             'timezone_offset_hint')),
+        ('Solar Position (photo cross-check)',
+         ('solar_altitude_deg', 'solar_azimuth_deg', 'is_daylight',
+          'solar_sunrise_utc', 'solar_sunset_utc', 'solar_note')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
 def sections_for(kind: str, result: Dict[str, Any]) -> List[Dict[str, Any]]:
     builders = {
         'ip': ip_sections,
@@ -439,6 +546,11 @@ def sections_for(kind: str, result: Dict[str, Any]) -> List[Dict[str, Any]]:
         'hash': hash_sections,
         'cve': cve_sections,
         'asn': asn_sections,
+        # v5.0 kinds
+        'mac': mac_sections,
+        'iban': iban_sections,
+        'imei': imei_sections,
+        'coords': coords_sections,
     }
     builder = builders.get(kind)
     return builder(result) if builder else []

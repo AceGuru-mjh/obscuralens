@@ -105,6 +105,30 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  desktop:
+    # Focused check for the v5.1 desktop beta surface: the desktop module,
+    # i18n catalogues, offline data packs, SDK and rule packs. These are all
+    # stdlib(+yaml/jinja2) modules, so the plain dev install suffices.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: pip install -e ".[dev]"
+      - name: Desktop beta surface tests
+        run: |
+          pytest tests/test_desktop.py tests/test_i18n.py tests/test_data_catalog.py \
+                 tests/test_sdk.py tests/test_rules.py tests/test_templates.py -q
+      - name: Desktop CLI smoke test
+        run: |
+          python -m obscuralens desktop --diagnostics | head -40
+          python -m obscuralens data country US
+          python -m obscuralens data port 22
+          python -m obscuralens i18n list
+          python -m obscuralens data stats
+
   exe:
     # Best-effort standalone Windows executable; the artifact is uploaded even
     # if a future PyInstaller/hook regression breaks the build.
@@ -121,6 +145,42 @@ jobs:
         run: pyinstaller scripts/obscuralens.spec --noconfirm
       - name: Smoke-test the executable
         run: dist/obscuralens.exe --version
+      - name: Boot-test the frozen web UI
+        # A frozen app cannot pip-install extras at runtime, so the bundled
+        # web stack must actually start: boot `serve`, poll /api/health,
+        # then stop the server again. Exe output is captured so even a
+        # silent early exit leaves evidence in the log.
+        shell: pwsh
+        run: |
+          $log = 'frozen-serve.log'
+          $proc = Start-Process -FilePath dist/obscuralens.exe `
+            -ArgumentList 'serve', '--port', '18080' `
+            -RedirectStandardOutput $log `
+            -RedirectStandardError "$log.err" -PassThru
+          try {
+            $ok = $false
+            for ($i = 0; $i -lt 75 -and -not $proc.HasExited; $i++) {
+              try {
+                $r = Invoke-RestMethod http://127.0.0.1:18080/api/health `
+                  -TimeoutSec 5
+                if ($r.status -eq 'ok') { $ok = $true; break }
+              } catch { Start-Sleep 4 }
+            }
+            if (-not $ok) {
+              if ($proc.HasExited) {
+                Write-Output ("frozen exe exited early with code {0}" `
+                  -f $proc.ExitCode)
+              } else {
+                Write-Output 'frozen exe still alive but never answered'
+              }
+              Write-Output '--- frozen-serve.log tail ---'
+              Get-Content $log -Tail 60 -ErrorAction SilentlyContinue
+              Get-Content "$log.err" -Tail 60 -ErrorAction SilentlyContinue
+              throw 'frozen web UI did not answer /api/health'
+            }
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          }
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

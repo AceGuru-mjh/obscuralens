@@ -1,0 +1,255 @@
+# ObscuraLens explainable rule pack -- domain
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the domain tracker output: registration.age_days (nested
+# registration block), dmarc_record, spf_record, mx_records, tld, dnssec...
+# ---------------------------------------------------------------------------
+
+name: domain-rules
+description: >-
+  Explainable age, mail-security posture and reputation heuristics for
+  domain name lookups.
+version: 1
+rules:
+  - id: DOMAIN-001
+    title: Very young domain
+    description: >-
+      The domain was registered within the last 30 days. Newly registered
+      domains are heavily over-represented in phishing and malware
+      distribution because they are cheap, unburned and unscored by
+      reputation feeds. Many legitimate domains are also young, so treat
+      this as one input among several.
+    severity: medium
+    weight: 20
+    tags: [age, phishing]
+    references: ["MITRE ATT&CK T1583.001"]
+    conditions:
+      - field: registration.age_days
+        operator: lte
+        value: 30
+
+  - id: DOMAIN-002
+    title: Days-old domain
+    description: >-
+      The domain is less than a week old. Campaign domains are frequently
+      registered and burned within days, making a registration this fresh
+      a strong phishing-kit indicator when combined with look-alike
+      naming.
+    severity: high
+    weight: 25
+    tags: [age, phishing]
+    references: ["MITRE ATT&CK T1583.001", "MITRE ATT&CK T1566.002"]
+    conditions:
+      - field: registration.age_days
+        operator: lte
+        value: 7
+
+  - id: DOMAIN-003
+    title: No DMARC policy
+    description: >-
+      The domain publishes no DMARC record. Without a DMARC policy the
+      domain can be freely spoofed in the From header, which is exactly
+      what display-name and look-alike phishing relies on.
+    severity: medium
+    weight: 10
+    tags: [mail, spoofing]
+    references: ["RFC 7489"]
+    conditions:
+      - field: dmarc_record
+        operator: empty
+        value: true
+
+  - id: DOMAIN-004
+    title: SPF permits every sender
+    description: >-
+      The SPF record ends in '+all', authorising the entire internet to
+      send mail for this domain. The record neutralises SPF completely and
+      is almost always a misconfiguration or a deliberate anti-filtering
+      trick.
+    severity: high
+    weight: 25
+    tags: [mail, spoofing]
+    references: ["RFC 7208"]
+    conditions:
+      - field: spf_record
+        operator: contains
+        value: +all
+
+  - id: DOMAIN-005
+    title: SPF is neutral for everyone
+    description: >-
+      The SPF record ends in '?all', marking every sender neutral. Unlike
+      '-all' it asks receivers to take no action, so spoofed mail passes
+      just as if no SPF existed.
+    severity: medium
+    weight: 15
+    tags: [mail, spoofing]
+    references: ["RFC 7208"]
+    conditions:
+      - field: spf_record
+        operator: contains
+        value: ?all
+
+  - id: DOMAIN-006
+    title: No MX records
+    description: >-
+      The domain cannot receive mail (no MX, not even a Null MX). This is
+      normal for pure web domains, but a domain that sends mail while
+      being unable to receive replies is a common spam and phishing
+      pattern.
+    severity: low
+    weight: 5
+    tags: [mail]
+    references: ["RFC 5321", "RFC 7505"]
+    conditions:
+      - field: mx_records
+        operator: empty
+        value: true
+
+  - id: DOMAIN-007
+    title: Wildcard certificate in transparency log
+    description: >-
+      A wildcard TLS certificate covers every subdomain of this name.
+      Phishing kits favour wildcards so they can spin up random hostnames
+      (secure-login, verify-app, ...) without new certificate issuance.
+    severity: info
+    weight: 5
+    tags: [tls, phishing]
+    conditions:
+      - field: wildcard_cert
+        operator: is_true
+
+  - id: DOMAIN-008
+    title: Privacy-protected and young
+    description: >-
+      WHOIS privacy redacts the registrant on a domain younger than 60
+      days. Privacy services are legitimate, but combined with a fresh
+      registration they remove both reputation history and an accountable
+      contact, which brand-abuse operations exploit.
+    severity: medium
+    weight: 15
+    tags: [whois, age]
+    conditions:
+      - field: registration.privacy_protected
+        operator: is_true
+      - field: registration.age_days
+        operator: lte
+        value: 60
+
+  - id: DOMAIN-009
+    title: Frequently abused TLD
+    description: >-
+      The extension is one where cheap or free registration keeps abuse
+      rates persistently high in public phishing feed statistics. The TLD
+      alone proves nothing; it raises the prior for the other signals.
+    severity: medium
+    weight: 15
+    tags: [tld, phishing]
+    conditions:
+      - field: tld
+        operator: in
+        value: [xyz, top, gq, cf, tk, ml, ga, work, click, country]
+
+  - id: DOMAIN-010
+    title: DNSSEC not enabled
+    description: >-
+      The zone is not signed. Without DNSSEC, cache-poisoning and
+      zone-impersonation attacks against this domain's records cannot be
+      detected by resolvers -- a hardening gap rather than a compromise
+      indicator.
+    severity: low
+    weight: 5
+    tags: [dns, hardening]
+    references: ["RFC 4033"]
+    conditions:
+      - field: dnssec
+        operator: is_false
+
+  - id: DOMAIN-011
+    title: MX points into private address space
+    description: >-
+      A mail exchanger resolves into RFC 1918 space. No internet mail can
+      legitimately be delivered there, so the zone is either broken or
+      deliberately weird -- worth checking before trusting its mail.
+    severity: low
+    weight: 10
+    tags: [mail, dns]
+    references: ["RFC 1918"]
+    conditions:
+      - field: mx_on_private
+        operator: is_true
+
+  - id: DOMAIN-012
+    title: Parked-domain page
+    description: >-
+      The HTTP title advertises the domain as parked or for sale. Parked
+      names carry stale reputation and are frequently re-registered by
+      abusers, so history attached to them may not carry over.
+    severity: info
+    weight: 5
+    tags: [content]
+    conditions:
+      - field: http_title
+        operator: contains
+        value: for sale
+
+  - id: DOMAIN-013
+    title: Typosquat of a popular domain
+    description: >-
+      The name is a small edit away from a well-known domain (added
+      letter, swapped pair, homoglyph). Typosquats are the bread-and-
+      butter of credential phishing and ad-fraud networks.
+    severity: high
+    weight: 20
+    tags: [typosquat, phishing]
+    references: ["MITRE ATT&CK T1566.002"]
+    conditions:
+      - field: typosquat_of_popular
+        operator: not_empty
+        value: true
+
+  - id: DOMAIN-014
+    title: Scans judged malicious
+    description: >-
+      One or more urlscan.io scans of this domain reached a malicious
+      verdict. Automated confirmation that the hosted content itself --
+      not just its neighbourhood -- is hostile.
+    severity: high
+    weight: 25
+    tags: [reputation, scanners]
+    conditions:
+      - field: urlscan_malicious_verdicts
+        operator: gte
+        value: 1
+
+  - id: DOMAIN-015
+    title: Registration already expired
+    description: >-
+      The registration has lapsed. Expired domains lose their history on
+      re-registration, and drop-catchers routinely re-sell them into
+      redirect and malvertising schemes.
+    severity: low
+    weight: 5
+    tags: [whois, lifecycle]
+    conditions:
+      - field: domain_status
+        operator: contains
+        value: expired
+
+  - id: DOMAIN-016
+    title: Registration expires within a week
+    description: >-
+      The registration lapses in seven days or less. Domains about to
+      expire often host throwaway content, and a sudden expiry lets the
+      name drop into someone else's campaign.
+    severity: low
+    weight: 5
+    tags: [whois, lifecycle]
+    conditions:
+      - field: expires_in_days
+        operator: lte
+        value: 7

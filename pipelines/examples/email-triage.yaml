@@ -1,0 +1,92 @@
+# Email triage pipeline
+# ---------------------
+# Fast triage of a suspicious email address: enrich the address itself,
+# then pivot to its mail domain so deliverability and registration-age
+# signals can be checked side by side. Breach exposure drives the
+# escalation gate, and the run is exported as Markdown for the case notes
+# plus JSON for the ticketing system.
+#
+# Run it with:
+#   obscuralens pipeline run email-triage --set target=suspect@example.xyz
+#
+# Useful variable overrides (--set key=value):
+#   target    the email address under investigation
+#   domain    the mail domain to pivot to (defaults to the same domain)
+#   breaches  breach-count threshold that escalates the case
+
+name: email-triage
+description: Triage a suspicious email address and its mail domain
+
+# Default values; every $token below is replaced at run time and callers
+# can override any variable from the CLI without editing this file.
+variables:
+  target: john.doe@example.xyz
+  domain: example.xyz
+  breaches: 1
+
+steps:
+  # 1. Full multi-source lookup of the address. The kind is auto-detected
+  #    from the target (a single '@' with a dotted domain reads as an
+  #    email). Sources include the breach catalogues, the mail-security
+  #    DNS probes and the disposable-domain data pack.
+  - lookup: $target
+
+  # 2. Mail-domain pivot: enrich the domain side of the address. This is
+  #    where a young registration, a missing DMARC record or a permissive
+  #    SPF policy would surface - all context the address-level lookup
+  #    cannot see. Swap $domain in when the From header uses a different
+  #    domain than the Reply-To (a classic phishing tell).
+  - lookup:
+      kind: domain
+      target: $domain
+
+  # 3. Attach heuristic risk scores to every gathered result. The scorer
+  #    weighs breach counts, disposable-provider flags, mail posture and
+  #    registration age, and writes an explainable signal list into each
+  #    payload that the report layers render later.
+  - risk: true
+
+  # 4. Escalation gate: pass only when the address appears in at least
+  #    $breaches known data breaches. The numeric comparison works for
+  #    both numbers and numeric strings; a passing assertion becomes a
+  #    finding in the exported report. A failing assertion never aborts
+  #    the run - it simply records no finding.
+  - assert:
+      field: hibp_breach_count
+      op: '>='
+      value: $breaches
+      message: address appears in known data breach catalogues
+
+  # 5. Secondary gate: flag disposable mailboxes. These warrant an
+  #    immediate "unverified signup" note in the case file even when no
+  #    breach record exists, because the mailbox can vanish at any time.
+  - assert:
+      field: disposable
+      op: '=='
+      value: true
+      message: address uses a disposable mail provider
+
+  # 6. Build an event timeline from dated fields (breach Added dates,
+  #    domain registration, first/last seen stamps) so the ticket can
+  #    show when exposure started.
+  - timeline: true
+
+  # 7. Export a Markdown summary for the case notes. Relative paths are
+  #    resolved under the configured report directory, so this lands in
+  #    reports/email-triage-$target.md with the target folded into the
+  #    file name.
+  - output:
+      format: markdown
+      path: email-triage-$target.md
+
+  # 8. Export the machine-readable form for the ticketing system. JSON
+  #    keeps every gathered field, the risk signals, the findings and the
+  #    timeline in one document; the $target token keeps one file per
+  #    investigated address.
+  - output:
+      format: json
+      path: email-triage-$target.json
+
+# Follow-up commands worth documenting in the ticket:
+#   obscuralens report --format html    full HTML report of this lookup
+#   obscuralens case add --note "breach exposure confirmed"   case file update

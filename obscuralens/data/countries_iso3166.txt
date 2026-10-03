@@ -1,0 +1,263 @@
+# ObscuraLens offline data pack: ISO 3166-1 country codes.
+# Source registry: ISO 3166-1 (alpha-2, alpha-3, numeric) - public registry data;
+# official names and capitals cross-checked against the CIA World Factbook /
+# restcountries mirrors of ISO 3166.
+# Generated for ObscuraLens offline packs - see obscuralens/utils/data_packs.py.
+#
+# Format: alpha2|alpha3|numeric|official-name|capital
+#   - one entry per line (249 officially assigned ISO 3166-1 codes)
+#   - codes uppercase; numeric is the zero-padded 3-digit ISO numeric
+#   - official name is the long-form English name
+#   - capital "-" where no capital exists (uninhabited territories);
+#     countries with several capitals list them comma-separated
+#   - sorted alphabetically by alpha-2 code
+# '#' starts a comment; blank lines are ignored.
+AD|AND|020|Principality of Andorra|Andorra la Vella
+AE|ARE|784|United Arab Emirates|Abu Dhabi
+AF|AFG|004|Islamic Republic of Afghanistan|Kabul
+AG|ATG|028|Antigua and Barbuda|Saint John's
+AI|AIA|660|Anguilla|The Valley
+AL|ALB|008|Republic of Albania|Tirana
+AM|ARM|051|Republic of Armenia|Yerevan
+AO|AGO|024|Republic of Angola|Luanda
+AQ|ATA|010|Antarctica|-
+AR|ARG|032|Argentine Republic|Buenos Aires
+AS|ASM|016|American Samoa|Pago Pago
+AT|AUT|040|Republic of Austria|Vienna
+AU|AUS|036|Commonwealth of Australia|Canberra
+AW|ABW|533|Aruba|Oranjestad
+AX|ALA|248|Åland Islands|Mariehamn
+AZ|AZE|031|Republic of Azerbaijan|Baku
+BA|BIH|070|Bosnia and Herzegovina|Sarajevo
+BB|BRB|052|Barbados|Bridgetown
+BD|BGD|050|People's Republic of Bangladesh|Dhaka
+BE|BEL|056|Kingdom of Belgium|Brussels
+BF|BFA|854|Burkina Faso|Ouagadougou
+BG|BGR|100|Republic of Bulgaria|Sofia
+BH|BHR|048|Kingdom of Bahrain|Manama
+BI|BDI|108|Republic of Burundi|Gitega
+BJ|BEN|204|Republic of Benin|Porto-Novo
+BL|BLM|652|Collectivity of Saint Barthélemy|Gustavia
+BM|BMU|060|Bermuda|Hamilton
+BN|BRN|096|Nation of Brunei, Abode of Peace|Bandar Seri Begawan
+BO|BOL|068|Plurinational State of Bolivia|Sucre
+BQ|BES|535|Bonaire, Sint Eustatius and Saba|Kralendijk, Oranjestad, The Bottom
+BR|BRA|076|Federative Republic of Brazil|Brasília
+BS|BHS|044|Commonwealth of the Bahamas|Nassau
+BT|BTN|064|Kingdom of Bhutan|Thimphu
+BV|BVT|074|Bouvet Island|-
+BW|BWA|072|Republic of Botswana|Gaborone
+BY|BLR|112|Republic of Belarus|Minsk
+BZ|BLZ|084|Belize|Belmopan
+CA|CAN|124|Canada|Ottawa
+CC|CCK|166|Territory of the Cocos (Keeling) Islands|West Island
+CD|COD|180|Democratic Republic of the Congo|Kinshasa
+CF|CAF|140|Central African Republic|Bangui
+CG|COG|178|Republic of the Congo|Brazzaville
+CH|CHE|756|Swiss Confederation|Bern
+CI|CIV|384|Republic of Côte d'Ivoire|Yamoussoukro
+CK|COK|184|Cook Islands|Avarua
+CL|CHL|152|Republic of Chile|Santiago
+CM|CMR|120|Republic of Cameroon|Yaoundé
+CN|CHN|156|People's Republic of China|Beijing
+CO|COL|170|Republic of Colombia|Bogotá
+CR|CRI|188|Republic of Costa Rica|San José
+CU|CUB|192|Republic of Cuba|Havana
+CV|CPV|132|Republic of Cabo Verde|Praia
+CW|CUW|531|Country of Curaçao|Willemstad
+CX|CXR|162|Territory of Christmas Island|Flying Fish Cove
+CY|CYP|196|Republic of Cyprus|Nicosia
+CZ|CZE|203|Czech Republic|Prague
+DE|DEU|276|Federal Republic of Germany|Berlin
+DJ|DJI|262|Republic of Djibouti|Djibouti
+DK|DNK|208|Kingdom of Denmark|Copenhagen
+DM|DMA|212|Commonwealth of Dominica|Roseau
+DO|DOM|214|Dominican Republic|Santo Domingo
+DZ|DZA|012|People's Democratic Republic of Algeria|Algiers
+EC|ECU|218|Republic of Ecuador|Quito
+EE|EST|233|Republic of Estonia|Tallinn
+EG|EGY|818|Arab Republic of Egypt|Cairo
+EH|ESH|732|Sahrawi Arab Democratic Republic|El Aaiún
+ER|ERI|232|State of Eritrea|Asmara
+ES|ESP|724|Kingdom of Spain|Madrid
+ET|ETH|231|Federal Democratic Republic of Ethiopia|Addis Ababa
+FI|FIN|246|Republic of Finland|Helsinki
+FJ|FJI|242|Republic of Fiji|Suva
+FK|FLK|238|Falkland Islands|Stanley
+FM|FSM|583|Federated States of Micronesia|Palikir
+FO|FRO|234|Faroe Islands|Tórshavn
+FR|FRA|250|French Republic|Paris
+GA|GAB|266|Gabonese Republic|Libreville
+GB|GBR|826|United Kingdom of Great Britain and Northern Ireland|London
+GD|GRD|308|Grenada|St. George's
+GE|GEO|268|Georgia|Tbilisi
+GF|GUF|254|Guiana|Cayenne
+GG|GGY|831|Bailiwick of Guernsey|St. Peter Port
+GH|GHA|288|Republic of Ghana|Accra
+GI|GIB|292|Gibraltar|Gibraltar
+GL|GRL|304|Greenland|Nuuk
+GM|GMB|270|Republic of the Gambia|Banjul
+GN|GIN|324|Republic of Guinea|Conakry
+GP|GLP|312|Guadeloupe|Basse-Terre
+GQ|GNQ|226|Republic of Equatorial Guinea|Malabo
+GR|GRC|300|Hellenic Republic|Athens
+GS|SGS|239|South Georgia and the South Sandwich Islands|King Edward Point
+GT|GTM|320|Republic of Guatemala|Guatemala City
+GU|GUM|316|Guam|Hagåtña
+GW|GNB|624|Republic of Guinea-Bissau|Bissau
+GY|GUY|328|Co-operative Republic of Guyana|Georgetown
+HK|HKG|344|Hong Kong Special Administrative Region of the People's Republic of China|Hong Kong
+HM|HMD|334|Heard Island and McDonald Islands|-
+HN|HND|340|Republic of Honduras|Tegucigalpa
+HR|HRV|191|Republic of Croatia|Zagreb
+HT|HTI|332|Republic of Haiti|Port-au-Prince
+HU|HUN|348|Hungary|Budapest
+ID|IDN|360|Republic of Indonesia|Jakarta
+IE|IRL|372|Republic of Ireland|Dublin
+IL|ISR|376|State of Israel|Jerusalem
+IM|IMN|833|Isle of Man|Douglas
+IN|IND|356|Republic of India|New Delhi
+IO|IOT|086|British Indian Ocean Territory|Diego Garcia
+IQ|IRQ|368|Republic of Iraq|Baghdad
+IR|IRN|364|Islamic Republic of Iran|Tehran
+IS|ISL|352|Iceland|Reykjavik
+IT|ITA|380|Italian Republic|Rome
+JE|JEY|832|Bailiwick of Jersey|Saint Helier
+JM|JAM|388|Jamaica|Kingston
+JO|JOR|400|Hashemite Kingdom of Jordan|Amman
+JP|JPN|392|Japan|Tokyo
+KE|KEN|404|Republic of Kenya|Nairobi
+KG|KGZ|417|Kyrgyz Republic|Bishkek
+KH|KHM|116|Kingdom of Cambodia|Phnom Penh
+KI|KIR|296|Independent and Sovereign Republic of Kiribati|South Tarawa
+KM|COM|174|Union of the Comoros|Moroni
+KN|KNA|659|Federation of Saint Christopher and Nevis|Basseterre
+KP|PRK|408|Democratic People's Republic of Korea|Pyongyang
+KR|KOR|410|Republic of Korea|Seoul
+KW|KWT|414|State of Kuwait|Kuwait City
+KY|CYM|136|Cayman Islands|George Town
+KZ|KAZ|398|Republic of Kazakhstan|Astana
+LA|LAO|418|Lao People's Democratic Republic|Vientiane
+LB|LBN|422|Lebanese Republic|Beirut
+LC|LCA|662|Saint Lucia|Castries
+LI|LIE|438|Principality of Liechtenstein|Vaduz
+LK|LKA|144|Democratic Socialist Republic of Sri Lanka|Colombo
+LR|LBR|430|Republic of Liberia|Monrovia
+LS|LSO|426|Kingdom of Lesotho|Maseru
+LT|LTU|440|Republic of Lithuania|Vilnius
+LU|LUX|442|Grand Duchy of Luxembourg|Luxembourg
+LV|LVA|428|Republic of Latvia|Riga
+LY|LBY|434|State of Libya|Tripoli
+MA|MAR|504|Kingdom of Morocco|Rabat
+MC|MCO|492|Principality of Monaco|Monaco
+MD|MDA|498|Republic of Moldova|Chișinău
+ME|MNE|499|Montenegro|Podgorica
+MF|MAF|663|Saint Martin|Marigot
+MG|MDG|450|Republic of Madagascar|Antananarivo
+MH|MHL|584|Republic of the Marshall Islands|Majuro
+MK|MKD|807|Republic of North Macedonia|Skopje
+ML|MLI|466|Republic of Mali|Bamako
+MM|MMR|104|Republic of the Union of Myanmar|Naypyidaw
+MN|MNG|496|Mongolia|Ulan Bator
+MO|MAC|446|Macao Special Administrative Region of the People's Republic of China|-
+MP|MNP|580|Commonwealth of the Northern Mariana Islands|Saipan
+MQ|MTQ|474|Martinique|Fort-de-France
+MR|MRT|478|Islamic Republic of Mauritania|Nouakchott
+MS|MSR|500|Montserrat|Plymouth
+MT|MLT|470|Republic of Malta|Valletta
+MU|MUS|480|Republic of Mauritius|Port Louis
+MV|MDV|462|Republic of the Maldives|Malé
+MW|MWI|454|Republic of Malawi|Lilongwe
+MX|MEX|484|United Mexican States|Mexico City
+MY|MYS|458|Malaysia|Kuala Lumpur
+MZ|MOZ|508|Republic of Mozambique|Maputo
+NA|NAM|516|Republic of Namibia|Windhoek
+NC|NCL|540|New Caledonia|Nouméa
+NE|NER|562|Republic of Niger|Niamey
+NF|NFK|574|Territory of Norfolk Island|Kingston
+NG|NGA|566|Federal Republic of Nigeria|Abuja
+NI|NIC|558|Republic of Nicaragua|Managua
+NL|NLD|528|Kingdom of the Netherlands|Amsterdam
+NO|NOR|578|Kingdom of Norway|Oslo
+NP|NPL|524|Federal Democratic Republic of Nepal|Kathmandu
+NR|NRU|520|Republic of Nauru|Yaren
+NU|NIU|570|Niue|Alofi
+NZ|NZL|554|New Zealand|Wellington
+OM|OMN|512|Sultanate of Oman|Muscat
+PA|PAN|591|Republic of Panama|Panama City
+PE|PER|604|Republic of Peru|Lima
+PF|PYF|258|French Polynesia|Papeetē
+PG|PNG|598|Independent State of Papua New Guinea|Port Moresby
+PH|PHL|608|Republic of the Philippines|Manila
+PK|PAK|586|Islamic Republic of Pakistan|Islamabad
+PL|POL|616|Republic of Poland|Warsaw
+PM|SPM|666|Saint Pierre and Miquelon|Saint-Pierre
+PN|PCN|612|Pitcairn Group of Islands|Adamstown
+PR|PRI|630|Commonwealth of Puerto Rico|San Juan
+PS|PSE|275|State of Palestine|Ramallah
+PT|PRT|620|Portuguese Republic|Lisbon
+PW|PLW|585|Republic of Palau|Ngerulmud
+PY|PRY|600|Republic of Paraguay|Asunción
+QA|QAT|634|State of Qatar|Doha
+RE|REU|638|Réunion Island|Saint-Denis
+RO|ROU|642|Romania|Bucharest
+RS|SRB|688|Republic of Serbia|Belgrade
+RU|RUS|643|Russian Federation|Moscow
+RW|RWA|646|Republic of Rwanda|Kigali
+SA|SAU|682|Kingdom of Saudi Arabia|Riyadh
+SB|SLB|090|Solomon Islands|Honiara
+SC|SYC|690|Republic of Seychelles|Victoria
+SD|SDN|729|Republic of the Sudan|Khartoum
+SE|SWE|752|Kingdom of Sweden|Stockholm
+SG|SGP|702|Republic of Singapore|Singapore
+SH|SHN|654|Saint Helena, Ascension and Tristan da Cunha|Jamestown
+SI|SVN|705|Republic of Slovenia|Ljubljana
+SJ|SJM|744|Svalbard og Jan Mayen|Longyearbyen
+SK|SVK|703|Slovak Republic|Bratislava
+SL|SLE|694|Republic of Sierra Leone|Freetown
+SM|SMR|674|Most Serene Republic of San Marino|City of San Marino
+SN|SEN|686|Republic of Senegal|Dakar
+SO|SOM|706|Federal Republic of Somalia|Mogadishu
+SR|SUR|740|Republic of Suriname|Paramaribo
+SS|SSD|728|Republic of South Sudan|Juba
+ST|STP|678|Democratic Republic of São Tomé and Príncipe|São Tomé
+SV|SLV|222|Republic of El Salvador|San Salvador
+SX|SXM|534|Sint Maarten|Philipsburg
+SY|SYR|760|Syrian Arab Republic|Damascus
+SZ|SWZ|748|Kingdom of Eswatini|Lobamba
+TC|TCA|796|Turks and Caicos Islands|Cockburn Town
+TD|TCD|148|Republic of Chad|N'Djamena
+TF|ATF|260|Territory of the French Southern and Antarctic Lands|Port-aux-Français
+TG|TGO|768|Togolese Republic|Lomé
+TH|THA|764|Kingdom of Thailand|Bangkok
+TJ|TJK|762|Republic of Tajikistan|Dushanbe
+TK|TKL|772|Tokelau|Fakaofo
+TL|TLS|626|Democratic Republic of Timor-Leste|Dili
+TM|TKM|795|Turkmenistan|Ashgabat
+TN|TUN|788|Tunisian Republic|Tunis
+TO|TON|776|Kingdom of Tonga|Nuku'alofa
+TR|TUR|792|Republic of Türkiye|Ankara
+TT|TTO|780|Republic of Trinidad and Tobago|Port of Spain
+TV|TUV|798|Tuvalu|Funafuti
+TW|TWN|158|Republic of China (Taiwan)|Taipei
+TZ|TZA|834|United Republic of Tanzania|Dodoma
+UA|UKR|804|Ukraine|Kyiv
+UG|UGA|800|Republic of Uganda|Kampala
+UM|UMI|581|United States Minor Outlying Islands|-
+US|USA|840|United States of America|Washington D.C.
+UY|URY|858|Oriental Republic of Uruguay|Montevideo
+UZ|UZB|860|Republic of Uzbekistan|Tashkent
+VA|VAT|336|Vatican City State|Vatican City
+VC|VCT|670|Saint Vincent and the Grenadines|Kingstown
+VE|VEN|862|Bolivarian Republic of Venezuela|Caracas
+VG|VGB|092|Virgin Islands|Road Town
+VI|VIR|850|Virgin Islands of the United States|Charlotte Amalie
+VN|VNM|704|Socialist Republic of Vietnam|Hanoi
+VU|VUT|548|Republic of Vanuatu|Port Vila
+WF|WLF|876|Territory of the Wallis and Futuna Islands|Mata-Utu
+WS|WSM|882|Independent State of Samoa|Apia
+YE|YEM|887|Republic of Yemen|Sana'a
+YT|MYT|175|Department of Mayotte|Mamoudzou
+ZA|ZAF|710|Republic of South Africa|Pretoria, Bloemfontein, Cape Town
+ZM|ZMB|894|Republic of Zambia|Lusaka
+ZW|ZWE|716|Republic of Zimbabwe|Harare

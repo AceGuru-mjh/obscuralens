@@ -1,7 +1,7 @@
 """
 Threat-intel blocklist feeds: download, parse, cache and IP membership.
 
-Three keyless plain-text feeds are supported:
+Five keyless feeds are supported (the last two joined in v5.0):
 
 * **spamhaus_drop** — Spamhaus DROP (hijacked / rogue ranges), lines like
   ``1.2.3.0/24 ; SBL12345 ; description`` with ``;``/``#`` comments.
@@ -9,19 +9,34 @@ Three keyless plain-text feeds are supported:
   per line (treated as a /32 network), ``#`` comments.
 * **firehol_level1** — FireHOL level 1 aggregate netset, one CIDR per
   line, ``#`` comments.
+* **urlhaus** — abuse.ch URLhaus malware URL dump
+  (``https://urlhaus.abuse.ch/downloads/text/``), one URL per line; the
+  host of every URL is extracted and kept when it is a literal IP.
+* **threatfox** — abuse.ch ThreatFox IOC dump, CSV lines of
+  ``"first_seen", "id", "ioc_value", "ioc_type", ...``; rows whose
+  ``ioc_type`` starts with ``ip`` contribute the host part of
+  ``ioc_value`` (``1.2.3.4:8080`` → ``1.2.3.4``). The authenticated JSON
+  API (``POST /api/v1/`` with ``{"query": "get_iocs"}``) now demands an
+  abuse.ch Auth-Key, so the keyless recent CSV export is used instead -
+  same data, no account, and plain GET transport.
 
 Every feed body is parsed into ``ipaddress`` network objects, so
 membership is an exact subnet match instead of a string comparison, and
 cached in-process with its fetch timestamp, refreshed after
-``app.feed_cache_ttl`` seconds. Transport failures keep the last known
+``app.feed_cache_ttl`` seconds. Parsing is capped at
+``_MAX_FEED_ENTRIES`` networks so monster dumps (URLhaus ships ~56k lines)
+never blow memory - the cap keeps the newest entries because the dumps are
+ordered most-recent-first. Transport failures keep the last known
 networks and surface through ``feeds_status``. Nothing in this module
 ever raises.
 """
 
+import csv
 import ipaddress
 import logging
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
+from urllib.parse import urlparse
 
 from ..config import config
 from ..utils.http_client import http
@@ -36,6 +51,8 @@ FEED_URLS: Dict[str, str] = {
              'main/feodoc.ipblocklist.txt',
     'firehol_level1': 'https://raw.githubusercontent.com/firehol/'
                       'blocklist-ipsets/master/firehol_level1.netset',
+    'urlhaus': 'https://urlhaus.abuse.ch/downloads/text/',
+    'threatfox': 'https://threatfox.abuse.ch/export/csv/recent/',
 }
 
 # Human labels used by the report rows.
@@ -43,6 +60,8 @@ FEED_LABELS: Dict[str, str] = {
     'spamhaus_drop': 'Spamhaus DROP',
     'feodo': 'Feodo Tracker',
     'firehol_level1': 'FireHOL Level 1',
+    'urlhaus': 'abuse.ch URLhaus',
+    'threatfox': 'abuse.ch ThreatFox',
 }
 
 # Comment prefixes shared by every feed format.
@@ -54,6 +73,70 @@ _FEED_SEPARATOR: Dict[str, str] = {
     'spamhaus_drop': ';',
     'feodo': '#',
     'firehol_level1': '#',
+}
+
+# Hard cap on parsed networks per feed: URLhaus alone ships ~56k URLs, so
+# only the first 20k (newest, the dumps are most-recent-first) are kept.
+_MAX_FEED_ENTRIES = 20_000
+
+
+# ---------------------------------------------------------------------------
+# Per-line tokenizers for feeds whose lines are not bare networks (v5.0).
+# A tokenizer turns one non-comment line into a candidate network token
+# ('' means skip); _parse_feed still validates it with ipaddress and
+# de-duplicates, so junk simply never reaches the network list.
+# ---------------------------------------------------------------------------
+
+def _urlhaus_host(line: str) -> str:
+    """
+    Extract the host from one URLhaus malware-URL line.
+
+    Lines look like ``http://61.52.219.186:56983/i``. ``urlparse`` yields
+    the host (IP or domain, port stripped); domains are rejected later by
+    ``_network_from_token`` because they are not IP literals.
+    """
+    try:
+        return urlparse(line).hostname or ''
+    except ValueError:
+        return ''
+
+
+def _threatfox_field(value: str) -> str:
+    """Strip the padding the ThreatFox export puts around CSV fields."""
+    return value.strip().strip('"').strip()
+
+
+def _threatfox_host(line: str) -> str:
+    """
+    Extract the IP host from one ThreatFox CSV export line.
+
+    Columns: ``"first_seen", "id", "ioc_value", "ioc_type", ...``. Only
+    rows whose ``ioc_type`` starts with ``ip`` (``ip:port`` etc.) are kept;
+    the host part of ``ioc_value`` is returned without the port
+    (``1.2.3.4:8000`` → ``1.2.3.4``, ``[2001:db8::1]:443`` → the bare
+    IPv6). Hashes, domains and URLs score an empty token.
+    """
+    try:
+        row = next(csv.reader([line]))
+    except (csv.Error, StopIteration):
+        return ''
+    if len(row) < 4:
+        return ''
+    ioc_value = _threatfox_field(row[2])
+    ioc_type = _threatfox_field(row[3]).lower()
+    if not ioc_value or not ioc_type.startswith('ip'):
+        return ''
+    if ioc_value.startswith('['):  # [ipv6]:port
+        end = ioc_value.find(']')
+        return ioc_value[1:end] if end > 0 else ''
+    host = ioc_value.split('/')[0]
+    return host.rsplit(':', 1)[0] if host.count(':') == 1 else host
+
+
+#: name -> tokenizer for non-bare-network feed lines (absent = plain split).
+_FEED_TOKENIZERS: Dict[str, Any] = {
+    'urlhaus': _urlhaus_host,
+    'threatfox': _threatfox_host,
 }
 
 # In-module cache: name -> (fetch timestamp, [ip_network, ...]).
@@ -85,17 +168,23 @@ def _network_from_token(token: str) -> Optional[Any]:
 def _parse_feed(text: str, name: str) -> List[Any]:
     """Parse a feed body into a de-duplicated list of networks."""
     separator = _FEED_SEPARATOR.get(name, '#')
+    tokenize = _FEED_TOKENIZERS.get(name)
     networks: List[Any] = []
     seen: Set = set()
     for raw_line in (text or '').splitlines():
         line = raw_line.strip()
         if not line or line.startswith(_COMMENT_PREFIXES):
             continue
-        token = line.split(separator)[0].strip()
+        # Tokenized feeds (urlhaus/threatfox) carry URLs or CSV rows; the
+        # plain feeds are "network [separator] annotation".
+        token = tokenize(line) if tokenize is not None \
+            else line.split(separator)[0].strip()
         network = _network_from_token(token)
         if network is not None and network not in seen:
             seen.add(network)
             networks.append(network)
+            if len(networks) >= _MAX_FEED_ENTRIES:
+                break  # newest-first dumps: keep the freshest entries
     return networks
 
 
@@ -143,16 +232,18 @@ def check_ip(ip: str) -> Dict[str, Any]:
     Check one address against the Tor exit list and every blocklist feed.
 
     Returns ``{'tor', 'spamhaus_drop', 'feodo', 'firehol_level1',
-    'listed_count', 'relay'}`` where ``listed_count`` counts how many of
-    those four lists contain the address. Invalid input gives all-False
-    verdicts, and ``app.feeds_enabled`` switched off gives exactly
+    'urlhaus', 'threatfox', 'listed_count', 'relay'}`` where
+    ``listed_count`` counts how many of those six lists contain the
+    address. Invalid input gives all-False verdicts, and
+    ``app.feeds_enabled`` switched off gives exactly
     ``{'disabled': True}``. Never raises.
     """
     if not config.app_config.feeds_enabled:
         return {'disabled': True}
     empty = {
         'tor': False, 'spamhaus_drop': False, 'feodo': False,
-        'firehol_level1': False, 'listed_count': 0,
+        'firehol_level1': False, 'urlhaus': False, 'threatfox': False,
+        'listed_count': 0,
         'relay': {'is_relay': False, 'error': 'invalid ip address'},
     }
     try:

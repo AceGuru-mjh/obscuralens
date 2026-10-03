@@ -1,0 +1,328 @@
+{# ------------------------------------------------------------------ #}
+{# ObscuraLens executive summary card (v5.1)                           #}
+{#                                                                      #}
+{# A compact, one-screen HTML summary designed for dashboards, e-mail  #}
+{# previews and ticket sidebars. It uses the same sections/meta        #}
+{# contract as standalone_report.html.j2 and additionally understands: #}
+{#   meta.band          clean|watch|elevated|high|critical             #}
+{#   meta.score         0-100 rule score                               #}
+{#   meta.top_signals   [str, ...] strongest signals                   #}
+{#   meta.source_health [[Source, Status, Detail], ...]                #}
+{#                      (first row is the header, same as sections)    #}
+{# The card is fully self-contained (all CSS inline) and safe to       #}
+{# paste into any page; values are escaped via the `esc` filter.       #}
+{# ------------------------------------------------------------------ #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary &middot; {{ meta.title|esc }}</title>
+<style>
+/* Design tokens shared with the full report, trimmed to one card. */
+:root {
+  --bg: #0d1117;
+  --card: #131a23;
+  --inset: #0a0e14;
+  --border: #26303d;
+  --text: #e6edf3;
+  --muted: #93a1b3;
+  --faint: #6b7889;
+  --accent: #38d9a9;
+  --clean: #38d9a9;
+  --watch: #58a6ff;
+  --elevated: #f2cc60;
+  --high: #ff9f43;
+  --critical: #ff6b6b;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f6f9;
+    --card: #ffffff;
+    --inset: #eef1f6;
+    --border: #d7dde6;
+    --text: #1c2430;
+    --muted: #55606f;
+    --faint: #7c8798;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 1rem;
+  background: var(--bg);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* The single executive-summary card. */
+.card {
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Card header: brand + headline. */
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  background: var(--inset);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0;
+}
+
+.card-head h1 {
+  margin: 0;
+  font-size: 1rem;
+  text-align: right;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Target block: the investigated indicator. */
+.target-block {
+  padding: 1rem 1rem 0.75rem;
+  text-align: center;
+}
+
+.target-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--faint);
+  margin: 0 0 0.2rem;
+}
+
+.target-value {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  word-break: break-all;
+}
+
+.kind-pill {
+  display: inline-block;
+  margin-top: 0.4rem;
+  padding: 0.1rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--inset);
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Risk band chip + score bar. */
+.band-row {
+  padding: 0 1rem 1rem;
+}
+
+.band-chip {
+  display: block;
+  text-align: center;
+  padding: 0.45rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-transform: capitalize;
+  color: #0b1015;
+}
+
+.band-chip.clean { background: var(--clean); }
+.band-chip.watch { background: var(--watch); }
+.band-chip.elevated { background: var(--elevated); }
+.band-chip.high { background: var(--high); }
+.band-chip.critical { background: var(--critical); }
+.band-chip.unknown { background: var(--muted); }
+
+.score-track {
+  margin-top: 0.5rem;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--inset);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--clean), var(--high));
+}
+
+.score-caption {
+  margin: 0.3rem 0 0;
+  text-align: center;
+  color: var(--faint);
+  font-size: 0.72rem;
+}
+
+/* Top signals list. */
+.signals {
+  padding: 0 1rem 0.75rem;
+}
+
+.signals h2,
+.health h2 {
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--faint);
+}
+
+.signals ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+
+.signals li { margin: 0.15rem 0; }
+
+/* Source health mini-table. */
+.health {
+  padding: 0 1rem 1rem;
+}
+
+.health table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.health th {
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  color: var(--faint);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid var(--border);
+}
+
+.health td {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.health tr:last-child td { border-bottom: none; }
+
+/* Card footer. */
+.card-foot {
+  padding: 0.6rem 1rem;
+  background: var(--inset);
+  border-top: 1px solid var(--border);
+  color: var(--faint);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+/* Responsive: let long targets wrap instead of overflowing. */
+@media (max-width: 480px) {
+  body { padding: 0.5rem; }
+  .card-head h1 { font-size: 0.85rem; }
+  .target-value { font-size: 1rem; }
+}
+</style>
+</head>
+<body>
+<div class="card" role="article" aria-label="ObscuraLens summary for {{ meta.target|esc }}">
+
+  <div class="card-head">
+    <p class="brand">&#9678; ObscuraLens</p>
+    <h1>{{ meta.title|esc }}</h1>
+  </div>
+
+  <div class="target-block">
+    <p class="target-label">Target</p>
+    <p class="target-value">{{ meta.target|esc or '&mdash;' }}</p>
+    {% if meta.kind %}<span class="kind-pill">{{ meta.kind|esc }}</span>{% endif %}
+  </div>
+
+  {% if meta.band %}
+  <div class="band-row">
+    <span class="band-chip {{ meta.band }}">
+      {{ meta.band }}{% if meta.score is not none %} &middot; {{ meta.score }}/100{% endif %}
+    </span>
+    {% if meta.score is defined and meta.score is not none %}
+    <div class="score-track"
+         role="progressbar"
+         aria-valuenow="{{ meta.score }}"
+         aria-valuemin="0"
+         aria-valuemax="100"
+         aria-label="Rule score">
+      <div class="score-fill" style="width: {{ [meta.score, 100]|min }}%;"></div>
+    </div>
+    <p class="score-caption">explainable rule score, capped at 100</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if meta.top_signals %}
+  <div class="signals">
+    <h2>Top signals</h2>
+    <ul>
+      {% for signal in meta.top_signals %}
+      <li>{{ signal|esc }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if meta.source_health %}
+  <div class="health">
+    <h2>Source health</h2>
+    <table>
+      <thead>
+        <tr>
+          {% for header in meta.source_health[0] %}
+          <th scope="col">{{ header|esc }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in meta.source_health[1:] %}
+        <tr>
+          {% for entry in line %}
+          <td>{{ entry|esc }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="card-foot">
+    ObscuraLens v{{ meta.version|esc }} &middot; {{ meta.generated|fmt_date }} &middot;
+    heuristics, not verdicts
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,119 @@
+# Network sweep pipeline
+# ----------------------
+# Sweep-and-pivot workflow for a network segment under review: enrich a
+# primary IP (abuse reputation, exposed services, hosting metadata), then
+# pivot to the announcing AS and a hostname observed on the address so
+# the sweep covers the address, its routing and its name service in one
+# run. Score everything, correlate against history, and export both a
+# machine-readable artefact and an analyst table.
+#
+# The pipeline engine keeps one result per kind per run, so a full /24
+# sweep is driven from the shell by looping this pipeline over the hosts:
+#
+#   for host in 203.0.113.{1..254}; do
+#     obscuralens pipeline run network-sweep --set primary=$host
+#   done
+#
+# Each run leaves a JSON artefact keyed by the host; merge them afterwards
+# to rank the segment by abuse confidence and exposure.
+#
+# Useful variable overrides (--set key=value):
+#   primary  the IP address to sweep first (auto-detected as kind 'ip')
+#   asn      the AS number to pivot to (origin AS of $primary)
+#   hostname a hostname observed on $primary (reverse DNS or CT log)
+
+name: network-sweep
+description: Sweep an IP and pivot to its AS and hostname context
+
+# Default values; every $token below is replaced at run time and callers
+# can override any variable from the CLI without editing this file.
+variables:
+  primary: 8.8.8.8
+  asn: 15169
+  hostname: dns.google
+
+steps:
+  # 1. Primary IP lookup: abuse-feed confidence, Tor/proxy flags, exposed
+  #    ports and vulnerable services (InternetDB), VirusTotal engine
+  #    counts, geolocation and hosting metadata. The kind is auto-det
+  #    ected from the dotted-quad shape.
+  - lookup: $primary
+
+  # 2. Routing pivot: enrich the announcing AS. Prefix counts, bogon
+  #    announcements, RPKI validity and - importantly for sweeps - the
+  #    presence of an abuse contact decide how useful escalation mail
+  #    will be. Swap in the origin AS observed in step 1 when triaging.
+  - lookup:
+      kind: asn
+      target: $asn
+
+  # 3. Name pivot: enrich a hostname seen on the address. Certificate-
+  #    transparency subdomains, DNS posture and the registration age of
+  #    the name turn a bare IP into a story about who operates it.
+  - lookup:
+      kind: domain
+      target: $hostname
+
+  # 4. Attach heuristic risk scores to every gathered result - the IP
+  #    scorer (abuse, anonymisation, exposure), the AS scorer (routing
+  #    hygiene, accountability) and the domain scorer (age, mail
+  #    posture) each add their explainable signals.
+  - risk: true
+
+  # 5. Escalation gate: abuse confidence. 50+ means many recent, distinct
+  #    abuse reports against this address - the strongest community-
+  #    derived signal the sweep can produce. Passing becomes a finding.
+  - assert:
+      field: abuse_confidence
+      op: '>='
+      value: 50
+      message: address flagged with elevated abuse confidence
+
+  # 6. Exposure gate: risky management ports. Telnet (23) on an internet-
+  #    reachable host is almost always an accident or a scanner trap;
+  #    its presence should fail any segment review.
+  - assert:
+      field: ports
+      op: contains
+      value: 23
+      message: telnet exposed on the swept address
+
+  # 7. Build an event timeline from dated fields across all three results
+  #    (first/last seen, registration dates, RDAP events) so the sweep
+  #    report shows how long each element has existed.
+  - timeline: true
+
+  # 8. Correlate the three results against each other and the local query
+  #    history. Previous sweeps that touched the same AS or hostname
+  #    connect this run to earlier findings - repeat offenders surface
+  #    here even when their current address is fresh.
+  - correlate: true
+
+  # 9. Export the JSON artefact for the segment merge. The file name
+  #    folds in the primary host so looped runs never overwrite each
+  #    other.
+  - output:
+      format: json
+      path: sweep-$primary.json
+
+  # 10. Print the compact summary table (kinds, targets, success, field
+  #     counts, steps and findings) to the console for the operator
+  #     driving the loop.
+  - output:
+      format: table
+      path: ''
+
+# Follow-up commands worth documenting in the sweep notes:
+#   obscuralens export graphml      correlation graph of the segment run
+#   obscuralens report --format html  full HTML report of this run
+#
+# Merging the loop artefacts to rank the segment:
+#   jq -s 'map({ip: .name, abuse: .results.ip.info.abuse_confidence})
+#          | sort_by(-(.abuse // 0))' reports/sweep-*.json > ranked.json
+#
+# Reading the findings:
+#   * abuse gate passing  -> escalate to the abuse contact of $asn (when
+#                            one exists; AS enrichment shows it)
+#   * exposure gate       -> quarantine host / firewall the port now
+#   * both quiet          -> keep the artefact; the merged ranking across
+#                            the segment decides further work

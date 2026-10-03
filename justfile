@@ -29,6 +29,10 @@ fmt:
 run:
     python -m obscuralens
 
+# One-command web UI (creates .venv, installs deps, opens browser).
+start:
+    ./start.sh
+
 # Start the web UI.
 serve:
     python -m obscuralens serve

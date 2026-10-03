@@ -6,6 +6,15 @@ single flaky source cannot blank out the whole report. Sources marked keyless
 work without an API key; keyed sources (Etherscan) layer on when a key is
 configured. ``app.disabled_sources`` can switch any source off.
 
+* ``blockchain.info`` (BTC, keyless) - balance, received/sent totals, tx
+  count and a first/last-seen window from the recent transaction list.
+* ``blockstream.info`` (BTC, keyless) - Esplora funded/spent sums, tx and
+  mempool counters, newest confirmed activity.
+* ``blockchair`` (BTC/ETH/LTC/DOGE, keyless) - address type, balance and
+  first/last seen dates.
+* ``mempool.space`` (BTC, keyless) - funded/spent sums cross-confirming
+  blockchain.info plus a pending-mempool counter.
+
 Because the blockchains speak in integer minor units (satoshis, wei, koinu),
 each reader normalises amounts to human-readable floats before returning:
 BTC-family values are divided by 1e8 and rounded to 8 decimals, ETH values by
@@ -332,6 +341,60 @@ def _etherscan(address: str, api_key: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v5.0 keyless additions
+# ---------------------------------------------------------------------------
+
+def _mempool_space(address: str) -> Dict[str, Any]:
+    """
+    mempool.space address statistics (keyless, BTC only).
+
+    Endpoint: ``https://mempool.space/api/address/{addr}`` - one request
+    returning ``chain_stats`` (``funded_txo_sum`` / ``spent_txo_sum`` /
+    ``tx_count`` in satoshis) and ``mempool_stats`` for the unconfirmed
+    backlog. The service runs an Esplora-compatible API, so its counters
+    line up 1:1 with the Blockstream reader.
+
+    Balance facts deliberately reuse the blockchain.info field names
+    (``btc_balance`` / ``btc_total_received`` / ``btc_total_sent`` /
+    ``btc_tx_count``, funded minus spent, satoshis converted to BTC) so
+    ``gather_all`` provenance stacks the independent providers instead of
+    picking one; distinctly-named extras carry the ``mempool_`` prefix
+    (``mempool_pending`` unconfirmed tx count and the exact integer
+    ``mempool_balance_sats``). Non-BTC addresses return ``{}`` without a
+    round trip; transport failures yield ``{}``.
+    """
+    if detect_crypto_chain(address) != 'btc':
+        return {}
+
+    ok, d, _ = http.get_json(f"https://mempool.space/api/address/{address}")
+    if not ok or not isinstance(d, dict):
+        return {}
+
+    chain_stats = d.get('chain_stats') or {}
+    mempool_stats = d.get('mempool_stats') or {}
+    if not isinstance(chain_stats, dict):
+        chain_stats = {}
+    if not isinstance(mempool_stats, dict):
+        mempool_stats = {}
+
+    try:
+        funded = int(chain_stats.get('funded_txo_sum') or 0)
+        spent = int(chain_stats.get('spent_txo_sum') or 0)
+    except (TypeError, ValueError):
+        return {}
+
+    return {
+        'chain': 'btc',
+        'btc_balance': _sats_to_btc(funded - spent),
+        'btc_total_received': _sats_to_btc(funded),
+        'btc_total_sent': _sats_to_btc(spent),
+        'btc_tx_count': chain_stats.get('tx_count'),
+        'mempool_pending': mempool_stats.get('tx_count'),
+        'mempool_balance_sats': funded - spent,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -339,6 +402,7 @@ FREE_SOURCES: Dict[str, Any] = {
     'blockchain.info': _blockchain_info,
     'blockstream.info': _blockstream,
     'blockchair': _blockchair,
+    'mempool.space': _mempool_space,
 }
 
 KEYED_SOURCES: Dict[str, Any] = {
@@ -353,6 +417,8 @@ SOURCE_CATALOG = {
                         'last confirmed activity (BTC only, keyless)',
     'blockchair': 'Address type, balance and first/last seen dates '
                   '(BTC/ETH/LTC/DOGE, keyless, rate-limited)',
+    'mempool.space': 'Funded/spent sums, tx count and pending mempool '
+                     'counter (BTC only, keyless)',
     'etherscan': 'Ethereum balance and transaction timestamps (keyed)',
 }
 

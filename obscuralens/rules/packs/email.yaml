@@ -1,0 +1,195 @@
+# ObscuraLens explainable rule pack -- email
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the email tracker output: local_part, domain, mx_exists,
+# spf_record, hibp_breach_count, credentials_leaked, emailrep_reputation...
+# ---------------------------------------------------------------------------
+
+name: email-rules
+description: >-
+  Explainable deliverability, disposable-provider and breach-exposure
+  heuristics for email address lookups.
+version: 1
+rules:
+  - id: EMAIL-001
+    title: Disposable mail provider
+    description: >-
+      The address uses a throwaway mail domain from the shipped
+      disposable_email_domains data pack. Disposable mailboxes are used to
+      bypass signup verification and vanish with the account; they also
+      appear in fraud chains where a reachable contact would create
+      liability.
+    severity: medium
+    weight: 20
+    tags: [disposable, signup-abuse]
+    conditions:
+      - field: email
+        operator: known_pack
+        value: disposable_email_domains
+
+  - id: EMAIL-002
+    title: Mail domain cannot receive
+    description: >-
+      The domain has no usable MX records. An address whose domain cannot
+      receive mail can still send (spoofed or via relays) but never
+      answers, which fits both fraud lures and simple typos worth ruling
+      out.
+    severity: medium
+    weight: 15
+    tags: [mail, deliverability]
+    references: ["RFC 5321"]
+    conditions:
+      - field: mx_exists
+        operator: is_false
+
+  - id: EMAIL-003
+    title: No SPF hardfail
+    description: >-
+      The domain's SPF record does not end in '-all'. Without a hardfail
+      the domain tells receivers nothing definitive about unauthorized
+      senders, so spoofed mail from look-alike infrastructure scores
+      higher on delivery.
+    severity: medium
+    weight: 10
+    tags: [mail, spoofing]
+    references: ["RFC 7208"]
+    conditions:
+      - field: spf_record
+        operator: not_contains
+        value: -all
+
+  - id: EMAIL-004
+    title: Present in known breaches
+    description: >-
+      The address appears in at least one catalogued data breach. Breach
+      exposure raises credential-stuffing and impersonation risk and is
+      the standard first question in account-takeover triage.
+    severity: medium
+    weight: 10
+    tags: [breach, exposure]
+    conditions:
+      - field: hibp_breach_count
+        operator: gte
+        value: 1
+
+  - id: EMAIL-005
+    title: Repeatedly breached
+    description: >-
+      The address appears in five or more breaches. Cumulative exposure
+      means old passwords circulate widely; any reused credential for
+      this address should be considered burned.
+    severity: high
+    weight: 20
+    tags: [breach, exposure]
+    conditions:
+      - field: hibp_breach_count
+        operator: gte
+        value: 5
+
+  - id: EMAIL-006
+    title: Credentials reported leaked
+    description: >-
+      A source reports plaintext credentials circulating for this exact
+      address. This converts breach exposure from theoretical to
+      immediately actionable: rotate the password and review sessions.
+    severity: high
+    weight: 20
+    tags: [breach, credentials]
+    references: ["MITRE ATT&CK T1552"]
+    conditions:
+      - field: credentials_leaked
+        operator: is_true
+
+  - id: EMAIL-007
+    title: Role account
+    description: >-
+      The local part is a shared role alias (admin, info, support...)
+      rather than a personal mailbox. Role addresses receive bulk mail
+      and appear in scraped lists constantly, so their breach and spam
+      footprint says little about any individual.
+    severity: info
+    weight: 5
+    tags: [role-account, context]
+    conditions:
+      - field: local_part
+        operator: in
+        value: [admin, administrator, info, support, contact, billing,
+                sales, helpdesk, security, abuse, postmaster, webmaster]
+
+  - id: EMAIL-008
+    title: No public footprint
+    description: >-
+      No breach history and no Gravatar profile. Legitimate long-lived
+      personal addresses usually leave some trace; total silence is
+      consistent with a purpose-built address, though also with careful
+      privacy practices.
+    severity: info
+    weight: 5
+    tags: [footprint, context]
+    conditions:
+      - field: gravatar_exists
+        operator: is_false
+      - field: hibp_breach_count
+        operator: eq
+        value: 0
+
+  - id: EMAIL-009
+    title: Low reputation score
+    description: >-
+      EmailRep rates the address 25/100 or lower. The score aggregates
+      deliverability, breach and fraud signals from many sources, so a
+      low value corroborates the individual findings in this pack.
+    severity: medium
+    weight: 15
+    tags: [reputation]
+    conditions:
+      - field: emailrep_reputation
+        operator: lte
+        value: 25
+
+  - id: EMAIL-010
+    title: Mail domain is days old
+    description: >-
+      The mail domain was registered within the last 30 days. A domain
+      this young has no reputation to lose, which is exactly what
+      short-lived spam and phishing operations buy domains for.
+    severity: medium
+    weight: 15
+    tags: [age, mail]
+    conditions:
+      - field: domain_age_days
+        operator: lte
+        value: 30
+
+  - id: EMAIL-011
+    title: Tracker flagged disposable
+    description: >-
+      The lookup itself already marked the address disposable. This rule
+      mirrors the tracker flag for parity so the pack fires even when the
+      email field itself was not populated.
+    severity: medium
+    weight: 15
+    tags: [disposable, parity]
+    conditions:
+      - field: disposable
+        operator: is_true
+
+  - id: EMAIL-012
+    title: Free mailbox provider
+    description: >-
+      The domain belongs to a major free mailbox provider. Millions of
+      legitimate users share it, so provider-level signals are weak and
+      individual findings should carry the weight. Recorded as context
+      only.
+    severity: info
+    weight: 0
+    tags: [context]
+    conditions:
+      - field: domain
+        operator: in
+        value: [gmail.com, outlook.com, hotmail.com, yahoo.com,
+                proton.me, protonmail.com, icloud.com, aol.com]
