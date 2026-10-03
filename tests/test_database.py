@@ -49,3 +49,24 @@ def test_max_history_entries_is_enforced(tmp_env, monkeypatch):
 def test_save_disabled_returns_minus_one(tmp_env, monkeypatch):
     monkeypatch.setattr(config.app_config, 'save_history', False)
     assert db.save_query('unittest', 'ignored', {}) == -1
+
+
+def test_save_query_redacts_secrets(tmp_env):
+    token = 'ghp_' + 'A' * 20
+    query_id = db.save_query(
+        'unittest', token,
+        {'info': {'note': f'token {token} inside', 'openpgp': False}},
+        success=False, error_message=f'failed with {token}')
+    assert query_id > 0
+
+    record = db.get_query_by_id(query_id)
+    assert record is not None
+    assert 'ghp_' not in record.query_value
+    assert 'ghp_' not in record.result_data
+    assert 'ghp_' not in record.error_message
+    assert '[REDACTED:GITHUB_TOKEN]' in record.query_value
+    assert '[REDACTED:GITHUB_TOKEN]' in record.result_data
+    # Real collected facts survive redaction untouched.
+    assert '"openpgp": false' in record.result_data
+
+    db.delete_history(query_id)

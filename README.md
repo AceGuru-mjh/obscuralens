@@ -37,6 +37,16 @@ Multi-source OSINT console and investigation platform for **10 target kinds**: I
 
 Keyed sources layer on automatically when a key is configured. Zero keys required to start.
 
+## Screenshots
+
+| Console menu | IP lookup |
+|---|---|
+| ![ObscuraLens console menu](asset/banner.png) | ![ObscuraLens IP lookup](asset/ip-lookup.png) |
+
+| Phone lookup | Username scan |
+|---|---|
+| ![ObscuraLens phone lookup](asset/phone-lookup.png) | ![ObscuraLens username scan](asset/username-scan.png) |
+
 ## Installation
 
 Requires Python 3.9+.

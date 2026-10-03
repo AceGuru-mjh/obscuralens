@@ -9,6 +9,7 @@ is not a terminal, when NO_COLOR is set, or when OBSCURALENS_NO_COLOR is set.
 import contextlib
 import json
 import os
+import re
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -372,3 +373,31 @@ def get_input(prompt: str, required: bool = True) -> str:
         if value or not required:
             return value
         print_error("This field is required")
+
+
+#: Secret patterns redacted before anything is persisted (history database)
+#: or echoed back. A pasted token must never end up stored or displayed.
+_SECRET_PATTERNS = (
+    (re.compile(r'ghp_[A-Za-z0-9]{10,}'), '[REDACTED:GITHUB_TOKEN]'),
+    (re.compile(r'gho_[A-Za-z0-9]{10,}'), '[REDACTED:GITHUB_TOKEN]'),
+    (re.compile(r'github_pat_[A-Za-z0-9_]{10,}'), '[REDACTED:GITHUB_TOKEN]'),
+    (re.compile(r'sk-[A-Za-z0-9]{10,}'), '[REDACTED:API_KEY]'),
+    (re.compile(r'xox[bpas]-[A-Za-z0-9-]+'), '[REDACTED:SLACK_TOKEN]'),
+    (re.compile(r'AKIA[0-9A-Z]{16}'), '[REDACTED:AWS_KEY]'),
+    (re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----'), '[REDACTED:PRIVATE_KEY]'),
+)
+
+
+def sanitize_secrets(text: Any) -> Any:
+    """
+    Redact secret-looking strings so they are never stored or displayed.
+
+    Non-string values pass through untouched. Deliberately conservative:
+    only well-known token shapes are matched, so ordinary lookup targets
+    (IPs, domains, usernames) are never altered.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+    for pattern, replacement in _SECRET_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
