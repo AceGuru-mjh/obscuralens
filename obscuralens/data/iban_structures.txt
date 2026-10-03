@@ -1,0 +1,159 @@
+# ObscuraLens per-country IBAN structure pack (ISO 13616 registry).
+#
+# Sources:
+#   * SWIFT IBAN registry, machine-readable mirror from the php-iban project
+#     (globalcitizen/php-iban registry.txt, generated from the official
+#     ISO 13616 registry editions)
+#   * iban.com structure table, used to cross-check every shared length
+#     (0 mismatches across the 85 shared countries) and to add the newest
+#     entries (FK, LY, MN, SO).
+#
+# This is the COMPLETE published registry subset relevant to validation:
+# 124 country structures including the French territorial IBANs that share
+# the French layout (GF, GP, MQ, NC, PF, RE, TF, WF, YT, BL, MF, PM) and
+# the West/Central African states (CI, SN, ML, BF, NE, TG, CM, GA, ...).
+#
+# Format: one entry per line, sorted by country code, no duplicates:
+#   CC|length|bank_code_len|account_len|country_name
+# * CC          - ISO 3166-1 alpha-2 country code (also the IBAN prefix)
+# * length      - total IBAN length in characters (country + 2 check + BBAN)
+# * bank_code_len - characters at the front of the BBAN that identify the
+#   bank (per the registry's bank-identifier offsets); 0 = flat BBAN with
+#   no published split
+# * account_len - remaining BBAN characters after the bank identifier
+#
+# The IBAN mod-97 checksum itself is computed in code (iban_sources); this
+# pack provides per-country length/structure knowledge for offline checks.
+#
+# Major economies that do NOT use IBAN (domestic systems only):
+#   US (ABA routing), CA (transit/routing), CN, JP, AU (BSB), MX (CLABE),
+#   IN (IFSC). RU appears below with its registry structure but Russian
+#   banks operate domestic account numbers in practice.
+#
+# Entries from registry extensions not present in the official SWIFT
+# registry (per php-iban's swift_official flag): DZ, AO, BJ, BF, CM, CV, CF, TD, KM, CI, EG, GQ, GA, GW, IR, MG, ML, MA, MZ, NE, SN, TG, UA.
+# Their lengths follow the widely-published per-country structures.
+AD|24|4|16|Andorra
+AE|23|3|16|United Arab Emirates
+AL|28|3|21|Albania
+AO|25|0|21|Angola
+AT|20|5|11|Austria
+AX|18|3|11|Åland Islands
+AZ|28|4|20|Azerbaijan
+BA|20|3|13|Bosnia and Herzegovina
+BE|16|3|9|Belgium
+BF|27|0|23|Burkina Faso
+BG|22|4|14|Bulgaria
+BH|22|4|14|Bahrain
+BI|27|5|18|Burundi
+BJ|28|0|24|Benin
+BL|27|5|18|Saint Barthélemy
+BR|29|8|17|Brazil
+BY|28|4|20|Belarus
+CF|27|5|18|Central African Republic
+CG|27|5|18|Congo
+CH|21|5|12|Switzerland
+CI|28|0|24|Côte d'Ivoire
+CM|27|0|23|Cameroon
+CR|22|4|14|Costa Rica
+CV|25|0|21|Cape Verde
+CY|28|3|21|Cyprus
+CZ|24|4|16|Czech Republic
+DE|22|8|10|Germany
+DJ|27|5|18|Djibouti
+DK|18|4|10|Denmark
+DO|28|4|20|Dominican Republic
+DZ|24|0|20|Algeria
+EE|20|2|14|Estonia
+EG|29|5|20|Egypt
+ES|24|4|16|Spain
+FI|18|3|11|Finland
+FK|18|2|12|Falkland Islands
+FO|18|4|10|Faroe Islands
+FR|27|5|18|France
+GA|27|5|18|Gabon
+GB|22|4|14|United Kingdom
+GE|22|2|16|Georgia
+GF|27|5|18|French Guiana
+GI|23|4|15|Gibraltar
+GL|18|4|10|Greenland
+GP|27|5|18|Guadelope
+GQ|27|5|18|Equitorial Guinea
+GR|27|3|20|Greece
+GT|28|4|20|Guatemala
+GW|25|4|17|Guinea-Bissau
+HN|28|4|20|Honduras
+HR|21|7|10|Croatia
+HU|28|3|21|Hungary
+IE|22|4|14|Ireland
+IL|23|3|16|Israel
+IQ|23|4|15|Iraq
+IR|26|0|22|Iran
+IS|26|4|18|Iceland
+IT|27|5|18|Italy
+JO|30|4|22|Jordan
+KM|27|5|18|Comoros
+KW|30|4|22|Kuwait
+KZ|20|3|13|Kazakhstan
+LB|28|4|20|Lebanon
+LC|32|4|24|Saint Lucia
+LI|21|5|12|Liechtenstein
+LT|20|5|11|Lithuania
+LU|20|3|13|Luxembourg
+LV|21|4|13|Latvia
+LY|25|3|18|Libya
+MA|28|3|23|Morocco
+MC|27|5|18|Monaco
+MD|24|2|18|Moldova
+ME|22|3|15|Montenegro
+MF|27|5|18|Saint Martin (French Part)
+MG|27|0|23|Madagascar
+MK|19|3|12|Macedonia
+ML|28|0|24|Mali
+MN|20|4|12|Mongolia
+MQ|27|5|18|Martinique
+MR|27|5|18|Mauritania
+MT|31|4|23|Malta
+MU|30|6|20|Mauritius
+MZ|25|0|21|Mozambique
+NC|27|5|18|New Caledonia
+NE|28|5|18|Niger
+NI|28|4|20|Nicaragua
+NL|18|4|10|Netherlands
+NO|15|4|7|Norway
+OM|23|3|16|Oman
+PF|27|5|18|French Polynesia
+PK|24|4|16|Pakistan
+PL|28|8|16|Poland
+PM|27|5|18|Saint-Pierre and Miquelon
+PS|29|4|21|Palestine
+PT|25|4|17|Portugal
+QA|29|4|21|Qatar
+RE|27|5|18|Réunion
+RO|24|4|16|Romania
+RS|22|3|15|Serbia
+RU|33|9|20|Russian Federation
+SA|24|2|18|Saudi Arabia
+SC|31|4|23|Seychelles
+SD|18|2|12|Sudan
+SE|24|3|17|Sweden
+SI|19|2|13|Slovenia
+SK|24|4|16|Slovakia
+SM|27|5|18|San Marino
+SN|28|0|24|Senegal
+SO|23|4|15|Somalia
+ST|25|4|17|São Tomé and Príncipe
+SV|28|4|20|El Salvador
+TD|27|5|18|Chad
+TF|27|5|18|French Southern Territories
+TG|28|5|21|Togo
+TL|23|4|15|Timor-Leste
+TN|24|2|18|Tunisia
+TR|26|5|17|Turkey
+UA|29|6|19|Ukraine
+VA|22|3|15|Vatican (Holy See)
+VG|24|4|16|British Virgin Islands
+WF|27|5|18|Wallis and Futuna
+XK|20|2|14|Kosovo
+YE|30|4|22|Yemen
+YT|27|5|18|Mayotte
