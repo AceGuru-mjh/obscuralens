@@ -2,6 +2,88 @@
 
 ## Changelog
 
+## 5.1.0-beta.1 — Desktop Beta
+
+ObscuraLens 5.1 launches the **Desktop Beta program**: the whole platform as
+a downloadable single-file executable, plus a large offline/reference layer —
+14 languages, a 10-pack data catalog, a Python SDK, explainable risk rule
+packs and report templates. Tagged pre-releases are published automatically
+by CI; see [docs/desktop-beta.md](docs/desktop-beta.md) for the download
+guide and [docs/v5.1.md](docs/v5.1.md) for the full notes.
+
+### Added — Desktop Beta
+
+- `obscuralens desktop` — single-instance desktop launcher: acquires a lock
+  file, probes free ports (8000-8020), boots the local web UI, polls
+  readiness, opens the browser and shuts down gracefully on Ctrl+C.
+  Flags: `--host`, `--port`, `--no-browser`, `--channel`,
+  `--diagnostics`, `--check-update`.
+- `obscuralens update check` — GitHub Releases update check with
+  semver pre-release ordering (beta.2 > beta.1, rc > beta, nightly lowest);
+  channel-aware (beta/stable/nightly); never auto-downloads.
+- `obscuralens-desktop` console script (pyproject entry point) plus the
+  `desktop` optional extra.
+- Desktop package: branding (ASCII banner, channel badge, about text),
+  channel registry, updater, single-instance lock with stale takeover,
+  diagnostics report (runtime, paths, dependencies, data packs, network).
+- **Release workflows**: `desktop-beta.yml` (triggered by `v*-beta*` tags or
+  manual dispatch) builds win-x64 / linux-x64 / macos-arm64 binaries,
+  smoke-tests each, attaches SHA-256 checksums and publishes a pre-release
+  with download instructions; `desktop-nightly.yml` refreshes a rolling
+  nightly pre-release at 03:00 UTC. New `desktop` CI job runs the focused
+  v5.1 test surface plus CLI smoke tests.
+
+### Added — Internationalization (14 languages)
+
+- `obscuralens.i18n`: Python-module catalogues for en, zh, ja, ko, de, fr,
+  es, pt, ru, it, nl, pl, ar, hi (220 keys each, 100% coverage); `t()`
+  interpolation, `tp()` plurals (zero/one/many), English fallback chain,
+  Accept-Language `best_match`, RTL awareness.
+- `obscuralens i18n list|show|match` CLI commands.
+
+### Added — Offline data catalog (10 packs)
+
+- IANA port/service registry (~2,600 entries), ISO 3166-1 countries,
+  ISO 639 languages, ISO 4217 currencies, HTTP status codes, a MITRE CWE
+  selection, the IANA root-zone TLD list (~1,400), file extensions, MIME
+  types and a user-agent rotation pool (~317 realistic current agents).
+- Typed, never-raising `obscuralens.utils.data_catalog` API plus the
+  `obscuralens data country|port|tld|cwe|status|ua|mime|stats` CLI family.
+
+### Added — Python SDK
+
+- `obscuralens.sdk`: sync `ObscuraLensClient` and `AsyncObscuraLensClient`
+  covering every REST endpoint, stdlib-only transport, retries with
+  exponential backoff and Retry-After honouring, typed exception hierarchy
+  (ApiError/NotFoundError/RateLimitError/...), injectable `StaticTransport`
+  for offline tests.
+
+### Added — Explainable risk rule packs
+
+- `obscuralens.rules`: YAML rule DSL with 23 operators (`in_cidr`,
+  `age_lt_days`, `known_pack`, regex, comparisons, membership, ...) and 15
+  packs (shared + all 14 kinds, ~165 rules). Every hit carries an
+  explanation; scores accumulate to a 0-100 band
+  (clean/watch/elevated/high/critical).
+
+### Added — Reports, pipelines, docs
+
+- Jinja2 report templates: standalone HTML (self-contained CSS, print
+  styles, accessible tables), Markdown and an executive summary card, plus
+  the `template_render` module with `esc`/`nl2br`/`fmt_pct` filters.
+- 8 new pipeline examples (email triage, phishing URL review, CVE patch
+  priority, crypto screening, malware hash response, brand username audit,
+  network sweep, weekly exec brief).
+- New docs: desktop-beta.md, i18n.md, data-packs.md, sdk.md, rules.md,
+  v5.1.md.
+
+### Fixed
+
+- The PyInstaller spec now bundles **all package data** (offline data packs,
+  rule packs, report templates) via `collect_data_files` — previously the
+  standalone exe silently shipped without them. pyproject package-data
+  globs added for wheels too.
+
 ## 5.0.0 — 2026-10-03
 
 ObscuraLens grows from 10 to **14 target kinds**, gains a local-first analyst

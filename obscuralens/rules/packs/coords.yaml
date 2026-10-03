@@ -1,0 +1,168 @@
+# ObscuraLens explainable rule pack -- coords
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the coordinates tracker output: latitude, longitude,
+# is_ocean, near_military_base, accuracy_radius, geohash, timezone,
+# country...
+# ---------------------------------------------------------------------------
+
+name: coords-rules
+description: >-
+  Explainable plausibility and precision heuristics for geographic
+  coordinate lookups.
+version: 1
+rules:
+  - id: COORDS-001
+    title: Null Island
+    description: >-
+      Both coordinates are exactly zero -- the famous Null Island at
+      0N 0E in the Gulf of Guinea. No real observation sits there; the
+      value is a geocoding fallback for unparseable or missing location
+      data and must not be treated as a position.
+    severity: medium
+    weight: 15
+    tags: [plausibility]
+    conditions:
+      - field: latitude
+        operator: eq
+        value: 0
+      - field: longitude
+        operator: eq
+        value: 0
+
+  - id: COORDS-002
+    title: Open-ocean position
+    description: >-
+      Reverse geocoding resolves the point to water. Ocean coordinates
+      in a person- or device-adjacent dataset almost always mean a
+      mis-set datum, swapped lat/lon, or IP-geolocation drift being read
+      as a real fix.
+    severity: low
+    weight: 10
+    tags: [plausibility]
+    conditions:
+      - field: is_ocean
+        operator: is_true
+
+  - id: COORDS-003
+    title: Sensitive-site proximity flag
+    description: >-
+      The point falls within the flagged radius of a military or other
+      sensitive installation. Purely a data-quality caution: published
+      datasets of such sites are coarse, and coordinates near them are
+      frequently scraped, rounded or deliberately obfuscated.
+    severity: low
+    weight: 10
+    tags: [plausibility, context]
+    conditions:
+      - field: near_military_base
+        operator: is_true
+
+  - id: COORDS-004
+    title: Huge accuracy radius
+    description: >-
+      The source reports an accuracy radius of 5,000 metres or more. At
+      that scale the coordinate identifies a town at best -- drawing
+      conclusions about a specific address or venue from it would be
+      false precision.
+    severity: info
+    weight: 5
+    tags: [precision]
+    conditions:
+      - field: accuracy_radius
+        operator: gte
+        value: 5000
+
+  - id: COORDS-005
+    title: Latitude out of range
+    description: >-
+      The latitude exceeds 90 degrees north, which cannot exist on the
+      WGS 84 ellipsoid. The value is corrupted or the two axes were
+      combined/transformed incorrectly upstream.
+    severity: low
+    weight: 10
+    tags: [validity]
+    references: ["WGS 84 (NIMA TR8350.2)"]
+    conditions:
+      - field: latitude
+        operator: gt
+        value: 90
+
+  - id: COORDS-006
+    title: Latitude below the pole
+    description: >-
+      The latitude is below -90 degrees. As with over-range northern
+      values this is arithmetically impossible and marks a corrupted or
+      mis-assembled coordinate pair.
+    severity: low
+    weight: 10
+    tags: [validity]
+    references: ["WGS 84 (NIMA TR8350.2)"]
+    conditions:
+      - field: latitude
+        operator: lt
+        value: -90
+
+  - id: COORDS-007
+    title: Centimetre-level geohash precision
+    description: >-
+      The geohash is 9 characters or longer, implying sub-5-metre
+      cells. Genuine GPS fixes rarely justify that precision, so a
+      hyper-precise geohash usually signals fabricated or
+      artificially-quantised coordinates.
+    severity: info
+    weight: 5
+    tags: [precision]
+    conditions:
+      - field: geohash_length
+        operator: gte
+        value: 9
+
+  - id: COORDS-008
+    title: Timezone unresolvable
+    description: >-
+      No timezone could be matched to the point. Combined with a
+      missing country this suggests the coordinates failed reverse
+      geocoding entirely, so every derived local-time claim is junk.
+    severity: info
+    weight: 5
+    tags: [coverage]
+    conditions:
+      - field: timezone
+        operator: empty
+        value: true
+
+  - id: COORDS-009
+    title: No country resolved
+    description: >-
+      Reverse geocoding returned no country for the point. Without a
+      jurisdiction, legal and language context cannot be attached and
+      the coordinate should be re-sourced before use.
+    severity: info
+    weight: 5
+    tags: [coverage]
+    conditions:
+      - field: country
+        operator: empty
+        value: true
+
+  - id: COORDS-010
+    title: Well-formed populated-place fix
+    description: >-
+      The point resolves to a country, carries a plausible accuracy
+      radius and is not on water. Positive context: this is what a
+      usable coordinate looks like, and absence of the other rules is
+      then meaningful.
+    severity: info
+    weight: 0
+    tags: [positive]
+    conditions:
+      - field: country
+        operator: not_empty
+        value: true
+      - field: is_ocean
+        operator: is_false

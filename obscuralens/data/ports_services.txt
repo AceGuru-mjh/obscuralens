@@ -1,0 +1,2684 @@
+# ObscuraLens offline data pack: TCP/UDP port assignments and services.
+# Source registry: IANA Service Name and Transport Protocol Port Number
+# Registry (iana.org/assignments/service-names-port-numbers) - public
+# registry data, plus widely recognised de-facto service usage for
+# unassigned-but-conventional ports (marked "unofficial" in descriptions).
+# Generated for ObscuraLens offline packs - see obscuralens/utils/data_packs.py
+# and obscuralens/utils/data_catalog.py.
+#
+# Format: port/protocol|service-name|short description
+#   - port: decimal port number; protocol: tcp or udp
+#   - service names follow IANA where assigned; common de-facto names are
+#     used for unassigned-but-conventional ports (e.g. 3389 ms-wbt-server)
+#   - port ranges: 0-1023 well-known, 1024-49151 registered,
+#     49152-65535 dynamic/private
+#   - sections: well-known TCP, well-known UDP, notable registered ports
+0/tcp|tcpmux|TCP Port Service Multiplexer
+1/tcp|tcpmux|TCP Port Service Multiplexer
+2/tcp|compressnet|Management Utility
+3/tcp|compressnet|Compression Process
+5/tcp|rje|Remote Job Entry
+7/tcp|echo|Echo protocol
+9/tcp|discard|Discard protocol (sink)
+11/tcp|systat|Active Users / system status
+13/tcp|daytime|Daytime protocol (RFC 867)
+15/tcp|netstat|Network status (unofficial)
+17/tcp|qotd|Quote of the Day
+18/tcp|msp|Message Send Protocol
+19/tcp|chargen|Character Generator protocol
+20/tcp|ftp-data|FTP data channel
+21/tcp|ftp|File Transfer Protocol control
+22/tcp|ssh|Secure Shell remote login
+23/tcp|telnet|Telnet remote login (cleartext)
+25/tcp|smtp|Simple Mail Transfer Protocol
+27/tcp|nsw-fe|NSW User System FE (obscure)
+29/tcp|msg-icp|MSG ICP
+31/tcp|msg-auth|MSG Authentication
+33/tcp|dsp|Display Support Protocol
+35/tcp|priv-print|Any private printer server
+37/tcp|time|Time protocol (RFC 868)
+38/tcp|rap|Route Access Protocol
+39/tcp|rlp|Resource Location Protocol
+41/tcp|graphics|Graphics protocol
+42/tcp|nameserver|Host Name Server
+43/tcp|whois|WHOIS directory service
+44/tcp|mpm-flags|MPM FLAGS Protocol
+45/tcp|mpm|Message Processing Module
+46/tcp|mpm-snd|MPM send protocol
+47/tcp|ni-ftp|NI FTP
+48/tcp|auditd|Digital Audit Daemon
+49/tcp|tacacs|Login Host Protocol (TACACS)
+50/tcp|re-mail-ck|Remote Mail Checking Protocol
+51/tcp|la-maint|IMP Logical Address Maintenance
+52/tcp|xns-time|XNS Time Protocol
+53/tcp|domain|Domain Name System
+54/tcp|xns-ch|XNS Clearinghouse
+55/tcp|isi-gl|ISI Graphics Language
+56/tcp|xns-auth|XNS Authentication
+57/tcp|mtp|Any private terminal access (MTP)
+58/tcp|xns-mail|XNS Mail
+59/tcp|priv-file|Any private file service
+61/tcp|ni-mail|NI MAIL
+62/tcp|acas|ACA Services
+63/tcp|whois++|WHOIS++ extended whois
+64/tcp|covia|Communications Integrator (CI)
+65/tcp|tacacs-ds|TACACS-Database Service
+66/tcp|sql-net|Oracle SQL*NET
+67/tcp|bootps|Bootstrap Protocol / DHCP server
+68/tcp|bootpc|Bootstrap Protocol / DHCP client
+69/tcp|tftp|Trivial File Transfer Protocol
+70/tcp|gopher|Gopher document service
+71/tcp|netrjs-1|Remote Job Service
+72/tcp|netrjs-2|Remote Job Service
+73/tcp|netrjs-3|Remote Job Service
+74/tcp|netrjs-4|Remote Job Service
+75/tcp|priv-dial|Any private dial-out service
+76/tcp|deos|Distributed External Object Store
+77/tcp|priv-rje|Any private remote job entry
+78/tcp|vettcp|vettcp
+79/tcp|finger|Finger user information
+80/tcp|http|World Wide Web HTTP
+81/tcp|hosts2-ns|HOSTS2 Name Server
+82/tcp|xfer|XFER Utility
+83/tcp|mit-ml-dev|MIT ML Device
+84/tcp|ctf|Common Trace Facility
+85/tcp|mit-ml-dev2|MIT ML Device alternate
+86/tcp|mfcobol|Micro Focus Cobol
+87/tcp|priv-term-l|Any private terminal link
+88/tcp|kerberos|Kerberos authentication
+89/tcp|su-mit-tg|SU/MIT Telnet Gateway
+90/tcp|dnsix|DNSIX security attribute map
+91/tcp|dnsix-ca|DNSIX central authority
+92/tcp|npp|Network Printing Protocol
+93/tcp|dcp|Device Control Protocol
+94/tcp|objcall|Tivoli Object Dispatcher
+95/tcp|supdup|SUPDUP protocol
+96/tcp|dixie|DIXIE Protocol
+97/tcp|swift-rvf|Swift Remote Virtual File
+98/tcp|tacnews|TAC News
+99/tcp|metagram|Metagram Relay
+100/tcp|newacct|Unauthorised use
+101/tcp|hostname|NIC Host Name Server
+102/tcp|iso-tsap|ISO-TSAP Class 4
+103/tcp|gppitnp|Genesis Point-to-Point Trans Net
+104/tcp|acr-nema|ACR-NEMA digital imaging
+105/tcp|cso|CSO name server
+106/tcp|3com-tsmux|3COM-TSMUX
+107/tcp|rtelnet|Remote Telnet Service
+108/tcp|snagas|SNA Gateway Access Server
+109/tcp|pop2|Post Office Protocol v2
+110/tcp|pop3|Post Office Protocol v3
+111/tcp|sunrpc|SUN RPC (rpcbind)
+112/tcp|mcidas|McIDAS data transmission
+113/tcp|ident|Identification Protocol (auth)
+114/tcp|audionews|Audio News Multicast
+115/tcp|sftp|Simple File Transfer Protocol
+116/tcp|ansanotify|ANSA REX Notify
+117/tcp|uucp-path|UUCP Path Service
+118/tcp|sqlserv|SQL Services
+119/tcp|nntp|Network News Transfer Protocol
+120/tcp|cfdptkt|CFDPTKT
+121/tcp|erpc|Encore Expedited Remote Call
+122/tcp|smakynet|SMAKYNET
+123/tcp|ntp|Network Time Protocol
+124/tcp|ansatrader|ANSA REX Trader
+125/tcp|locus-map|Locus PC-Interface map server
+126/tcp|unitary|Unisys Unitary Login
+127/tcp|locus-con|Locus PC-Interface conn server
+128/tcp|gss-xlicen|GSS X License Verification
+129/tcp|pwdgen|Password Generator Protocol
+130/tcp|cisco-fna|Cisco FNATIVE
+131/tcp|cisco-tna|Cisco TNATIVE
+132/tcp|cisco-sys|Cisco SYSMAINT
+133/tcp|statsrv|Statistics Service
+134/tcp|ingres-net|INGRES-NET Service
+135/tcp|epmap|DCE endpoint resolution (MSRPC)
+136/tcp|profile|PROFILE Naming System
+137/tcp|netbios-ns|NETBIOS Name Service (SMB)
+138/tcp|netbios-dgm|NETBIOS Datagram Service (SMB)
+139/tcp|netbios-ssn|NETBIOS Session Service (SMB)
+140/tcp|emfis-data|EMFIS Data Service
+141/tcp|emfis-cntl|EMFIS Control Service
+142/tcp|bl-idm|Britton-Lee IDM
+143/tcp|imap|Internet Message Access Protocol
+144/tcp|news|NeWS Window System
+145/tcp|uaac|UAAC Protocol
+146/tcp|iso-tp0|ISO-IP0
+147/tcp|iso-ip|ISO-IP
+148/tcp|cronus|CRONUS-SUPPORT
+149/tcp|aed-512|AED 512 Emulation
+150/tcp|sql-net2|SQL-NET alternate
+151/tcp|hems|HEMS
+152/tcp|bftp|Background File Transfer Program
+153/tcp|sgmp|SGMP
+154/tcp|netsc-prod|NetScater NetFiler production
+155/tcp|netsc-dev|NetScater NetFiler development
+156/tcp|sqlsrv|SQL Service
+157/tcp|knet-cmp|KNET/VM command protocol
+158/tcp|pcmail-srv|PCMail Server
+159/tcp|nss-routing|NSS-Routing
+160/tcp|sgmp-traps|SGMP-TRAPS
+161/tcp|snmp-tcp|SNMP over TCP
+162/tcp|snmptrap-tcp|SNMP Trap over TCP
+163/tcp|cmip-man|CMIP/TCP Manager
+164/tcp|cmip-agent|CMIP/TCP Agent
+165/tcp|xns-courier|Xerox Courier
+166/tcp|s-net|Sirius Systems
+167/tcp|namp|NAMP
+168/tcp|rsvd|RSVD
+169/tcp|send|SEND
+170/tcp|print-srv|Network PostScript
+171/tcp|multiplex|Network Multiplexing
+172/tcp|cl-1|Network Innovations CL/1
+173/tcp|xyplex-mux|Xyplex multiplexer
+174/tcp|mailq|MAILQ
+175/tcp|vmnet|VMNET
+176/tcp|genrad-mux|GENRAD-MUX
+177/tcp|xdmcp|X Display Manager Control Protocol
+178/tcp|nextstep|NextStep Window Server
+179/tcp|bgp|Border Gateway Protocol
+180/tcp|ris|Intergraph
+181/tcp|unify|Unify
+182/tcp|audit|Unisys Audit
+183/tcp|ocbinder|OCBinder
+184/tcp|ocserver|OCServer
+185/tcp|remote-kis|Remote-KIS
+186/tcp|kis|KIS Protocol
+187/tcp|aci|Application Communication Interface
+188/tcp|mumps|Plus Five's MUMPS
+189/tcp|qft|Queued File Transport
+190/tcp|gacp|Gateway Access Control Protocol
+191/tcp|prospero|Prospero Directory Service
+192/tcp|osu-nms|OSU Network Monitoring
+193/tcp|srp|Spider Remote Protocol
+194/tcp|irc|Internet Relay Chat
+195/tcp|dn6-nlm-aud|DNSIX NLM audit
+196/tcp|dn6-smm-red|DNSIX SMM redirect
+197/tcp|dls|Directory Location Service
+198/tcp|dls-mon|DLS Monitor
+199/tcp|smux|SMUX
+200/tcp|src|IBM System Resource Controller
+201/tcp|at-rtmp|AppleTalk routing maintenance
+202/tcp|at-nbp|AppleTalk name binding
+203/tcp|at-3|AppleTalk unused
+204/tcp|at-echo|AppleTalk echo
+205/tcp|at-5|AppleTalk unused
+206/tcp|at-zis|AppleTalk zone info
+207/tcp|at-7|AppleTalk unused
+208/tcp|at-8|AppleTalk unused
+209/tcp|qmtp|Quick Mail Transfer Protocol
+210/tcp|z39-50|ANSI Z39.50 library catalog
+211/tcp|914c-g-data|Texas Instruments 914C/G
+212/tcp|anet|ATEXSSTR
+213/tcp|ipx|IPX over IP
+214/tcp|vmpwscs|VM PWSCS
+215/tcp|softpc|Insignia Solutions SoftPC
+216/tcp|atls|Authenticated TLSP
+217/tcp|dbase|dBASE Unix
+218/tcp|mpp|Netix Message Posting
+219/tcp|uarp|Unisys ARPs
+220/tcp|imap3|IMAP v3
+221/tcp|fln-spx|Berkeley rlogind with SPX
+222/tcp|rsh-spx|Berkeley rshd with SPX
+223/tcp|cdc|Certificate Distribution Center
+242/tcp|direct|Direct (rdbse)
+243/tcp|sur-meas|Survey Measurement
+244/tcp|inbusiness|Dayna/Open INBusiness
+245/tcp|link|LINK
+246/tcp|dsp3270|Display Systems Protocol
+247/tcp|subntbcst-tftp|SUBNTBCST/TFTP
+248/tcp|bhfhs|bhfhs
+255/tcp|reserved|Reserved
+256/tcp|rap2|RAP
+257/tcp|priv-rje2|Reserved
+258/tcp|priv-terminal|Reserved
+259/tcp|esro-gen|Efficient Short Remote Operations
+260/tcp|openport|Openport
+261/tcp|nsiiops|IIOP Name Service over TLS
+262/tcp|arcisdms|Arcisdms
+263/tcp|hdap|HDAP
+264/tcp|bgmp|Border Gateway Multicast Protocol
+265/tcp|x-bone-ctl|X-Bone CTL
+266/tcp|astxfile|Astxfile
+267/tcp|tobacco-ctl|Tobacco Control
+268/tcp|http-mgmt|http-mgmt
+269/tcp|manet-psng|MANET PDUs
+270/tcp|reserved2|Reserved
+271/tcp|pt-tls|PT-TLS
+272/tcp|tcp-discard-rate|Reserved
+280/tcp|http-webclient|Personal web client
+281/tcp|personal-link|Personal Link
+282/tcp|cableport-ax|Cable Port A/X
+286/tcp|fxp-1|FXP
+287/tcp|fxp-2|FXP
+308/tcp|novastorbakcup|Novastor Backup
+309/tcp|entrusttime|EntrustTime
+310/tcp|bhmds|bhmds
+313/tcp|magenta-logic|Magenta Logic
+314/tcp|opalis-robot|Opalis Robot
+315/tcp|dpsi|DPSI
+316/tcp|decauth|decauth
+317/tcp|zannet|Zannet
+318/tcp|pkix-timestamp|PKIX Time Stamp Protocol
+319/tcp|ptp-event|PTP Event (IEEE 1588)
+320/tcp|ptp-general|PTP General (IEEE 1588)
+321/tcp|pip|PIP
+322/tcp|rtsps|RTSP Secure
+323/tcp|rpki-rtr-tls|RPKI RTR over TLS
+324/tcp|rpki-rtr-tcp|RPKI-ROUTER over TCP
+333/tcp|texar|Texar Security Protocol
+344/tcp|pdap|Prospero Data Access
+345/tcp|pawserv|Perf Analysis Workbench
+346/tcp|zserv|Zebra server
+347/tcp|fatserv|Fatmen Server
+348/tcp|csi-sgwp|Cabletron management
+349/tcp|mftp|mftp
+350/tcp|matip-type-a|MATIP Type A
+351/tcp|matip-type-b|MATIP Type B
+352/tcp|dtag-ste-sb|DTAG
+353/tcp|ndsauth|NDS Auth
+354/tcp|bh611|bh611
+355/tcp|matip-type-c|MATIP Type C
+356/tcp|cloanto-net-1|Cloanto Net 1
+357/tcp|bhevent|bhevent
+358/tcp|shrinkwrap|Shrinkwrap
+359/tcp|tenebris_ntp|Tenebris NTP
+360/tcp|semantix|Semantix
+361/tcp|semantix-ss7|Semantix SS7
+362/tcp|rkn-dap|RKN-DAP
+363/tcp|rkn-tls|Reserved
+364/tcp|aurora|Aurora
+365/tcp|dtk|DTK
+366/tcp|odmr|On Demand Mail Relay
+367/tcp|mortgageware|MortgageWare
+368/tcp|qbikgdp|QbikGDP
+369/tcp|rpc2portmap|RPC2 Portmap
+370/tcp|codaauth2|Coda Authentication
+371/tcp|clearcase|Clearcase
+372/tcp|ulistserv|UNIX Listserv
+373/tcp|lanserver|Lanserver
+374/tcp|legent-1|Legent
+375/tcp|legent-2|Legent
+376/tcp|hap|HAProtocol (IBM)
+377/tcp|tnet/315|NEC Corporation
+378/tcp|ds/315|NEC Corporation
+379/tcp|is99c|TIA/EIA/IS-99
+380/tcp|is99s|TIA/EIA/IS-99
+381/tcp|hp-collector|HP performance collector
+382/tcp|hp-managed-node|HP managed node
+383/tcp|hp-alarm-mgr|HP alarm manager
+384/tcp|arns|A Remote Network Server
+385/tcp|ibm-app|IBM Application
+386/tcp|asa|ASA Message Router
+387/tcp|aurp|Appletalk Update Routing
+388/tcp|unidata-ldm|Unidata LDM
+389/tcp|ldap|Lightweight Directory Access Protocol
+390/tcp|uis|UIS
+391/tcp|synotics-relay|SynOptics Port Relay
+392/tcp|synotics-broker|SynOptics Port Broker
+393/tcp|dis|Data Integration Server
+394/tcp|embl-ndt|EMBL Nucleic Transfer
+395/tcp|netcp|NETscout Control
+396/tcp|netware-ip|Novell Netware over IP
+397/tcp|mptn|Multi Protocol Transaction
+398/tcp|kryptolan|Kryptolan
+399/tcp|iso-tsap-c2|ISO Transport class 2
+400/tcp|work-sol|Workstation Solutions
+401/tcp|ups|Uninterruptible Power Supply
+402/tcp|genie|Genie Protocol
+403/tcp|decap|decap
+404/tcp|nced|nced
+405/tcp|ncld|ncld
+406/tcp|interactive|Interactive Mail Support
+407/tcp|timbuktu|Timbuktu
+408/tcp|prospero2|Prospero alternate
+409/tcp|smpte|SMPTE
+410/tcp|decladebug|DECLADEBUG
+411/tcp|rmt|Remote MT Protocol
+412/tcp|synoptics-trap|Trap Convention
+413/tcp|smsp|SMSP
+414/tcp|infoseek|InfoSeek
+415/tcp|bnet|BNet
+416/tcp|silverplatter|Silverplatter
+417/tcp|onmux|Onmux
+418/tcp|hyper-g|Hyper-G
+419/tcp|ariel1|Ariel
+420/tcp|smpte2|SMPTE alternate
+421/tcp|ariel2|Ariel 2
+422/tcp|ariel3|Ariel 3
+423/tcp|opc-job-start|OPC Job Start
+424/tcp|opc-job-track|OPC Job Track
+425/tcp|icad-el|ICAD
+426/tcp|smartsdp|smartsdp
+427/tcp|svrloc|Server Location
+428/tcp|ocs-cmu|OCS/cmU
+429/tcp|ocs-amu|OCS/aMU
+430/tcp|utcp-smf1|UTCP
+431/tcp|utcp-smf2|UTCP 2
+432/tcp|nds-wrap|NDS wrapper
+433/tcp|nnsp|NNSP
+434/tcp|mobileip-agent|MobileIP-Agent
+435/tcp|mobilip-mn|MobilIP-MN
+436/tcp|dna-cml|DNA-CML
+437/tcp|comscm|comscm
+438/tcp|dsfgw|dsfgw
+439/tcp|dasp|dasp
+440/tcp|sgcp|sgcp
+441/tcp|decvms-sysmgt|DEC VMS sysmgt
+442/tcp|cvc-hostd|cvc_hostd
+443/tcp|https|HTTP over TLS/SSL
+444/tcp|snpp|Simple Network Paging Protocol
+445/tcp|microsoft-ds|Directory Services (SMB/CIFS)
+446/tcp|ddm-rdb|DDM-RDB
+447/tcp|ddm-dfm|DDM-DFM
+448/tcp|ddm-ssl|DDM-SSL
+449/tcp|as-servermap|AS Server Mapper
+450/tcp|tserver|TServer
+451/tcp|sfs-smp|Cray Network Monitor
+452/tcp|sfs-config|Cray SFS config
+453/tcp|creativeserver|CreativePartnr server
+454/tcp|contentserver|Content server
+455/tcp|creativepartnr|CreativePartnr
+456/tcp|macon-tcp|macon
+457/tcp|scohelp|scohelp
+458/tcp|appleqtc|Apple QuickTime
+459/tcp|ampr-rcmd|ampr-rcmd
+460/tcp|skronk|skronk
+461/tcp|datasurfsrv|DataRampSrv
+462/tcp|datasurfsrvsec|DataRampSrvSec
+463/tcp|alpes|alpes
+464/tcp|kpasswd|Kerberos password change
+465/tcp|submissions|SMTP over implicit TLS
+466/tcp|digital-vrc|digital-vrc
+467/tcp|mylex-mapd|mylex-mapd
+468/tcp|photuris|Photuris
+469/tcp|rcp|Radio Control Protocol
+470/tcp|scx-proxy|scx-proxy
+471/tcp|mondex|Mondex
+472/tcp|ljk-login|ljk-login
+473/tcp|hybrid-pop|Hybrid POP
+474/tcp|tn-tl-w1|tn-tl-w1
+475/tcp|tcpnethaspsrv|tcpnethaspsrv
+476/tcp|tn-tl-fd1|tn-tl-fd1
+477/tcp|ss7ns|SS7 NS
+478/tcp|scx-dn|scx-dn
+479/tcp|iafserver|iafserver
+480/tcp|iafdbase|iafdbase
+481/tcp|ph|Ph service
+482/tcp|bgs-nsi|bgs-nsi
+483/tcp|ulpnet|ulpnet
+484/tcp|integra-sme|Integra Software
+485/tcp|softcp|Air Soft Power Burst
+486/tcp|avian|Avian
+487/tcp|saft|Saft simple asynchronous
+488/tcp|gss-http|GSS HTTP
+489/tcp|nss|NSS
+490/tcp|micom-pfs|micom-pfs
+491/tcp|go-login|go-login
+492/tcp|ticf-1|TICF-1
+493/tcp|ticf-2|TICF-2
+494/tcp|blp-1|BLp Bloomberg
+495/tcp|blp-2|BLp Bloomberg
+496/tcp|blp-3|BLp Bloomberg
+497/tcp|dantz|Dantz
+498/tcp|siam|siam
+499/tcp|iso-ill|ISO ILL Protocol
+500/tcp|isakmp|IPSec Key Management (IKE)
+501/tcp|stmf|STMF
+502/tcp|asa-appliance-proto|Modbus/TCP
+503/tcp|intrinsa|intrinsa
+504/tcp|citadel|Citadel
+505/tcp|mailbox-lm|mailbox-lm
+506/tcp|ohimsrv|ohimsrv
+507/tcp|crs|crs
+508/tcp|xvttp|xvttp
+509/tcp|snare|snare
+510/tcp|fcp|FirstClass Protocol
+511/tcp|passgo|passgo
+512/tcp|exec|remote process execution
+513/tcp|login|remote login (who)
+514/tcp|shell|remote shell (rsh)
+515/tcp|printer|spooler (lpd/lpr)
+516/tcp|videotex|videotex
+517/tcp|talk|Talk
+518/tcp|ntalk|New Talk
+519/tcp|utime|unixtime
+520/tcp|efs|extended file name server
+521/tcp|ripng|RIPng routing
+522/tcp|ulp|ulp
+523/tcp|ibm-db2|IBM DB2
+524/tcp|ncp|NCP
+525/tcp|timed|timeserver
+526/tcp|tempo|newdate
+527/tcp|stx|Stock Index Quote
+528/tcp|carv5|CARV5 client/server
+529/tcp|irc-serv|IRC service
+530/tcp|courier|courier RPC
+531/tcp|conference|chat
+532/tcp|netnews|readnews
+533/tcp|netwall|emergency broadcasts
+534/tcp|mm-admin|MegaMedia Admin
+535/tcp|iiop|IIOP
+536/tcp|mandelpool|mandelpool
+537/tcp|nntp2|Netnews alternate
+538/tcp|gdomap|gdomap
+539/tcp|apertus-ldp|Apertus LDP
+540/tcp|uucpd|uucpd
+541/tcp|uucp-rlogin|uucp-rlogin
+542/tcp|commerce|commerce
+543/tcp|klogin|Kerberos login
+544/tcp|kshell|Kerberos shell
+545/tcp|appleqtcsrvr|Apple QuickTime
+546/tcp|dhcpv6-client|DHCPv6 Client
+547/tcp|dhcpv6-server|DHCPv6 Server
+548/tcp|afpovernet|AFP over TCP (AppleShare)
+549/tcp|idfp|IDFP
+550/tcp|new-rwho|new-who
+551/tcp|cybercash|CyberCash
+552/tcp|device-share|devshr
+553/tcp|pirp|PIRP
+554/tcp|rtsp|Real Time Streaming Protocol
+555/tcp|dsf|dsf
+556/tcp|remotefs|remotefs (rfs)
+557/tcp|openvms-sysipc|OpenVMS sysipc
+558/tcp|sdnskmp|sdnskmp
+559/tcp|teedtap|teedtap
+560/tcp|rmonitor|rmonitord
+561/tcp|monitor|monitor
+562/tcp|chshell|chcmd (chshell)
+563/tcp|nntps|NNTP over TLS
+564/tcp|9pfs|Plan 9 file service
+565/tcp|whoami|whoami
+566/tcp|streettalk|StreetTalk
+567/tcp|banyan-rpc|Banyan RPC
+568/tcp|ms-shuttle|MS streettalk shuttle
+569/tcp|ms-rome|MS streettalk rome
+570/tcp|meter|demon metering
+571/tcp|meter2|udemon metering
+572/tcp|chargon|chargon
+573/tcp|banyan-vip|Banyan VIP
+574/tcp|ftp-agent-2|banyan-vip alternate
+575/tcp|vemmi|VEMMI
+576/tcp|ipcd|ipcd
+577/tcp|vnas|vnas
+578/tcp|ipdd|ipdd
+579/tcp|decbsrv|decbsrv
+580/tcp|sntp-heartbeat|SNTP heartbeat
+581/tcp|bdp|Bundle Discovery Protocol
+582/tcp|scc-security|SCC security
+583/tcp|philips-vc|Philips VC
+584/tcp|keyserver|Key Server
+585/tcp|imap4-ssl|IMAP over SSL (deprecated)
+586/tcp|pwdchange|Password change
+587/tcp|submission|Mail submission (SMTP)
+588/tcp|cal|CAL
+589/tcp|eyelink|EyeLink
+590/tcp|tn-cui|T.400
+591/tcp|http-alt|FileMaker HTTP
+592/tcp|eudora-set|Eudora set
+593/tcp|http-rpc-epmap|RPC over HTTP
+594/tcp|tpip|TPIP
+595/tcp|cab-protocol|CAB protocol
+596/tcp|smsd|Sysman daemon
+597/tcp|ptcnameservice|PTC Name Service
+598/tcp|scmwebsm|SCM/SPANWEB
+599/tcp|acp|Acolyte Core Protocol
+600/tcp|ipcserver|Sun IPC server
+601/tcp|syslog-relay|Syslog relay
+602/tcp|xmlrpc-beep|XML-RPC over BEEP
+603/tcp|idxp|IDX Payload
+604/tcp|tunnel|TUNNEL profile
+605/tcp|soap-beep|SOAP over BEEP
+606/tcp|urm|Cray Unified Resource
+607/tcp|nqs|NQS
+608/tcp|sift-uft|Sender-Initiated File Transfer
+609/tcp|npmp-trap|NPMP TRAP
+610/tcp|npmp-local|NPMP LOCAL
+611/tcp|npmp-entity|NPMP ENTITY
+612/tcp|hmmp-ops|HMMP Operation
+613/tcp|hmmp-ind|HMMP Indication
+614/tcp|hmmp-attr|HMMP Attributes
+615/tcp|sco-sysmgr|Internet Config Manager
+616/tcp|sco-dtmgr|Internet Config Manager
+617/tcp|deos-core|SCO Desktop
+618/tcp|deos-iqc|DEI-ICAD
+619/tcp|compaq-evm|Compaq EVM
+620/tcp|scm-scm|SCM interface
+621/tcp|escp-ip|ESCP
+622/tcp|collaborator|Collaborator
+623/tcp|aux-bus-shunt|Auxiliary Bus Shunt
+624/tcp|cryptoadmin|Crypto Admin
+625/tcp|dec-dlm|DEC DLM
+626/tcp|asia|ASIA
+627/tcp|passgo-tivoli|PassGo
+628/tcp|qmqp|QMQP quick mail queue
+629/tcp|3com-amp3|3Com AMP3
+630/tcp|rda|RDA
+631/tcp|ipp|Internet Printing Protocol
+632/tcp|bmpp|BMPP
+633/tcp|servstat|Service Status
+634/tcp|ginad|ginad
+635/tcp|rlzdbase|RLZ DBase
+636/tcp|ldaps|LDAP over TLS/SSL
+637/tcp|lanserver-lhc|lanserver
+638/tcp|metatransmetaring|MetaT. Ring
+639/tcp|msdp|Multicast Source Discovery
+640/tcp|entrust-svc|Entrust
+641/tcp|repcmd|repcmd
+642/tcp|esro-gen-esros|ESRO
+643/tcp|sanity|SANity
+644/tcp|dwrt-runner|DWRT
+645/tcp|pss|PSC
+646/tcp|lmp|Link Management Protocol
+647/tcp|dhcp-failover|DHCP Failover
+648/tcp|rrp|Registry Registrar Protocol
+649/tcp|cadview-3d|Cadview
+650/tcp|obex|OBEX
+651/tcp|uda-ldapi|UD
+652/tcp|uda-dapi|UDA
+653/tcp|declmdbs|DECL
+654/tcp|nemo|NEMO
+655/tcp|vs-tt|Virtual Software
+656/tcp|vmdtng|VMDTNG
+657/tcp|ibm-rsyscloesr|IBM RSCS
+658/tcp|tenfold|Ten Fold
+660/tcp|mac-srvr-admin|MacOS Server Admin
+662/tcp|pftp|PFTP
+663/tcp|purenoise|Pure Noise
+664/tcp|secure-aux-bus|Secure Aux Bus
+665/tcp|sun-dr|Sun dynamic reconfig
+666/tcp|mdqs|MDQS
+667/tcp|doom|Doom id software (legacy)
+668/tcp|mecomm|MECOMM
+669/tcp|meregister|Meregistry
+670/tcp|vacdsm-sws|VACDSM-SWS
+671/tcp|vppsqua|VPPS-QUA
+672/tcp|vpps-dda|VPPS-DDA
+673/tcp|implex|implex
+674/tcp|acap|ACAP application config
+675/tcp|dctp|DCTP
+676/tcp|vpps-via|VPPS Via
+677/tcp|vpps-msg|VPPS Message
+678/tcp|ggf-ncp|GFN
+679/tcp|mrm|MRM
+680/tcp|entrust-aa-ssl|Entrust AA SSL
+681/tcp|entrust-aams-ssl|Entrust AAMS SSL
+682/tcp|xfr|XFR
+683/tcp|corba-iiop-ssl|CORBA IIOP SSL
+684/tcp|corba-iiop2|CORBA IIOP
+685/tcp|mdc-portmapper|MDC Portmapper
+686/tcp|hcp-wism|HCP WISM
+687/tcp|asipregistry|ASIP Registry
+688/tcp|btp|Bloomberg
+689/tcp|nmap|NMAP
+690/tcp|vatp|VATP
+691/tcp|msexch-routing|MS Exchange Routing
+692/tcp|bios-notify|Hyperwave
+693/tcp|connendp|Connendp
+694/tcp|ha-cluster|Heartbeat (Linux-HA)
+695/tcp|ieee-mms-ssl|IEEE-MMS-SSL
+696/tcp|rushd|RUSHD
+697/tcp|uuidgen|UUIDGEN
+698/tcp|olsr|Optimized Link State Routing
+699/tcp|accessnetwork|Access Network
+700/tcp|epp|Extensible Provisioning Protocol
+701/tcp|lmp2|LMP alternate
+702/tcp|ar-server|AR Server
+703/tcp|elip|ELIP
+704/tcp|elcs|ELCS
+705/tcp|agentx|AgentX (SNMP)
+706/tcp|silc|SILC
+707/tcp|borland-ds|Borland DS
+708/tcp|csla-cmlb|CSLA
+709/tcp|entrustmanager|EntrustManager
+710/tcp|elite|Elite (31337 family)
+711/tcp|cisco-tdp|Cisco TDP
+712/tcp|tbrpf|TBRPF
+713/tcp|iris-xpc|IRIS over XPC
+714/tcp|iris-xpcs|IRIS over XPCS
+715/tcp|iris-lwz|IRIS-LWZ
+716/tcp|iris-beep|IRIS over BEEP
+717/tcp|fuze-bootstrap|Fuze Bootstrap
+718/tcp|fujitsu-dtcns|Fujitsu User Manager
+719/tcp|fujitsu-dtc|Fujitsu
+720/tcp|simcp|SIM-control
+721/tcp|scn|SCN
+722/tcp|cli|CLI
+723/tcp|iec-104|IEC 60870-5-104
+724/tcp|nbt|NBT
+725/tcp|de-consult|DE-Consult
+726/tcp|coas|COAS
+727/tcp|pmip-pmc-user|PMIP PMC
+728/tcp|rrim|RRIM
+729/tcp|netviewdm1|IBM NetView DM
+730/tcp|netviewdm2|IBM NetView DM
+731/tcp|netviewdm3|IBM NetView DM
+732/tcp|netview-dm|IBM NetView DM
+733/tcp|netview|netview
+734/tcp|licensedaemon|FLEX LM license daemon
+735/tcp|netx-admin|netx admin
+736/tcp|netx-nlm|netx nlm
+737/tcp|netx-db|netx db
+738/tcp|netx-sm|netx sm
+739/tcp|netx-agent|netx agent
+740/tcp|netx-map|netx map
+741/tcp|netx-chg|netx chg
+742/tcp|netx-relay|netx relay
+743/tcp|netx-tail|netx tail
+744/tcp|flexlm|Flexible License Manager
+745/tcp|fujitsu-dev|Fujitsu
+746/tcp|top-lgl|top-lgl
+747/tcp|top-raw|top-raw
+748/tcp|ris1|RIS
+749/tcp|kerberos-adm|Kerberos administration
+750/tcp|kerberos-iv|Kerberos IV (rfile)
+751/tcp|kerberos-master|Kerberos master (pump)
+752/tcp|qrh|qrh (submit)
+753/tcp|rrh|rrh (notify)
+754/tcp|tell|send (kerberos pw)
+755/tcp|nlogin|nlogin
+756/tcp|rfs2|rfs
+757/tcp|alock|alock
+758/tcp|rnfs|rnfs
+759/tcp|quotad|quotad
+760/tcp|ns2|ns (kerberos old)
+761/tcp|kpasswd2|kpasswd (rxe)
+762/tcp|quotad2|quotad
+763/tcp|cycleserv|cycleserv
+764/tcp|omserv|omserv
+765/tcp|webster|webster
+766/tcp|phonebook|phonebook
+767/tcp|phone|phone
+768/tcp|cbtcp|cbtcp
+769/tcp|vidtcp|vidtcp
+770/tcp|cadlock|cadlock
+771/tcp|rtip|rtip
+772/tcp|cycleserv2|cycleserv2
+773/tcp|submit|submit (notify)
+774/tcp|rpasswd|rpasswd
+775/tcp|entomb|entomb
+776/tcp|wpages|wpages
+777/tcp|multiling-http|Multiling HTTP
+778/tcp|betanet|betanet
+779/tcp|unknown779|unassigned
+780/tcp|unknown780|unassigned
+781/tcp|unknown781|unassigned
+782/tcp|concert|Concert
+783/tcp|hp-alarm-mgr2|HP alarm manager
+784/tcp|al-cnn|AL-CNN
+785/tcp|wild-rtp|Wild RTSP
+786/tcp|concert-send|Concert send
+787/tcp|qsc-control|QSC Control
+788/tcp|mdbs-daemon|MDBS daemon
+789/tcp|unknown789|unassigned
+790/tcp|unknown790|unassigned
+791/tcp|unknown791|unassigned
+792/tcp|unknown792|unassigned
+793/tcp|unknown793|unassigned
+794/tcp|unknown794|unassigned
+795/tcp|unknown795|unassigned
+796/tcp|unknown796|unassigned
+797/tcp|unknown797|unassigned
+798/tcp|unknown798|unassigned
+799/tcp|bagl-auto|bagl-auto
+800/tcp|mdbs-daemon2|MDBS daemon 2
+801/tcp|device|device
+802/tcp|mbap|Modbus over TCP
+803/tcp|unknown803|unassigned
+804/tcp|unknown804|unassigned
+805/tcp|unknown805|unassigned
+806/tcp|unknown806|unassigned
+807/tcp|unknown807|unassigned
+808/tcp|ccproxy-httping|CCProxy multi-protocol ping
+809/tcp|unknown809|unassigned
+810/tcp|fcp-adt|FCP-ADT
+811/tcp|synq|Synq
+812/tcp|unknown812|unassigned
+813/tcp|vcdp|VCDP
+814/tcp|unknown814|unassigned
+815/tcp|unknown815|unassigned
+816/tcp|unknown816|unassigned
+817/tcp|unknown817|unassigned
+818/tcp|unknown818|unassigned
+819/tcp|blr|BLR
+820/tcp|realtime-lm|Realtime License Manager
+821/tcp|unknown821|unassigned
+822/tcp|unknown822|unassigned
+823/tcp|lpx|LPX
+824/tcp|unknown824|unassigned
+825/tcp|unknown825|unassigned
+826/tcp|rxia|RXIA
+827/tcp|xtn|XTN
+828/tcp|itm-mcell-s|ITM MCell-S
+829/tcp|pkix-3-ca|PKIX-3 CA
+830/tcp|netconf-ssh|NETCONF over SSH
+831/tcp|netconf-beep|NETCONF over BEEP
+832/tcp|netconfsoaphttp|NETCONF SOAP over HTTPS
+833/tcp|netconfsoapbeep|NETCONF SOAP over BEEP
+834/tcp|unknown834|unassigned
+835/tcp|unknown835|unassigned
+836/tcp|unknown836|unassigned
+837/tcp|unknown837|unassigned
+838/tcp|unknown838|unassigned
+839/tcp|unknown839|unassigned
+840/tcp|unknown840|unassigned
+841/tcp|unknown841|unassigned
+842/tcp|unknown842|unassigned
+843/tcp|unknown843|unassigned
+844/tcp|pcsync-https|PC Sync HTTPS
+845/tcp|unknown845|unassigned
+846/tcp|pcsync-http|PC Sync HTTP
+847/tcp|dhcp-failover2|DHCP Failover 2
+848/tcp|gdsync|GDSYNC
+849/tcp|unknown849|unassigned
+850/tcp|unknown850|unassigned
+851/tcp|unknown851|unassigned
+852/tcp|unknown852|unassigned
+853/tcp|unknown853|unassigned
+854/tcp|unknown854|unassigned
+855/tcp|unknown855|unassigned
+856/tcp|unknown856|unassigned
+857/tcp|unknown857|unassigned
+858/tcp|unknown858|unassigned
+859/tcp|unknown859|unassigned
+860/tcp|unknown860|unassigned
+861/tcp|owfs-control|OWFS control
+862/tcp|unknown862|unassigned
+863/tcp|unknown863|unassigned
+864/tcp|unknown864|unassigned
+865/tcp|unknown865|unassigned
+866/tcp|unknown866|unassigned
+867/tcp|unknown867|unassigned
+868/tcp|unknown868|unassigned
+869/tcp|unknown869|unassigned
+870/tcp|unknown870|unassigned
+871/tcp|unknown871|unassigned
+872/tcp|unknown872|unassigned
+873/tcp|rsync|rsync file synchronisation
+874/tcp|unknown874|unassigned
+875/tcp|unknown875|unassigned
+876/tcp|unknown876|unassigned
+877/tcp|unknown877|unassigned
+878/tcp|unknown878|unassigned
+879/tcp|unknown879|unassigned
+880/tcp|unknown880|unassigned
+881/tcp|unknown881|unassigned
+882/tcp|unknown882|unassigned
+883/tcp|unknown883|unassigned
+884/tcp|unknown884|unassigned
+885/tcp|unknown885|unassigned
+886/tcp|unknown886|unassigned
+887/tcp|unknown887|unassigned
+888/tcp|accessbuilder|AccessBuilder
+889/tcp|unknown889|unassigned
+890/tcp|unknown890|unassigned
+891/tcp|unknown891|unassigned
+892/tcp|unknown892|unassigned
+893/tcp|unknown893|unassigned
+894/tcp|unknown894|unassigned
+895/tcp|unknown895|unassigned
+896/tcp|unknown896|unassigned
+897/tcp|unknown897|unassigned
+898/tcp|unknown898|unassigned
+899/tcp|unknown899|unassigned
+900/tcp|omginitialrefs|OMG Initial References
+901/tcp|smpnameres|SMPNAMERES (HTTPS alt unofficial)
+902/tcp|ideafarm-chat|IdeaFarm-CHAT
+903/tcp|ideafarm-pong|IdeaFarm-PONG
+904/tcp|unknown904|unassigned
+905/tcp|unknown905|unassigned
+906/tcp|unknown906|unassigned
+907/tcp|unknown907|unassigned
+908/tcp|unknown908|unassigned
+909/tcp|unknown909|unassigned
+910/tcp|unknown910|unassigned
+911/tcp|unknown911|unassigned
+912/tcp|aps |APEX relay
+913/tcp|apep|APEX event
+914/tcp|unknown914|unassigned
+915/tcp|unknown915|unassigned
+916/tcp|unknown916|unassigned
+917/tcp|unknown917|unassigned
+918/tcp|unknown918|unassigned
+919/tcp|unknown919|unassigned
+920/tcp|unknown920|unassigned
+921/tcp|unknown921|unassigned
+922/tcp|unknown922|unassigned
+923/tcp|unknown923|unassigned
+924/tcp|unknown924|unassigned
+925/tcp|unknown925|unassigned
+926/tcp|unknown926|unassigned
+927/tcp|unknown927|unassigned
+928/tcp|unknown928|unassigned
+929/tcp|unknown929|unassigned
+930/tcp|unknown930|unassigned
+931/tcp|unknown931|unassigned
+932/tcp|unknown932|unassigned
+933/tcp|unknown933|unassigned
+934/tcp|unknown934|unassigned
+935/tcp|unknown935|unassigned
+936/tcp|unknown936|unassigned
+937/tcp|unknown937|unassigned
+938/tcp|unknown938|unassigned
+939/tcp|unknown939|unassigned
+940/tcp|unknown940|unassigned
+941/tcp|unknown941|unassigned
+942/tcp|unknown942|unassigned
+943/tcp|unknown943|unassigned
+944/tcp|unknown944|unassigned
+945/tcp|unknown945|unassigned
+946/tcp|unknown946|unassigned
+947/tcp|unknown947|unassigned
+948/tcp|unknown948|unassigned
+949/tcp|unknown949|unassigned
+950/tcp|unknown950|unassigned
+951/tcp|unknown951|unassigned
+952/tcp|unknown952|unassigned
+953/tcp|unknown953|unassigned
+954/tcp|unknown954|unassigned
+955/tcp|unknown955|unassigned
+956/tcp|unknown956|unassigned
+957/tcp|unknown957|unassigned
+958/tcp|unknown958|unassigned
+959/tcp|unknown959|unassigned
+960/tcp|unknown960|unassigned
+961/tcp|unknown961|unassigned
+962/tcp|unknown962|unassigned
+963/tcp|unknown963|unassigned
+964/tcp|unknown964|unassigned
+965/tcp|unknown965|unassigned
+966/tcp|unknown966|unassigned
+967/tcp|unknown967|unassigned
+968/tcp|unknown968|unassigned
+969/tcp|unknown969|unassigned
+970/tcp|unknown970|unassigned
+971/tcp|unknown971|unassigned
+972/tcp|unknown972|unassigned
+973/tcp|unknown973|unassigned
+974/tcp|unknown974|unassigned
+975/tcp|unknown975|unassigned
+976/tcp|unknown976|unassigned
+977/tcp|unknown977|unassigned
+978/tcp|unknown978|unassigned
+979/tcp|unknown979|unassigned
+980/tcp|unknown980|unassigned (SMA web sometimes)
+981/tcp|unknown981|unassigned
+982/tcp|unknown982|unassigned
+983/tcp|unknown983|unassigned
+984/tcp|unknown984|unassigned
+985/tcp|unknown985|unassigned
+986/tcp|unknown986|unassigned
+987/tcp|unknown987|unassigned
+988/tcp|unknown988|unassigned
+989/tcp|ftps-data|FTP data over TLS
+990/tcp|ftps|FTP control over TLS
+991/tcp|nas|Netnews Administration Service
+992/tcp|telnets|Telnet over TLS
+993/tcp|imaps|IMAP over TLS
+994/tcp|ircs|IRC over TLS
+995/tcp|pop3s|POP3 over TLS
+996/tcp|vsinet|vsinet
+997/tcp|maitrd2|maitrd
+998/tcp|busymon|busymon
+999/tcp|garcon|garcon (Unix syntax 9p often)
+1000/tcp|cadlock2|cadlock2
+1001/tcp|websphere-smcs|WebSphere SMCS (many alternate uses)
+1002/tcp|windows-icfw|Windows ICFW
+1003/tcp|unknown1003|unassigned
+1004/tcp|unknown1004|unassigned
+1005/tcp|unknown1005|unassigned
+1006/tcp|unknown1006|unassigned
+1007/tcp|unknown1007|unassigned
+1008/tcp|unknown1008|unassigned
+1009/tcp|unknown1009|unassigned
+1010/tcp|surf|surf
+1011/tcp|unknown1011|unassigned
+1012/tcp|unknown1012|unassigned (sometimes DME)
+1013/tcp|unknown1013|unassigned
+1014/tcp|unknown1014|unassigned
+1015/tcp|unknown1015|unassigned
+1016/tcp|unknown1016|unassigned
+1017/tcp|unknown1017|unassigned
+1018/tcp|unknown1018|unassigned
+1019/tcp|unknown1019|unassigned
+1020/tcp|unknown1020|unassigned
+1021/tcp|exp1|RFC3632 Experimental 1
+1022/tcp|exp2|RFC3632 Experimental 2
+1023/tcp|netinfo-local|NetInfo Local
+# Well-known UDP assignments
+7/udp|echo|Echo
+9/udp|discard|Discard
+11/udp|systat|Active Users
+13/udp|daytime|Daytime
+19/udp|chargen|Character Generator
+37/udp|time|Time
+39/udp|rlp|Resource Location Protocol
+49/udp|tacacs|Login Host Protocol
+53/udp|domain|Domain Name System
+67/udp|bootps|DHCP Server
+68/udp|bootpc|DHCP Client
+69/udp|tftp|Trivial File Transfer Protocol
+88/udp|kerberos-udp|Kerberos over UDP
+123/udp|ntp|Network Time Protocol
+135/udp|epmap-udp|DCE endpoint resolution
+137/udp|netbios-ns|NETBIOS Name Service
+138/udp|netbios-dgm|NETBIOS Datagram Service
+139/udp|netbios-ssn|NETBIOS Session Service
+161/udp|snmp|Simple Network Management Protocol
+162/udp|snmptrap|SNMP Trap
+177/udp|xdmcp|X Display Manager Control
+427/udp|svrloc-udp|Service Location Protocol
+500/udp|isakmp|IPSec Key Management (IKE)
+514/udp|syslog|Syslog remote logging
+517/udp|talk|Talk
+518/udp|ntalk|New Talk
+520/udp|route|RIP routing
+525/udp|timed|Timeserver
+546/udp|dhcpv6-client|DHCPv6 Client
+547/udp|dhcpv6-server|DHCPv6 Server
+750/udp|kerberos-iv-udp|Kerberos IV
+1194/udp|openvpn|OpenVPN
+1812/udp|radius|RADIUS Authentication
+1813/udp|radius-acct|RADIUS Accounting
+1900/udp|upnp|SSDP for UPnP discovery
+1985/udp|hsrp|Cisco HSRP
+3544/udp|teredo|Teredo tunneling
+4500/udp|nat-t-ike|IPsec NAT Traversal
+5353/udp|mdns|Multicast DNS (mDNS)
+5355/udp|llmnr|Link-Local Multicast Name Resolution
+5678/udp|rrac|MPLS Routing
+# Notable registered ports (1024-49151)
+1080/tcp|socks|SOCKS proxy (SOCKS4/5)
+1085/tcp|webobjects|WebObjects
+1099/tcp|jmx-registry|Java RMI registry / JMX
+1109/tcp|kpop|Kerberos POP
+1194/tcp|openvpn-tcp|OpenVPN over TCP
+1234/tcp|hotline|Hotline (unofficial p2p)
+1241/udp|nessus|Nessus scanner (legacy)
+1311/tcp|dell-openmanage|Dell OpenManage (unofficial)
+1352/tcp|lotusnote|Lotus Notes
+1433/tcp|ms-sql-s|Microsoft SQL Server
+1434/udp|ms-sql-m|Microsoft SQL Server Monitor
+1494/tcp|citrix-ica|Citrix ICA
+1521/tcp|oracle-tns|Oracle TNS Listener
+1723/tcp|pptp|Point-to-Point Tunneling Protocol
+1755/tcp|ms-streaming|Microsoft Media Server (MMS)
+1863/tcp|msnp|MSN Messenger
+1901/tcp|fjicl-tep-a|Fujitsu (unofficial)
+2049/tcp|nfs|Network File System
+2082/tcp|cpanel|cPanel default HTTP
+2083/tcp|cpanel-ssl|cPanel HTTPS
+2086/tcp|whm|WebHost Manager
+2087/tcp|whm-ssl|WebHost Manager HTTPS
+2095/tcp|webmail|Webmail HTTP (cPanel)
+2096/tcp|webmail-ssl|Webmail HTTPS (cPanel)
+2181/tcp|zookeeper|Apache ZooKeeper
+2222/tcp|ssh-alt|SSH alternate (unofficial)
+2375/tcp|docker|Docker daemon (unencrypted)
+2376/tcp|docker-ssl|Docker daemon over TLS
+2483/tcp|oracle-ttc|Oracle TTC
+2484/tcp|oracle-ttc-ssl|Oracle TTC over SSL
+2628/tcp|dict|DICT dictionary service
+2717/tcp|pn-requester|PN Requester
+2718/tcp|pn-requester2|PN Requester 2
+2809/tcp|corbaloc|CORBA LOC
+2869/tcp|icslap|ICS Lap
+3000/tcp|grafana|Grafana / dev servers (unofficial)
+3001/tcp|grafana-alt|Dev servers alternate (unofficial)
+3050/tcp|gds-db|InterBase / Firebird
+3128/tcp|squid-http|Squid web proxy
+3225/tcp|fcip|FCIP Fibre Channel over IP
+3260/tcp|iscsi|iSCSI target
+3268/tcp|msft-gc|Microsoft Global Catalog (LDAP)
+3269/tcp|msft-gc-ssl|Global Catalog over SSL
+3299/tcp|sap-router|SAP router (unofficial)
+3306/tcp|mysql|MySQL / MariaDB database
+3307/tcp|mysqlx|MySQL X protocol
+3322/tcp|netinfo-remote|NetInfo remote (unofficial)
+3389/tcp|ms-wbt-server|Microsoft Remote Desktop (RDP)
+3396/tcp|rdp-alt|RDP alternate (unofficial)
+3423/tcp|x-tool|xTool (unofficial)
+3465/tcp|zvm-3270|z/VM 3270 (unofficial)
+3527/tcp|bes-msg-req|BlackBerry Enterprise (unofficial)
+3632/tcp|distcc|distcc distributed compiler
+3690/tcp|svn|Subversion (ra_svn)
+3701/tcp|netcps|NetCPS (unofficial)
+3750/tcp|p2pcommunity|P2P Community (unofficial)
+3784/udp|bfd-control|BFD Control
+3785/udp|bfd-echo|BFD Echo
+3868/tcp|diam-tcp|Diameter (TCP)
+3871/tcp|avocent-avsrv|Avocent (unofficial)
+3918/tcp|patrol-ism|PATROL (unofficial)
+3945/tcp|emcads|EMCADS (unofficial)
+3971/tcp|svp|GraphOn (unofficial)
+3986/tcp|mapper-ws-etd|MAPPER (unofficial)
+4045/udp|ncp|NCP (NetWare)
+4133/tcp|netserv-mgmt|Netserv (unofficial)
+4145/tcp|crums|CRMS (unofficial)
+4153/tcp|bdp-v2|BDP v2 (unofficial)
+4160/tcp|jomi-dispatch|Jomi (unofficial)
+4253/tcp|vnc-tls|VNC over TLS
+4254/tcp|vnc-tls-sasl|VNC over TLS+SASL
+4321/tcp|rwhois|Referral Whois (unofficial)
+4322/tcp|trim-event|TRIM (unofficial)
+4444/tcp|krb524|Kerberos 5-to-4 / Metasploit default (unofficial)
+4445/tcp|upnotifyp|UPN (unofficial)
+4569/tcp|iax|Inter-Asterisk eXchange (VoIP)
+4662/tcp|edonkey|eDonkey2000 (unofficial)
+4700/tcp|netxms-remote|NetXMS (unofficial)
+4725/tcp|chat-bull|Bull (unofficial)
+4800/tcp|iims|Icona (unofficial)
+4840/tcp|opc-ua-tls|OPC UA over TLS
+4843/tcp|opc-ua|OPC UA HTTPS
+4880/tcp|animalsnet|Animal (unofficial)
+4899/tcp|radmin|Radmin remote admin (unofficial)
+4949/tcp|munin|munin monitoring (unofficial)
+5000/tcp|upnp-dev|UPnP / Flask dev server (unofficial)
+5001/tcp|synapse-tls|Synapse (unofficial)
+5004/tcp|avt-profile-1|RTP media (AVT)
+5005/tcp|avt-profile-2|RTP media control (AVT)
+5050/tcp|unite|Unite (unofficial mmcc)
+5060/tcp|sip|Session Initiation Protocol
+5060/udp|sip-udp|Session Initiation Protocol
+5061/tcp|sip-tls|SIP over TLS
+5061/udp|sip-tls-udp|SIP over TLS
+5093/tcp|pitmvp|Panasonic (unofficial)
+5098/tcp|sentinel|Sentinel (unofficial)
+5101/tcp|admd|Adaptec (unofficial)
+5111/tcp|pm-cmdsvr|PM (unofficial)
+5120/tcp|barracuda|Barracuda (unofficial)
+5145/tcp|rmonitor-secure|RMonitor secure (unofficial)
+5154/tcp|bzflag|BZFlag game server (unofficial)
+5190/tcp|aol|AIM / ICQ messaging
+5200/tcp|targus-getdata|Targus (unofficial)
+5222/tcp|jabber-client|XMPP client connection
+5223/tcp|jabber-client-ssl|XMPP over TLS
+5228/tcp|gcm-push|Google GCM/FCM push (unofficial)
+5269/tcp|jabber-server|XMPP server federation
+5300/tcp|hacl-hb|HA Cluster heartbeat (unofficial)
+5308/tcp|cfengine|CFEngine engine
+5320/tcp|webrtc-websock|WebRTC (unofficial)
+5351/udp|nat-pmp|NAT Port Mapping
+5353/tcp|mdns-tcp|Multicast DNS over TCP
+5357/tcp|wsdapi|Web Services Discovery (WSDAPI)
+5405/tcp|pcanywhere|pcAnywhere (legacy)
+5432/tcp|postgresql|PostgreSQL database
+5454/tcp|apc-tcp|APC (unofficial)
+5466/tcp|netops-events|Netops (unofficial)
+5498/tcp|centerbeam|Centerbeam (unofficial)
+5500/tcp|hotline2|Hotline alternate (unofficial)
+5510/tcp|secure-portal|Secure Portal (unofficial)
+5520/tcp|sdlog|SD Log (unofficial)
+5555/tcp|freeciv-adb|FreeCiv / Android ADB (unofficial)
+5560/tcp|isqlplus|Oracle iSQL*Plus (unofficial)
+5566/tcp|westec-connect|Westec (unofficial)
+5601/tcp|kibana|Kibana web UI (unofficial)
+5631/tcp|pcanywheredata|pcAnywhere data (legacy)
+5632/tcp|pcanywheremap|pcAnywhere map (legacy)
+5666/tcp|nrpe|Nagios Remote Plugin Executor
+5667/tcp|nsca|Nagios Service Check Acceptor
+5672/tcp|amqp|AMQP 0-9-1 (RabbitMQ)
+5683/udp|coap|CoAP Constrained Application Protocol
+5684/udp|coaps|CoAP over DTLS
+5700/tcp|anywhereusb|AnywhereUSB (unofficial)
+5718/tcp|dpm-agent|DPM (unofficial)
+5720/tcp|ms-licensing|MS Licensing (unofficial)
+5757/tcp|openmail-g|OpenMail (unofficial)
+5800/tcp|vnc-http|VNC over HTTP
+5801/tcp|vnc-http-1|VNC web display :1
+5810/tcp|axel|Axel (unofficial)
+5900/tcp|vnc|VNC remote desktop display :0
+5901/tcp|vnc-1|VNC display :1
+5902/tcp|vnc-2|VNC display :2
+5903/tcp|vnc-3|VNC display :3
+5904/tcp|vnc-4|VNC display :4
+5905/tcp|vnc-5|VNC display :5
+5906/tcp|vnc-6|VNC display :6
+5907/tcp|vnc-7|VNC display :7
+5908/tcp|vnc-8|VNC display :8
+5909/tcp|vnc-9|VNC display :9
+5910/tcp|vnc-10|VNC display :10
+5911/tcp|vnc-11|VNC display :11
+5912/tcp|vnc-12|VNC display :12
+5913/tcp|vnc-13|VNC display :13
+5914/tcp|vnc-14|VNC display :14
+5915/tcp|vnc-15|VNC display :15
+5916/tcp|vnc-16|VNC display :16
+5917/tcp|vnc-17|VNC display :17
+5918/tcp|vnc-18|VNC display :18
+5919/tcp|vnc-19|VNC display :19
+5920/tcp|vnc-20|VNC display :20
+5921/tcp|vnc-21|VNC display :21
+5922/tcp|vnc-22|VNC display :22
+5923/tcp|vnc-23|VNC display :23
+5924/tcp|vnc-24|VNC display :24
+5925/tcp|vnc-25|VNC display :25
+5984/tcp|couchdb|CouchDB HTTP API
+5985/tcp|winrm|Windows Remote Management HTTP
+5986/tcp|winrm-ssl|Windows Remote Management HTTPS
+5988/tcp|wbem-http|WBEM HTTP (CIM)
+5989/tcp|wbem-https|WBEM HTTPS (CIM)
+6000/tcp|X11|X Window System display :0
+6001/tcp|X11-1|X Window System display :1
+6002/tcp|X11-2|X Window System display :2
+6003/tcp|X11-3|X Window System display :3
+6004/tcp|X11-4|X Window System display :4
+6005/tcp|X11-5|X Window System display :5
+6006/tcp|X11-6|X Window System display :6
+6007/tcp|X11-7|X Window System display :7
+6008/tcp|X11-8|X Window System display :8
+6009/tcp|X11-9|X Window System display :9
+6010/tcp|X11-10|X Window System display :10
+6101/tcp|isdnreport|ISDN report (unofficial)
+6112/tcp|dtspc|CDE Subprocess Control
+6123/tcp|backup-express|Backup Express (unofficial)
+6250/tcp|cluster-manager|Cluster Manager (unofficial)
+6271/tcp|bluelion|BlueLion (unofficial)
+6321/tcp|emp-server1|EMC (unofficial)
+6323/tcp|repmgr|MeetingMaker (unofficial)
+6379/tcp|redis|Redis in-memory database
+6380/tcp|redis-sentinel|Redis Sentinel (unofficial)
+6432/tcp|pgbouncer|PgBouncer (unofficial)
+6443/tcp|sun-sr-https|Kubernetes API server (unofficial)
+6514/tcp|syslog-tls|Syslog over TLS
+6566/tcp|sane-port|SANE network scanner daemon
+6600/tcp|mshvlm|Microsoft Hyper-V (unofficial)
+6666/tcp|ircu|IRC legacy / chat (unofficial)
+6667/tcp|irc|Internet Relay Chat (EFnet)
+6668/tcp|irc-dalnet|Internet Relay Chat (DALnet)
+6669/tcp|irc-alt|Internet Relay Chat alternate
+6789/tcp|smc-http|SMC (unofficial)
+6790/tcp|smc-https|SMC HTTPS (unofficial)
+6842/tcp|netmo-web|NetModule (unofficial)
+6881/tcp|bittorrent-tracker|BitTorrent tracker (unofficial)
+7000/tcp|afs3-fileserver|AFS fileserver (unofficial Cassini)
+7001/tcp|afs3-callback|AFS callback (unofficial WebLogic)
+7002/tcp|afs3-prserver|AFS protection server
+7003/tcp|afs3-vlserver|AFS volume location
+7004/tcp|afs3-kaserver|AFS Kerberos auth
+7005/tcp|afs3-volser|AFS volume server
+7006/tcp|afs3-errors|AFS error interpretation
+7007/tcp|afs3-bos|AFS basic overseer
+7008/tcp|afs3-update|AFS server updater
+7009/tcp|afs3-rmtsys|AFS remote cache manager
+7070/tcp|realserver|RealServer / HTTP alt (unofficial)
+7100/tcp|font-service-X|X Font Server (unofficial)
+7181/tcp|unknown7181|unassigned
+7200/tcp|fodms|FODMS FLIP (unofficial)
+7201/tcp|dlip|DLIP (unofficial)
+7402/tcp|esip|ESIP (unofficial)
+7426/tcp|pmdmgr|PMD Manager (unofficial)
+7443/tcp|closedcall|HTTPS alt (WebLogic SSL unofficial)
+7473/tcp|rise|RISE (unofficial)
+7474/tcp|rise-secure|RISE secure (unofficial)
+7510/tcp|hp-hps|HP (unofficial)
+7547/tcp|cwm|CPE WAN Management (TR-069)
+7566/tcp|vsi-data|VSI data (unofficial)
+7570/tcp|aesc-cra|AESC (unofficial)
+7588/tcp|sun-lm|Sun License Manager (unofficial)
+7600/tcp|rxe|Rxe (unofficial)
+7626/tcp|simco|SIMCO (unofficial)
+7628/tcp|primary-agentwork|AgentWorks (unofficial)
+7631/tcp|tesla|Tesla (unofficial)
+7633/tcp|pmcd|Performance Co-Pilot (unofficial)
+7674/tcp|imqft|iMQ (unofficial)
+7675/tcp|imqft-ssl|iMQ TLS (unofficial)
+7680/tcp|pando-pub|Pando publish (unofficial)
+7687/tcp|pando-sec|Pando secure (unofficial)
+7700/tcp|ems|EMS (unofficial)
+7723/tcp|unknown7723|unassigned
+7743/tcp|snarenet|Snare (unofficial)
+7777/tcp|cbt|Computer-Based Test / IRC alt (unofficial)
+7778/tcp|interwise|InterWise (unofficial)
+7779/tcp|unknown7779|unassigned (Vitel often)
+7780/tcp|unknown7780|unassigned
+7781/tcp|accu-lmgr|Accu (unofficial)
+7789/tcp|office-tools|Office tools (unofficial)
+7801/tcp|compositor|Compositor (unofficial)
+7810/tcp|mdcportmapper|MDC (unofficial)
+7822/tcp|server-agent|Server agent (unofficial)
+7825/tcp|orbit|Orbit (unofficial)
+7842/tcp|unknown7842|unassigned
+7854/tcp|unknown7854|unassigned
+7878/tcp|unknown7878|unassigned
+7890/tcp|unknown7890|unassigned
+7899/tcp|unknown7899|unassigned
+7900/tcp|mcregister|MC Register (unofficial)
+7902/tcp|tnos-dpf|TNOS (unofficial)
+7903/tcp|tnos-dsp|TNOS (unofficial)
+7906/tcp|tnos-dcan|TNOS (unofficial)
+7907/tcp|mcns-reg|MCNS (unofficial)
+7911/tcp|unknown7911|unassigned
+7913/tcp|q-ex-managers|Q managers (unofficial)
+7921/tcp|unknown7921|unassigned
+7932/tcp|tnos-dcxs|TNOS (unofficial)
+7933/tcp|tnos-dcxs2|TNOS (unofficial)
+7950/tcp|unknown7950|unassigned
+7961/tcp|unknown7961|unassigned
+7967/tcp|unknown7967|unassigned
+7979/tcp|unknown7979|unassigned
+7988/tcp|unknown7988|unassigned
+7999/tcp|unknown7999|unassigned ( Often AlternC)
+8000/tcp|http-alt|HTTP alternate (common dev/proxy)
+8001/tcp|vcom-tunnel|HTTP alternate / VCOM tunnel
+8002/tcp|teradataordbms|HTTP alternate / Teradata
+8003/tcp|http-alt-3|HTTP alternate
+8005/tcp|mgmt-http|HTTP management (unofficial)
+8007/tcp|http-alt-5|HTTP alternate
+8008/tcp|http-alt|HTTP alternate (Tomcat default)
+8009/tcp|ajp13|Apache JServ Protocol AJP13
+8010/tcp|http-alt-8|HTTP alternate
+8011/tcp|http-alt-9|HTTP alternate
+8016/tcp|http-alt-12|HTTP alternate
+8018/tcp|http-alt-14|HTTP alternate
+8020/tcp|oa-system|OA system (unofficial)
+8021/tcp|oa-system-tls|OA system TLS (unofficial)
+8022/tcp|oa-system-2|OA system (unofficial)
+8032/tcp|pro-ed|ProEd (unofficial)
+8033/tcp|pro-ed-tls|ProEd TLS (unofficial)
+8040/tcp|fpipc|FPIPC (unofficial)
+8042/tcp|fs-server|FS server (unofficial)
+8043/tcp|fs-proxy|FS proxy (unofficial)
+8044/tcp|fs-proxy-tls|FS proxy TLS (unofficial)
+8055/tcp|senomix|Senomix timesheet (unofficial)
+8060/tcp|unknown8060|unassigned
+8069/tcp|unknown8069|unassigned
+8080/tcp|http-proxy|HTTP proxy / alternate web
+8081/tcp|http-proxy-alt|Alternate web
+8082/tcp|http-alt-2|Alternate web
+8083/tcp|http-alt-3|Alternate web
+8084/tcp|http-alt-4|Alternate web
+8085/tcp|http-alt-5|Alternate web
+8086/tcp|http-alt-6|Alternate web
+8087/tcp|http-alt-7|Alternate web
+8088/tcp|http-alt-8|Alternate web
+8089/tcp|http-alt-9|Alternate web (Splunk default)
+8090/tcp|http-alt-10|Alternate web
+8091/tcp|http-alt-11|Alternate web
+8092/tcp|http-alt-12|Alternate web (Portapps)
+8093/tcp|http-alt-13|Alternate web
+8094/tcp|http-alt-14|Alternate web
+8095/tcp|http-alt-15|Alternate web
+8096/tcp|http-alt-16|Alternate web
+8097/tcp|http-alt-17|Alternate web
+8098/tcp|http-alt-18|Alternate web
+8099/tcp|http-alt-19|Alternate web
+8100/tcp|http-alt-20|Alternate web (Xprint)
+8105/tcp|http-alt-22|Alternate web
+8118/tcp|privoxy|Privoxy proxy (unofficial)
+8123/tcp|http-alt-24|Alternate web (unofficial)
+8130/tcp|paycash|PayCash (unofficial)
+8131/tcp|paycash-tls|PayCash (unofficial)
+8132/tcp|dbabble|DBabble (unofficial)
+8148/tcp|isntsa2|ISN (unofficial)
+8162/tcp|lpar2rrd|LPAR2RRD (unofficial)
+8181/tcp|intermapper|InterMapper (unofficial)
+8184/tcp|battle-net|Battle.net (unofficial)
+8188/tcp|unknown8188|unassigned
+8191/tcp|limner-property|Limner (unofficial)
+8192/tcp|sophos|Sophos (unofficial)
+8193/tcp|sophos-alt|Sophos (unofficial)
+8194/tcp|blaster|Blaster (unofficial)
+8200/tcp|lm-dtp|LM DTP (unofficial)
+8222/tcp|fz-server|FZ server (unofficial)
+8243/tcp|synapse-nhttps|Synapse HTTPS (unofficial)
+8280/tcp|unknown8280|unassigned
+8292/tcp|blp3|Bloomberg (unofficial)
+8303/tcp|unknown8303|unassigned
+8333/tcp|bitcoin-rpc|Bitcoin JSON-RPC (unofficial)
+8334/tcp|bitcoin-rpc-alt|Bitcoin RPC alt (unofficial)
+8383/tcp|m2mservices|M2M services (unofficial)
+8400/tcp|cvd|CVD (unofficial)
+8432/tcp|unknown8432|unassigned
+8443/tcp|https-alt|HTTPS alternate (Tomcat SSL default)
+8444/tcp|pcsync-https-alt|PC Sync (unofficial)
+8450/tcp|npmp|NPMP (unofficial)
+8484/tcp|unknown8484|unassigned
+8500/tcp|fmtp|Flight Message Transfer / HTTP alt
+8530/tcp|unknown8530|unassigned
+8531/tcp|unknown8531|unassigned
+8537/tcp|unknown8537|unassigned
+8540/tcp|unknown8540|unassigned
+8554/tcp|rtsp-alt|RTSP alternate (unofficial)
+8555/tcp|rtsp-alt-2|RTSP alternate (unofficial)
+8558/tcp|unknown8558|unassigned
+8585/tcp|unknown8585|unassigned
+8590/tcp|unknown8590|unassigned
+8600/tcp|canon-bj|Canon BJ (unofficial)
+8601/tcp|canon-bj-2|Canon BJ (unofficial)
+8602/tcp|canon-bj-3|Canon BJ (unofficial)
+8610/tcp|canon-mfnp|Canon MFNP (unofficial)
+8611/tcp|canon-mfnp-2|Canon MFNP (unofficial)
+8612/tcp|canon-bj-4|Canon BJ (unofficial)
+8620/tcp|unknown8620|unassigned
+8622/tcp|unknown8622|unassigned
+8649/tcp|unknown8649|unassigned
+8651/tcp|unknown8651|unassigned
+8652/tcp|unknown8652|unassigned
+8666/tcp|unknown8666|unassigned
+8675/tcp|unknown8675|unassigned
+8686/tcp|sun-as-jmx|Sun App Server JMX (unofficial)
+8701/tcp|unknown8701|unassigned
+8708/tcp|unknown8708|unassigned
+8711/tcp|unknown8711|unassigned
+8720/tcp|unknown8720|unassigned
+8732/tcp|unknown8732|unassigned
+8734/tcp|unknown8734|unassigned
+8741/tcp|unknown8741|unassigned
+8744/tcp|unknown8744|unassigned
+8747/tcp|unknown8747|unassigned
+8753/tcp|unknown8753|unassigned
+8760/tcp|unknown8760|unassigned
+8765/tcp|ultraseek-http|Ultraseek / HTTP alt
+8770/tcp|unknown8770|unassigned
+8780/tcp|unknown8780|unassigned
+8787/tcp|msgsrvr|Message server (unofficial)
+8790/tcp|unknown8790|unassigned
+8799/tcp|unknown8799|unassigned
+8800/tcp|sunwebadmin|Sun web admin / HTTP alt
+8804/tcp|trueconf|TrueConf (unofficial)
+8805/tcp|unknown8805|unassigned
+8808/tcp|unknown8808|unassigned
+8810/tcp|unknown8810|unassigned
+8812/tcp|unknown8812|unassigned
+8820/tcp|unknown8820|unassigned
+8830/tcp|unknown8830|unassigned
+8835/tcp|unknown8835|unassigned
+8844/tcp|unknown8844|unassigned
+8850/tcp|unknown8850|unassigned
+8860/tcp|unknown8860|unassigned
+8866/tcp|unknown8866|unassigned
+8873/tcp|dxspider|DXSpider (unofficial)
+8880/tcp|cddbp-alt|CDDB alternate / HTTP alt
+8881/tcp|galaxy4d|Galaxy4D (unofficial)
+8882/tcp|cddbp-3|CDDB (unofficial)
+8883/tcp|secure-mqtt|MQTT over TLS
+8884/tcp|cddbp-4|CDDB (unofficial)
+8885/tcp|cddbp-5|CDDB (unofficial)
+8886/tcp|cddbp-6|CDDB (unofficial)
+8888/tcp|cddbp-7|CDDB / HTTP alt (unofficial)
+8889/tcp|dist-edge|Dist edge (unofficial)
+8890/tcp|spoddog|Spoddog (unofficial)
+8891/tcp|ospf-lite|OSPF lite (unofficial)
+8892/tcp|pictyonary|Pictyonary (unofficial)
+8898/tcp|unknown8898|unassigned
+8899/tcp|ospf-lite-2|OSPF lite (unofficial)
+8900/tcp|jmb-cds|JMB (unofficial)
+8901/tcp|jmb-cds-2|JMB (unofficial)
+8902/tcp|jmb-cds-3|JMB (unofficial)
+8903/tcp|d2i-traf|D2I (unofficial)
+8904/tcp|d2i-traf-2|D2I (unofficial)
+8905/tcp|jmb-cds-4|JMB (unofficial)
+8906/tcp|jmb-cds-5|JMB (unofficial)
+8907/tcp|jmb-cds-6|JMB (unofficial)
+8908/tcp|jmb-cds-7|JMB (unofficial)
+8909/tcp|jmb-cds-8|JMB (unofficial)
+8910/tcp|manyone-http|ManyOne (unofficial)
+8911/tcp|manyone-2|ManyOne (unofficial)
+8912/tcp|windowsclient|Windows client (unofficial)
+8914/tcp|wsigate|WSIGate (unofficial)
+8915/tcp|bacula-file|Bacula file daemon (unofficial)
+8916/tcp|bacula-sd|Bacula storage daemon (unofficial)
+8917/tcp|bacula-dir|Bacula director (unofficial)
+8918/tcp|bacula-fd-2|Bacula (unofficial)
+8919/tcp|bacula-sd-2|Bacula (unofficial)
+8920/tcp|bacula-dir-2|Bacula (unofficial)
+8921/tcp|drizzle|Drizzle database (unofficial)
+8928/tcp|unknown8928|unassigned
+8930/tcp|unknown8930|unassigned
+8940/tcp|unknown8940|unassigned
+8954/tcp|cumulus-admin|Cumulus admin (unofficial)
+8962/tcp|unknown8962|unassigned
+8980/tcp|http-alt-21|HTTP alternate (unofficial)
+8990/tcp|webaccess|WebAccess (unofficial)
+8991/tcp|webaccess-2|WebAccess (unofficial)
+8999/tcp|unknown8999|unassigned
+9000/tcp|cslistener|PHP-FPM / SonarQube (unofficial)
+9001/tcp|etlservicemgr|ETL service / Tor ORPort (unofficial)
+9002/tcp|dynamid|DynamID (unofficial)
+9008/tcp|openwg|OpenWG (unofficial)
+9009/tcp|unknown9009|unassigned
+9010/tcp|unknown9010|unassigned
+9011/tcp|dragon-sms|Dragon SMS (unofficial)
+9012/tcp|tamd|TAMD (unofficial)
+9014/tcp|unknown9014|unassigned
+9020/tcp|tambora|Tambora (unofficial)
+9021/tcp|tambora-2|Tambora (unofficial)
+9022/tcp|paragent|ParAgent (unofficial)
+9030/tcp|unknown9030|unassigned
+9040/tcp|unknown9040|unassigned
+9050/tcp|unknown9050|unassigned
+9060/tcp|unknown9060|unassigned
+9080/tcp|glrpc|Glassfish RPC (unofficial)
+9087/tcp|classic-1|Classic (unofficial)
+9088/tcp|classic-2|Classic (unofficial)
+9090/tcp|websm|WebSphere SM / Prometheus alt
+9091/tcp|xmltec-xmlmail|XML mail (unofficial)
+9092/tcp|XmlIpcRegistrySvc|XML IPC registry (unofficial)
+9093/tcp|prometheus-api|Prometheus API (unofficial)
+9094/tcp|unknown9094|unassigned
+9095/tcp|unknown9095|unassigned
+9096/tcp|unknown9096|unassigned
+9098/tcp|unknown9098|unassigned
+9099/tcp|unknown9099|unassigned
+9100/tcp|hp-pdl-datastr|HP JetDirect printer (PDL)
+9101/tcp|bacula-dir-3|Bacula director (unofficial)
+9102/tcp|bacula-sd-3|Bacula storage (unofficial)
+9103/tcp|bacula-fd-3|Bacula file daemon (unofficial)
+9104/tcp|peerwire|PeerWire (unofficial)
+9105/tcp|xadmin|Xadmin (unofficial)
+9106/tcp|astpgate|Astpgate (unofficial)
+9107/tcp|astpgate-2|Astpgate (unofficial)
+9108/tcp|unknown9108|unassigned
+9110/tcp|unknown9110|unassigned
+9111/tcp|DragonIDSConsole|Dragon IDS (unofficial)
+9112/tcp|unknown9112|unassigned
+9120/tcp|unknown9120|unassigned
+9131/tcp|unknown9131|unassigned
+9150/tcp|unknown9150|unassigned
+9152/tcp|unknown9152|unassigned
+9160/tcp|unknown9160|unassigned
+9190/tcp|unknown9190|unassigned
+9199/tcp|unknown9199|unassigned
+9200/tcp|wap-wsp|WAP session / Elasticsearch
+9201/tcp|wap-wsp-s|WAP secure session / Elasticsearch alt
+9202/tcp|wap-wsp-2|WAP (unofficial)
+9203/tcp|wap-wsp-3|WAP (unofficial)
+9204/tcp|wap-vcard|WAP vCard (unofficial)
+9205/tcp|wap-vcard-2|WAP vCard (unofficial)
+9206/tcp|wap-vcal|WAP vCal (unofficial)
+9207/tcp|wap-vcal-2|WAP vCal (unofficial)
+9208/tcp|wap-vmsg|WAP vMessage (unofficial)
+9209/tcp|wap-vmsg-2|WAP vMessage (unofficial)
+9210/tcp|oma-mlp|OMA MLP (unofficial)
+9211/tcp|oma-mlp-2|OMA MLP (unofficial)
+9212/tcp|oma-mlp-3|OMA MLP (unofficial)
+9213/tcp|serverstart|ServerStart (unofficial)
+9214/tcp|ipdcesg|IPD (unofficial)
+9215/tcp|insis|InSIS (unofficial)
+9216/tcp|acme2|ACME (unofficial)
+9217/tcp|fsc-port|FSC (unofficial)
+9220/tcp|unknown9220|unassigned
+9222/tcp|queue-rpc|Queue RPC (unofficial)
+9225/tcp|unknown9225|unassigned
+9227/tcp|unknown9227|unassigned
+9230/tcp|unknown9230|unassigned
+9240/tcp|unknown9240|unassigned
+9255/tcp|man|Mobile MAN (unofficial)
+9273/tcp|iamat|IAMAT (unofficial)
+9274/tcp|iamat-2|IAMAT (unofficial)
+9287/tcp|unknown9287|unassigned
+9293/tcp|unknown9293|unassigned
+9295/tcp|arma|ARMA (unofficial)
+9298/tcp|unknown9298|unassigned
+9300/tcp|vrace|VRace (unofficial)
+9301/tcp|vrace-2|VRace (unofficial)
+9302/tcp|vrace-3|VRace (unofficial)
+9303/tcp|vrace-4|VRace (unofficial)
+9304/tcp|vrace-5|VRace (unofficial)
+9305/tcp|vrace-6|VRace (unofficial)
+9306/tcp|vrace-7|VRace (unofficial)
+9307/tcp|vrace-8|VRace (unofficial)
+9308/tcp|vrace-9|VRace (unofficial)
+9309/tcp|vrace-10|VRace (unofficial)
+9310/tcp|vrace-11|VRace (unofficial)
+9311/tcp|vrace-12|VRace (unofficial)
+9312/tcp|vrace-13|VRace (unofficial)
+9313/tcp|vrace-14|VRace (unofficial)
+9314/tcp|vrace-15|VRace (unofficial)
+9315/tcp|vrace-16|VRace (unofficial)
+9316/tcp|vrace-17|VRace (unofficial)
+9317/tcp|vrace-18|VRace (unofficial)
+9318/tcp|vrace-19|VRace (unofficial)
+9319/tcp|vrace-20|VRace (unofficial)
+9320/tcp|vrace-21|VRace (unofficial)
+9321/tcp|guibase|GuiBase (unofficial)
+9322/tcp|guibase-2|GuiBase (unofficial)
+9333/tcp|unknown9333|unassigned
+9335/tcp|unknown9335|unassigned
+9343/tcp|mpidcm|MPI (unofficial)
+9344/tcp|mprobe|MProbe (unofficial)
+9345/tcp|mpidcvt|MPI (unofficial)
+9346/tcp|ctechlicensing|C-Tech (unofficial)
+9350/tcp|unknown9350|unassigned
+9351/tcp|unknown9351|unassigned
+9354/tcp|unknown9354|unassigned
+9360/tcp|unknown9360|unassigned
+9370/tcp|unknown9370|unassigned
+9371/tcp|unknown9371|unassigned
+9374/tcp|fjdmimgr|FJD (unofficial)
+9377/tcp|unknown9377|unassigned
+9380/tcp|brivs|BRIVS (unofficial)
+9386/tcp|fkt-asvc|FKT (unofficial)
+9387/tcp|dnp|DNP (unofficial)
+9388/tcp|dnp-2|DNP (unofficial)
+9390/tcp|unknown9390|unassigned
+9400/tcp|simbox|Simbox (unofficial)
+9415/tcp|unknown9415|unassigned
+9418/tcp|git|Git daemon (unofficial)
+9420/tcp|unknown9420|unassigned
+9443/tcp|websm-alt|WebSM alt (unofficial)
+9445/tcp|websm-4|WebSM (unofficial)
+9460/tcp|unknown9460|unassigned
+9468/tcp|unknown9468|unassigned
+9475/tcp|unknown9475|unassigned
+9490/tcp|unknown9490|unassigned
+9495/tcp|unknown9495|unassigned
+9500/tcp|ismserver|ISM server (unofficial)
+9502/tcp|ismserver-2|ISM (unofficial)
+9510/tcp|ismserver-10|ISM (unofficial)
+9535/tcp|man2|Man (unofficial)
+9536/tcp|laudon-lm|Laudon (unofficial)
+9537/tcp|laudon-lm-2|Laudon (unofficial)
+9539/tcp|unknown9539|unassigned
+9540/tcp|unknown9540|unassigned
+9550/tcp|ismserver-51|ISM (unofficial)
+9555/tcp|ismserver-56|ISM (unofficial)
+9560/tcp|ismserver-61|ISM (unofficial)
+9575/tcp|unknown9575|unassigned
+9594/tcp|msg-system|Message system (unofficial)
+9595/tcp|pds|PDS (unofficial)
+9600/tcp|unknown9600|unassigned
+9612/tcp|tcp-smis|TCP SMIS (unofficial)
+9614/tcp|unknown9614|unassigned
+9618/tcp|condor|Condor (unofficial)
+9620/tcp|unknown9620|unassigned
+9626/tcp|unknown9626|unassigned
+9630/tcp|peoctlms|PEoC (unofficial)
+9633/tcp|unknown9633|unassigned
+9641/tcp|unknown9641|unassigned
+9655/tcp|unknown9655|unassigned
+9666/tcp|unknown9666|unassigned
+9670/tcp|unknown9670|unassigned
+9680/tcp|unknown9680|unassigned
+9686/tcp|unknown9686|unassigned
+9689/tcp|unknown9689|unassigned
+9700/tcp|board-roar|Board Roar (unofficial)
+9701/tcp|board-vo|Board Vo (unofficial)
+9702/tcp|unknown9702|unassigned
+9711/tcp|unknown9711|unassigned
+9720/tcp|unknown9720|unassigned
+9725/tcp|unknown9725|unassigned
+9747/tcp|latticeur|Lattice (unofficial)
+9755/tcp|unknown9755|unassigned
+9758/tcp|unknown9758|unassigned
+9777/tcp|empane|Empane (unofficial)
+9779/tcp|unknown9779|unassigned
+9785/tcp|unknown9785|unassigned
+9786/tcp|unknown9786|unassigned
+9788/tcp|unknown9788|unassigned
+9798/tcp|unknown9798|unassigned
+9800/tcp|WebSM/E|WebSM Sausalito (unofficial)
+9801/tcp|sstp|SSTP (unofficial)
+9802/tcp|davsrc|DAV source (unofficial)
+9803/tcp|davsrc-2|DAV source (unofficial)
+9805/tcp|unknown9805|unassigned
+9808/tcp|unknown9808|unassigned
+9809/tcp|unknown9809|unassigned
+9811/tcp|unknown9811|unassigned
+9812/tcp|unknown9812|unassigned
+9815/tcp|unknown9815|unassigned
+9818/tcp|unknown9818|unassigned
+9825/tcp|unknown9825|unassigned
+9845/tcp|unknown9845|unassigned
+9850/tcp|unknown9850|unassigned
+9866/tcp|unknown9866|unassigned
+9875/tcp|session-announce|Session announce (unofficial)
+9876/tcp|session-director|Session Director (unofficial)
+9877/tcp|session-announce-2|Session (unofficial)
+9880/tcp|unknown9880|unassigned
+9890/tcp|unknown9890|unassigned
+9898/tcp|monkeycom|MonkeyCom (unofficial)
+9900/tcp|unknown9900|unassigned
+9911/tcp|unknown9911|unassigned
+9917/tcp|unknown9917|unassigned
+9925/tcp|unknown9925|unassigned
+9944/tcp|unknown9944|unassigned
+9950/tcp|unknown9950|unassigned
+9951/tcp|apc-agent|APC agent (unofficial)
+9952/tcp|apc-agent-2|APC agent (unofficial)
+9968/tcp|unknown9968|unassigned
+9975/tcp|unknown9975|unassigned
+9985/tcp|unknown9985|unassigned
+9986/tcp|unknown9986|unassigned
+9988/tcp|iasa|IASA registration (unofficial)
+9989/tcp|distinct|Distinct (unofficial)
+9990/tcp|osm-appserver|OSM (unofficial)
+9991/tcp|osm-event|OSM event (unofficial)
+9992/tcp|osm-5-over|OSM (unofficial)
+9993/tcp|osm-5-notes|OSM (unofficial)
+9994/tcp|osm-com-v2|OSM (unofficial)
+9995/tcp|osm-ovi-https|OSM (unofficial)
+9996/tcp|osm-ovi-http|OSM (unofficial)
+9997/tcp|palace-1|Palace (unofficial)
+9998/tcp|distinct32|Distinct32 (unofficial)
+9999/tcp|distinct-33|Hydra / distinct (unofficial)
+10000/tcp|ndmp|Network Data Management / Webmin
+10001/tcp|scp-config|SCP config (unofficial)
+10002/tcp|documentum|Documentum (unofficial)
+10003/tcp|unknown10003|unassigned
+10004/tcp|unknown10004|unassigned
+10005/tcp|unknown10005|unassigned
+10008/tcp|octopus|Octopus (unofficial)
+10009/tcp|unknown10009|unassigned
+10010/tcp|rxapi|rxAPI (unofficial)
+10012/tcp|unknown10012|unassigned
+10017/tcp|unknown10017|unassigned
+10020/tcp|unknown10020|unassigned
+10021/tcp|unknown10021|unassigned
+10024/tcp|unknown10024|unassigned
+10025/tcp|unknown10025|unassigned
+10026/tcp|unknown10026|unassigned
+10027/tcp|unknown10027|unassigned
+10028/tcp|unknown10028|unassigned
+10029/tcp|unknown10029|unassigned
+10030/tcp|unknown10030|unassigned
+10050/tcp|zabbix-agent-alt|Zabbix (unofficial)
+10051/tcp|zabbix-trapper|Zabbix trapper
+10052/tcp|unknown10052|unassigned
+10080/tcp|amanda|Amanda backup / HTTP alt
+10110/tcp|nexria|NEXRIA (unofficial)
+10113/tcp|unknown10113|unassigned
+10114/tcp|unknown10114|unassigned
+10115/tcp|unknown10115|unassigned
+10116/tcp|unknown10116|unassigned
+10117/tcp|unknown10117|unassigned
+10180/tcp|beamer|Beamer (unofficial)
+10215/tcp|unknown10215|unassigned
+10217/tcp|unknown10217|unassigned
+10218/tcp|unknown10218|unassigned
+10219/tcp|unknown10219|unassigned
+10234/tcp|unknown10234|unassigned
+10320/tcp|unknown10320|unassigned
+10321/tcp|computer-tele|Computer telephony (unofficial)
+10520/tcp|unknown10520|unassigned
+10544/tcp|MOS-lower|MOS (unofficial)
+10566/tcp|unknown10566|unassigned
+10598/tcp|unknown10598|unassigned
+10616/tcp|unknown10616|unassigned
+10617/tcp|unknown10617|unassigned
+10621/tcp|unknown10621|unassigned
+10626/tcp|unknown10626|unassigned
+10628/tcp|unknown10628|unassigned
+10629/tcp|unknown10629|unassigned
+10631/tcp|unknown10631|unassigned
+10680/tcp|unknown10680|unassigned
+10713/tcp|unknown10713|unassigned
+10778/tcp|unknown10778|unassigned
+10800/tcp|cgi|Construction & Integration (unofficial)
+10805/tcp|LSP|LSP (unofficial)
+10990/tcp|unknown10990|unassigned
+11000/tcp|irisa|IRISA (unofficial)
+11001/tcp|metasys|Metasys (unofficial)
+11095/tcp|unknown11095|unassigned
+11111/tcp|vircom-smtp|Vircom SMTP (unofficial)
+11112/tcp|sgi-soap|SGI SOAP (unofficial)
+11211/tcp|memcache|Memcached key-value store
+11212/tcp|memcache-2|Memcached (unofficial)
+11223/tcp|unknown11223|unassigned
+11319/tcp|imip|IMIP (unofficial)
+11320/tcp|imip-ch|IMIP (unofficial)
+11367/tcp|unknown11367|unassigned
+11381/tcp|unknown11381|unassigned
+11501/tcp|unknown11501|unassigned
+11720/tcp|hna-1|HNA (unofficial)
+11825/tcp|unknown11825|unassigned
+11875/tcp|unknown11875|unassigned
+11967/tcp|wmereceiving|WM (unofficial)
+12000/tcp|cce3x|CCE (unofficial)
+12010/tcp|eDa|eDA (unofficial)
+12137/tcp|unknown12137|unassigned
+12345/tcp|italk|NetBus trojan (legacy) / iTalk
+12346/tcp|netbus2|NetBus (legacy)
+12753/tcp|tsaf-port|TSAF (unofficial)
+13000/tcp|unknown13000|unassigned
+13110/tcp|unknown13110|unassigned
+13337/tcp|unknown13337|unassigned
+13579/tcp|unknown13579|unassigned
+13720/tcp|unknown13720|unassigned
+13782/tcp|verbex-csa|Verbex (unofficial)
+13818/tcp|unknown13818|unassigned
+14000/tcp|scs|SCS (unofficial)
+14238/tcp|unknown14238|unassigned
+14441/tcp|unknown14441|unassigned
+14442/tcp|unknown14442|unassigned
+15000/tcp|hydap|Hydap (unofficial)
+15001/tcp|unknown15001|unassigned
+15126/tcp|unknown15126|unassigned
+15345/tcp|xpilot|Xpilot (unofficial)
+15361/tcp|unknown15361|unassigned
+15533/tcp|unknown15533|unassigned
+15660/tcp|bmc|BMC (unofficial)
+16000/tcp|unknown16000|unassigned
+16018/tcp|unknown16018|unassigned
+16161/tcp|storm|Storm (unofficial)
+16665/tcp|unknown16665|unassigned
+17007/tcp|isode-echo|Isode (unofficial)
+17185/tcp|vhcd|VHC (unofficial)
+17219/tcp|chipper|Chipper (unofficial)
+17500/tcp|dropbox-lan-sync|Dropbox LAN sync (unofficial)
+18104/tcp|radpdf|RadPDF (unofficial)
+18241/tcp|unknown18241|unassigned
+18980/tcp|unknown18980|unassigned
+19029/tcp|unknown19029|unassigned
+19191/tcp|unknown19191|unassigned
+19194/tcp|ua-accept|UA accept (unofficial)
+19283/tcp|keysrvr|Key server (unofficial)
+19315/tcp|unknown19315|unassigned
+19398/tcp|unknown19398|unassigned
+19702/tcp|unknown19702|unassigned
+19810/tcp|unknown19810|unassigned
+19888/tcp|unknown19888|unassigned
+20000/tcp|dnp|DNP3 protocol
+20031/tcp|unknown20031|unassigned
+20222/tcp|ipulse-ics|iPulse (unofficial)
+20828/tcp|unknown20828|unassigned
+21590/tcp|unknown21590|unassigned
+21800/tcp|tv-connections|TV connections (unofficial)
+21845/tcp|webphone|Webphone (unofficial)
+21999/tcp|unknown21999|unassigned
+22222/tcp|unknown22222|unassigned
+22273/tcp|unknown22273|unassigned
+23294/tcp|unknown23294|unassigned
+23400/tcp|unknown23400|unassigned
+23981/tcp|unknown23981|unassigned
+24242/tcp|file-hole|File hole (unofficial)
+24386/tcp|intel-rci|Intel RCI (unofficial)
+24554/tcp|binkp|Binkleyterm FTN mailer
+24677/tcp|flashfiler|FlashFiler (unofficial)
+24826/tcp|unknown24826|unassigned
+25000/tcp|icl-twobase1|ICL (unofficial)
+25565/tcp|minecraft|Minecraft server (unofficial)
+25793/tcp|unknown25793|unassigned
+26000/tcp|quake|Quake server (unofficial)
+26214/tcp|unknown26214|unassigned
+26365/tcp|unknown26365|unassigned
+27000/tcp|flexlm-alt|FlexLM (unofficial)
+27017/tcp|mongodb|MongoDB database
+27018/tcp|mongodb-ssl|MongoDB over TLS (unofficial)
+27019/tcp|mongodb-2|MongoDB shard (unofficial)
+27374/tcp|subseven|SubSeven trojan (legacy)
+27375/tcp|unknown27375|unassigned
+28001/tcp|nxl-mds|NXL (unofficial)
+28200/tcp|unknown28200|unassigned
+28650/tcp|unknown28650|unassigned
+29361/tcp|unknown29361|unassigned
+30000/tcp|unknown30000|unassigned
+30718/tcp|unknown30718|unassigned
+31000/tcp|unknown31000|unassigned
+31038/tcp|unknown31038|unassigned
+31337/tcp|elite|Elite / Back Orifice trojan (legacy)
+31416/tcp|boinc|BOINC client
+32769/tcp|filenet-rpc|FileNET (unofficial)
+32781/tcp|filenet|FileNET (unofficial)
+33354/tcp|unknown33354|unassigned
+33890/tcp|rdp-alt2|RDP alt (unofficial)
+34949/tcp|unknown34949|unassigned
+36320/tcp|unknown36320|unassigned
+36863/tcp|unknown36863|unassigned
+37839/tcp|unknown37839|unassigned
+38063/tcp|unknown38063|unassigned
+38078/tcp|unknown38078|unassigned
+38392/tcp|unknown38392|unassigned
+39213/tcp|unknown39213|unassigned
+41524/tcp|unknown41524|unassigned
+42510/tcp|caer|CAER (unofficial)
+43118/tcp|unknown43118|unassigned
+44176/tcp|unknown44176|unassigned
+44442/tcp|unknown44442|unassigned
+44501/tcp|unknown44501|unassigned
+45331/tcp|unknown45331|unassigned
+45678/tcp|eht|EHT (unofficial)
+47001/tcp|winrm-alt|WinRM over HTTP alt (unofficial)
+48080/tcp|unknown48080|unassigned
+48879/tcp|unknown48879|unassigned
+49152/tcp|dynamic|Dynamic/private port range begins
+49153/tcp|dynamic|Dynamic/private port
+49154/tcp|dynamic|Dynamic/private port
+49155/tcp|dynamic|Dynamic/private port
+49156/tcp|dynamic|Dynamic/private port
+49157/tcp|dynamic|Dynamic/private port
+49158/tcp|dynamic|Dynamic/private port
+49159/tcp|dynamic|Dynamic/private port
+49160/tcp|dynamic|Dynamic/private port
+49161/tcp|dynamic|Dynamic/private port
+49162/tcp|dynamic|Dynamic/private port
+49163/tcp|dynamic|Dynamic/private port
+49164/tcp|dynamic|Dynamic/private port
+49165/tcp|dynamic|Dynamic/private port
+49166/tcp|dynamic|Dynamic/private port
+49167/tcp|dynamic|Dynamic/private port
+49168/tcp|dynamic|Dynamic/private port
+49169/tcp|dynamic|Dynamic/private port
+49170/tcp|dynamic|Dynamic/private port
+49171/tcp|dynamic|Dynamic/private port
+49172/tcp|dynamic|Dynamic/private port
+49173/tcp|dynamic|Dynamic/private port
+49174/tcp|dynamic|Dynamic/private port
+49175/tcp|dynamic|Dynamic/private port
+49176/tcp|dynamic|Dynamic/private port
+49177/tcp|dynamic|Dynamic/private port
+49178/tcp|dynamic|Dynamic/private port
+49179/tcp|dynamic|Dynamic/private port
+49180/tcp|dynamic|Dynamic/private port
+49181/tcp|dynamic|Dynamic/private port
+49182/tcp|dynamic|Dynamic/private port
+49183/tcp|dynamic|Dynamic/private port
+49184/tcp|dynamic|Dynamic/private port
+49185/tcp|dynamic|Dynamic/private port
+49186/tcp|dynamic|Dynamic/private port
+49187/tcp|dynamic|Dynamic/private port
+49188/tcp|dynamic|Dynamic/private port
+49189/tcp|dynamic|Dynamic/private port
+49190/tcp|dynamic|Dynamic/private port
+49191/tcp|dynamic|Dynamic/private port
+49192/tcp|dynamic|Dynamic/private port
+49193/tcp|dynamic|Dynamic/private port
+49194/tcp|dynamic|Dynamic/private port
+49195/tcp|dynamic|Dynamic/private port
+49196/tcp|dynamic|Dynamic/private port
+49197/tcp|dynamic|Dynamic/private port
+49198/tcp|dynamic|Dynamic/private port
+49199/tcp|dynamic|Dynamic/private port
+49200/tcp|dynamic|Dynamic/private port
+49201/tcp|dynamic|Dynamic/private port
+49202/tcp|dynamic|Dynamic/private port
+49203/tcp|dynamic|Dynamic/private port
+49204/tcp|dynamic|Dynamic/private port
+49205/tcp|dynamic|Dynamic/private port
+49206/tcp|dynamic|Dynamic/private port
+49207/tcp|dynamic|Dynamic/private port
+49208/tcp|dynamic|Dynamic/private port
+49209/tcp|dynamic|Dynamic/private port
+49210/tcp|dynamic|Dynamic/private port
+49211/tcp|dynamic|Dynamic/private port
+49212/tcp|dynamic|Dynamic/private port
+49213/tcp|dynamic|Dynamic/private port
+49214/tcp|dynamic|Dynamic/private port
+49215/tcp|dynamic|Dynamic/private port
+49216/tcp|dynamic|Dynamic/private port
+49217/tcp|dynamic|Dynamic/private port
+49218/tcp|dynamic|Dynamic/private port
+49219/tcp|dynamic|Dynamic/private port
+49220/tcp|dynamic|Dynamic/private port
+49221/tcp|dynamic|Dynamic/private port
+49222/tcp|dynamic|Dynamic/private port
+49223/tcp|dynamic|Dynamic/private port
+49224/tcp|dynamic|Dynamic/private port
+49225/tcp|dynamic|Dynamic/private port
+49226/tcp|dynamic|Dynamic/private port
+49227/tcp|dynamic|Dynamic/private port
+49228/tcp|dynamic|Dynamic/private port
+49229/tcp|dynamic|Dynamic/private port
+49230/tcp|dynamic|Dynamic/private port
+49231/tcp|dynamic|Dynamic/private port
+49232/tcp|dynamic|Dynamic/private port
+49233/tcp|dynamic|Dynamic/private port
+49234/tcp|dynamic|Dynamic/private port
+49235/tcp|dynamic|Dynamic/private port
+49236/tcp|dynamic|Dynamic/private port
+49237/tcp|dynamic|Dynamic/private port
+49238/tcp|dynamic|Dynamic/private port
+49239/tcp|dynamic|Dynamic/private port
+49240/tcp|dynamic|Dynamic/private port
+49241/tcp|dynamic|Dynamic/private port
+49242/tcp|dynamic|Dynamic/private port
+49243/tcp|dynamic|Dynamic/private port
+49244/tcp|dynamic|Dynamic/private port
+49245/tcp|dynamic|Dynamic/private port
+49246/tcp|dynamic|Dynamic/private port
+49247/tcp|dynamic|Dynamic/private port
+49248/tcp|dynamic|Dynamic/private port
+49249/tcp|dynamic|Dynamic/private port
+49250/tcp|dynamic|Dynamic/private port
+49251/tcp|dynamic|Dynamic/private port
+49252/tcp|dynamic|Dynamic/private port
+49253/tcp|dynamic|Dynamic/private port
+49254/tcp|dynamic|Dynamic/private port
+49255/tcp|dynamic|Dynamic/private port
+49256/tcp|dynamic|Dynamic/private port
+49257/tcp|dynamic|Dynamic/private port
+49258/tcp|dynamic|Dynamic/private port
+49259/tcp|dynamic|Dynamic/private port
+49260/tcp|dynamic|Dynamic/private port
+49261/tcp|dynamic|Dynamic/private port
+49262/tcp|dynamic|Dynamic/private port
+49263/tcp|dynamic|Dynamic/private port
+49264/tcp|dynamic|Dynamic/private port
+49265/tcp|dynamic|Dynamic/private port
+49266/tcp|dynamic|Dynamic/private port
+49267/tcp|dynamic|Dynamic/private port
+49268/tcp|dynamic|Dynamic/private port
+49269/tcp|dynamic|Dynamic/private port
+49270/tcp|dynamic|Dynamic/private port
+49271/tcp|dynamic|Dynamic/private port
+49272/tcp|dynamic|Dynamic/private port
+49273/tcp|dynamic|Dynamic/private port
+49274/tcp|dynamic|Dynamic/private port
+49275/tcp|dynamic|Dynamic/private port
+49276/tcp|dynamic|Dynamic/private port
+49277/tcp|dynamic|Dynamic/private port
+49278/tcp|dynamic|Dynamic/private port
+49279/tcp|dynamic|Dynamic/private port
+49280/tcp|dynamic|Dynamic/private port
+49281/tcp|dynamic|Dynamic/private port
+49282/tcp|dynamic|Dynamic/private port
+49283/tcp|dynamic|Dynamic/private port
+49284/tcp|dynamic|Dynamic/private port
+49285/tcp|dynamic|Dynamic/private port
+49286/tcp|dynamic|Dynamic/private port
+49287/tcp|dynamic|Dynamic/private port
+49288/tcp|dynamic|Dynamic/private port
+49289/tcp|dynamic|Dynamic/private port
+49290/tcp|dynamic|Dynamic/private port
+49291/tcp|dynamic|Dynamic/private port
+49292/tcp|dynamic|Dynamic/private port
+49293/tcp|dynamic|Dynamic/private port
+49294/tcp|dynamic|Dynamic/private port
+49295/tcp|dynamic|Dynamic/private port
+49296/tcp|dynamic|Dynamic/private port
+49297/tcp|dynamic|Dynamic/private port
+49298/tcp|dynamic|Dynamic/private port
+49299/tcp|dynamic|Dynamic/private port
+49300/tcp|dynamic|Dynamic/private port
+49301/tcp|dynamic|Dynamic/private port
+49302/tcp|dynamic|Dynamic/private port
+49303/tcp|dynamic|Dynamic/private port
+49304/tcp|dynamic|Dynamic/private port
+49305/tcp|dynamic|Dynamic/private port
+49306/tcp|dynamic|Dynamic/private port
+49307/tcp|dynamic|Dynamic/private port
+49308/tcp|dynamic|Dynamic/private port
+49309/tcp|dynamic|Dynamic/private port
+49310/tcp|dynamic|Dynamic/private port
+49311/tcp|dynamic|Dynamic/private port
+49312/tcp|dynamic|Dynamic/private port
+49313/tcp|dynamic|Dynamic/private port
+49314/tcp|dynamic|Dynamic/private port
+49315/tcp|dynamic|Dynamic/private port
+49316/tcp|dynamic|Dynamic/private port
+49317/tcp|dynamic|Dynamic/private port
+49318/tcp|dynamic|Dynamic/private port
+49319/tcp|dynamic|Dynamic/private port
+49320/tcp|dynamic|Dynamic/private port
+49321/tcp|dynamic|Dynamic/private port
+49322/tcp|dynamic|Dynamic/private port
+49323/tcp|dynamic|Dynamic/private port
+49324/tcp|dynamic|Dynamic/private port
+49325/tcp|dynamic|Dynamic/private port
+49326/tcp|dynamic|Dynamic/private port
+49327/tcp|dynamic|Dynamic/private port
+49328/tcp|dynamic|Dynamic/private port
+49329/tcp|dynamic|Dynamic/private port
+49330/tcp|dynamic|Dynamic/private port
+49331/tcp|dynamic|Dynamic/private port
+49332/tcp|dynamic|Dynamic/private port
+49333/tcp|dynamic|Dynamic/private port
+49334/tcp|dynamic|Dynamic/private port
+49335/tcp|dynamic|Dynamic/private port
+49336/tcp|dynamic|Dynamic/private port
+49337/tcp|dynamic|Dynamic/private port
+49338/tcp|dynamic|Dynamic/private port
+49339/tcp|dynamic|Dynamic/private port
+49340/tcp|dynamic|Dynamic/private port
+49341/tcp|dynamic|Dynamic/private port
+49342/tcp|dynamic|Dynamic/private port
+49343/tcp|dynamic|Dynamic/private port
+49344/tcp|dynamic|Dynamic/private port
+49345/tcp|dynamic|Dynamic/private port
+49346/tcp|dynamic|Dynamic/private port
+49347/tcp|dynamic|Dynamic/private port
+49348/tcp|dynamic|Dynamic/private port
+49349/tcp|dynamic|Dynamic/private port
+49350/tcp|dynamic|Dynamic/private port
+49351/tcp|dynamic|Dynamic/private port
+49352/tcp|dynamic|Dynamic/private port
+49353/tcp|dynamic|Dynamic/private port
+49354/tcp|dynamic|Dynamic/private port
+49355/tcp|dynamic|Dynamic/private port
+49356/tcp|dynamic|Dynamic/private port
+49357/tcp|dynamic|Dynamic/private port
+49358/tcp|dynamic|Dynamic/private port
+49359/tcp|dynamic|Dynamic/private port
+49360/tcp|dynamic|Dynamic/private port
+49361/tcp|dynamic|Dynamic/private port
+49362/tcp|dynamic|Dynamic/private port
+49363/tcp|dynamic|Dynamic/private port
+49364/tcp|dynamic|Dynamic/private port
+49365/tcp|dynamic|Dynamic/private port
+49366/tcp|dynamic|Dynamic/private port
+49367/tcp|dynamic|Dynamic/private port
+49368/tcp|dynamic|Dynamic/private port
+49369/tcp|dynamic|Dynamic/private port
+49370/tcp|dynamic|Dynamic/private port
+49371/tcp|dynamic|Dynamic/private port
+49372/tcp|dynamic|Dynamic/private port
+49373/tcp|dynamic|Dynamic/private port
+49374/tcp|dynamic|Dynamic/private port
+49375/tcp|dynamic|Dynamic/private port
+49376/tcp|dynamic|Dynamic/private port
+49377/tcp|dynamic|Dynamic/private port
+49378/tcp|dynamic|Dynamic/private port
+49379/tcp|dynamic|Dynamic/private port
+49380/tcp|dynamic|Dynamic/private port
+49381/tcp|dynamic|Dynamic/private port
+49382/tcp|dynamic|Dynamic/private port
+49383/tcp|dynamic|Dynamic/private port
+49384/tcp|dynamic|Dynamic/private port
+49385/tcp|dynamic|Dynamic/private port
+49386/tcp|dynamic|Dynamic/private port
+49387/tcp|dynamic|Dynamic/private port
+49388/tcp|dynamic|Dynamic/private port
+49389/tcp|dynamic|Dynamic/private port
+49390/tcp|dynamic|Dynamic/private port
+49391/tcp|dynamic|Dynamic/private port
+49392/tcp|dynamic|Dynamic/private port
+49393/tcp|dynamic|Dynamic/private port
+49394/tcp|dynamic|Dynamic/private port
+49395/tcp|dynamic|Dynamic/private port
+49396/tcp|dynamic|Dynamic/private port
+49397/tcp|dynamic|Dynamic/private port
+49398/tcp|dynamic|Dynamic/private port
+49399/tcp|dynamic|Dynamic/private port
+49400/tcp|dynamic|Dynamic/private port
+49401/tcp|dynamic|Dynamic/private port
+49402/tcp|dynamic|Dynamic/private port
+49403/tcp|dynamic|Dynamic/private port
+49404/tcp|dynamic|Dynamic/private port
+49405/tcp|dynamic|Dynamic/private port
+49406/tcp|dynamic|Dynamic/private port
+49407/tcp|dynamic|Dynamic/private port
+49408/tcp|dynamic|Dynamic/private port
+49409/tcp|dynamic|Dynamic/private port
+49410/tcp|dynamic|Dynamic/private port
+49411/tcp|dynamic|Dynamic/private port
+49412/tcp|dynamic|Dynamic/private port
+49413/tcp|dynamic|Dynamic/private port
+49414/tcp|dynamic|Dynamic/private port
+49415/tcp|dynamic|Dynamic/private port
+49416/tcp|dynamic|Dynamic/private port
+49417/tcp|dynamic|Dynamic/private port
+49418/tcp|dynamic|Dynamic/private port
+49419/tcp|dynamic|Dynamic/private port
+49420/tcp|dynamic|Dynamic/private port
+49421/tcp|dynamic|Dynamic/private port
+49422/tcp|dynamic|Dynamic/private port
+49423/tcp|dynamic|Dynamic/private port
+49424/tcp|dynamic|Dynamic/private port
+49425/tcp|dynamic|Dynamic/private port
+49426/tcp|dynamic|Dynamic/private port
+49427/tcp|dynamic|Dynamic/private port
+49428/tcp|dynamic|Dynamic/private port
+49429/tcp|dynamic|Dynamic/private port
+49430/tcp|dynamic|Dynamic/private port
+49431/tcp|dynamic|Dynamic/private port
+49432/tcp|dynamic|Dynamic/private port
+49433/tcp|dynamic|Dynamic/private port
+49434/tcp|dynamic|Dynamic/private port
+49435/tcp|dynamic|Dynamic/private port
+49436/tcp|dynamic|Dynamic/private port
+49437/tcp|dynamic|Dynamic/private port
+49438/tcp|dynamic|Dynamic/private port
+49439/tcp|dynamic|Dynamic/private port
+49440/tcp|dynamic|Dynamic/private port
+49441/tcp|dynamic|Dynamic/private port
+49442/tcp|dynamic|Dynamic/private port
+49443/tcp|dynamic|Dynamic/private port
+49444/tcp|dynamic|Dynamic/private port
+49445/tcp|dynamic|Dynamic/private port
+49446/tcp|dynamic|Dynamic/private port
+49447/tcp|dynamic|Dynamic/private port
+49448/tcp|dynamic|Dynamic/private port
+49449/tcp|dynamic|Dynamic/private port
+49450/tcp|dynamic|Dynamic/private port
+49451/tcp|dynamic|Dynamic/private port
+49452/tcp|dynamic|Dynamic/private port
+49453/tcp|dynamic|Dynamic/private port
+49454/tcp|dynamic|Dynamic/private port
+49455/tcp|dynamic|Dynamic/private port
+49456/tcp|dynamic|Dynamic/private port
+49457/tcp|dynamic|Dynamic/private port
+49458/tcp|dynamic|Dynamic/private port
+49459/tcp|dynamic|Dynamic/private port
+49460/tcp|dynamic|Dynamic/private port
+49461/tcp|dynamic|Dynamic/private port
+49462/tcp|dynamic|Dynamic/private port
+49463/tcp|dynamic|Dynamic/private port
+49464/tcp|dynamic|Dynamic/private port
+49465/tcp|dynamic|Dynamic/private port
+49466/tcp|dynamic|Dynamic/private port
+49467/tcp|dynamic|Dynamic/private port
+49468/tcp|dynamic|Dynamic/private port
+49469/tcp|dynamic|Dynamic/private port
+49470/tcp|dynamic|Dynamic/private port
+49471/tcp|dynamic|Dynamic/private port
+49472/tcp|dynamic|Dynamic/private port
+49473/tcp|dynamic|Dynamic/private port
+49474/tcp|dynamic|Dynamic/private port
+49475/tcp|dynamic|Dynamic/private port
+49476/tcp|dynamic|Dynamic/private port
+49477/tcp|dynamic|Dynamic/private port
+49478/tcp|dynamic|Dynamic/private port
+49479/tcp|dynamic|Dynamic/private port
+49480/tcp|dynamic|Dynamic/private port
+49481/tcp|dynamic|Dynamic/private port
+49482/tcp|dynamic|Dynamic/private port
+49483/tcp|dynamic|Dynamic/private port
+49484/tcp|dynamic|Dynamic/private port
+49485/tcp|dynamic|Dynamic/private port
+49486/tcp|dynamic|Dynamic/private port
+49487/tcp|dynamic|Dynamic/private port
+49488/tcp|dynamic|Dynamic/private port
+49489/tcp|dynamic|Dynamic/private port
+49490/tcp|dynamic|Dynamic/private port
+49491/tcp|dynamic|Dynamic/private port
+49492/tcp|dynamic|Dynamic/private port
+49493/tcp|dynamic|Dynamic/private port
+49494/tcp|dynamic|Dynamic/private port
+49495/tcp|dynamic|Dynamic/private port
+49496/tcp|dynamic|Dynamic/private port
+49497/tcp|dynamic|Dynamic/private port
+49498/tcp|dynamic|Dynamic/private port
+49499/tcp|dynamic|Dynamic/private port
+49500/tcp|dynamic|Dynamic/private port
+49501/tcp|dynamic|Dynamic/private port
+49502/tcp|dynamic|Dynamic/private port
+49503/tcp|dynamic|Dynamic/private port
+49504/tcp|dynamic|Dynamic/private port
+49505/tcp|dynamic|Dynamic/private port
+49506/tcp|dynamic|Dynamic/private port
+49507/tcp|dynamic|Dynamic/private port
+49508/tcp|dynamic|Dynamic/private port
+49509/tcp|dynamic|Dynamic/private port
+49510/tcp|dynamic|Dynamic/private port
+49511/tcp|dynamic|Dynamic/private port
+49512/tcp|dynamic|Dynamic/private port
+49513/tcp|dynamic|Dynamic/private port
+49514/tcp|dynamic|Dynamic/private port
+49515/tcp|dynamic|Dynamic/private port
+49516/tcp|dynamic|Dynamic/private port
+49517/tcp|dynamic|Dynamic/private port
+49518/tcp|dynamic|Dynamic/private port
+49519/tcp|dynamic|Dynamic/private port
+49520/tcp|dynamic|Dynamic/private port
+49521/tcp|dynamic|Dynamic/private port
+49522/tcp|dynamic|Dynamic/private port
+49523/tcp|dynamic|Dynamic/private port
+49524/tcp|dynamic|Dynamic/private port
+49525/tcp|dynamic|Dynamic/private port
+49526/tcp|dynamic|Dynamic/private port
+49527/tcp|dynamic|Dynamic/private port
+49528/tcp|dynamic|Dynamic/private port
+49529/tcp|dynamic|Dynamic/private port
+49530/tcp|dynamic|Dynamic/private port
+49531/tcp|dynamic|Dynamic/private port
+49532/tcp|dynamic|Dynamic/private port
+49533/tcp|dynamic|Dynamic/private port
+49534/tcp|dynamic|Dynamic/private port
+49535/tcp|dynamic|Dynamic/private port
+49536/tcp|dynamic|Dynamic/private port
+49537/tcp|dynamic|Dynamic/private port
+49538/tcp|dynamic|Dynamic/private port
+49539/tcp|dynamic|Dynamic/private port
+49540/tcp|dynamic|Dynamic/private port
+49541/tcp|dynamic|Dynamic/private port
+49542/tcp|dynamic|Dynamic/private port
+49543/tcp|dynamic|Dynamic/private port
+49544/tcp|dynamic|Dynamic/private port
+49545/tcp|dynamic|Dynamic/private port
+49546/tcp|dynamic|Dynamic/private port
+49547/tcp|dynamic|Dynamic/private port
+49548/tcp|dynamic|Dynamic/private port
+49549/tcp|dynamic|Dynamic/private port
+49550/tcp|dynamic|Dynamic/private port
+49551/tcp|dynamic|Dynamic/private port
+49552/tcp|dynamic|Dynamic/private port
+49553/tcp|dynamic|Dynamic/private port
+49554/tcp|dynamic|Dynamic/private port
+49555/tcp|dynamic|Dynamic/private port
+49556/tcp|dynamic|Dynamic/private port
+49557/tcp|dynamic|Dynamic/private port
+49558/tcp|dynamic|Dynamic/private port
+49559/tcp|dynamic|Dynamic/private port
+49560/tcp|dynamic|Dynamic/private port
+49561/tcp|dynamic|Dynamic/private port
+49562/tcp|dynamic|Dynamic/private port
+49563/tcp|dynamic|Dynamic/private port
+49564/tcp|dynamic|Dynamic/private port
+49565/tcp|dynamic|Dynamic/private port
+49566/tcp|dynamic|Dynamic/private port
+49567/tcp|dynamic|Dynamic/private port
+49568/tcp|dynamic|Dynamic/private port
+49569/tcp|dynamic|Dynamic/private port
+49570/tcp|dynamic|Dynamic/private port
+49571/tcp|dynamic|Dynamic/private port
+49572/tcp|dynamic|Dynamic/private port
+49573/tcp|dynamic|Dynamic/private port
+49574/tcp|dynamic|Dynamic/private port
+49575/tcp|dynamic|Dynamic/private port
+49576/tcp|dynamic|Dynamic/private port
+49577/tcp|dynamic|Dynamic/private port
+49578/tcp|dynamic|Dynamic/private port
+49579/tcp|dynamic|Dynamic/private port
+49580/tcp|dynamic|Dynamic/private port
+49581/tcp|dynamic|Dynamic/private port
+49582/tcp|dynamic|Dynamic/private port
+49583/tcp|dynamic|Dynamic/private port
+49584/tcp|dynamic|Dynamic/private port
+49585/tcp|dynamic|Dynamic/private port
+49586/tcp|dynamic|Dynamic/private port
+49587/tcp|dynamic|Dynamic/private port
+49588/tcp|dynamic|Dynamic/private port
+49589/tcp|dynamic|Dynamic/private port
+49590/tcp|dynamic|Dynamic/private port
+49591/tcp|dynamic|Dynamic/private port
+49592/tcp|dynamic|Dynamic/private port
+49593/tcp|dynamic|Dynamic/private port
+49594/tcp|dynamic|Dynamic/private port
+49595/tcp|dynamic|Dynamic/private port
+49596/tcp|dynamic|Dynamic/private port
+49597/tcp|dynamic|Dynamic/private port
+49598/tcp|dynamic|Dynamic/private port
+49599/tcp|dynamic|Dynamic/private port
+49600/tcp|dynamic|Dynamic/private port
+49601/tcp|dynamic|Dynamic/private port
+49602/tcp|dynamic|Dynamic/private port
+49603/tcp|dynamic|Dynamic/private port
+49604/tcp|dynamic|Dynamic/private port
+49605/tcp|dynamic|Dynamic/private port
+49606/tcp|dynamic|Dynamic/private port
+49607/tcp|dynamic|Dynamic/private port
+49608/tcp|dynamic|Dynamic/private port
+49609/tcp|dynamic|Dynamic/private port
+49610/tcp|dynamic|Dynamic/private port
+49611/tcp|dynamic|Dynamic/private port
+49612/tcp|dynamic|Dynamic/private port
+49613/tcp|dynamic|Dynamic/private port
+49614/tcp|dynamic|Dynamic/private port
+49615/tcp|dynamic|Dynamic/private port
+49616/tcp|dynamic|Dynamic/private port
+49617/tcp|dynamic|Dynamic/private port
+49618/tcp|dynamic|Dynamic/private port
+49619/tcp|dynamic|Dynamic/private port
+49620/tcp|dynamic|Dynamic/private port
+49621/tcp|dynamic|Dynamic/private port
+49622/tcp|dynamic|Dynamic/private port
+49623/tcp|dynamic|Dynamic/private port
+49624/tcp|dynamic|Dynamic/private port
+49625/tcp|dynamic|Dynamic/private port
+49626/tcp|dynamic|Dynamic/private port
+49627/tcp|dynamic|Dynamic/private port
+49628/tcp|dynamic|Dynamic/private port
+49629/tcp|dynamic|Dynamic/private port
+49630/tcp|dynamic|Dynamic/private port
+49631/tcp|dynamic|Dynamic/private port
+49632/tcp|dynamic|Dynamic/private port
+49633/tcp|dynamic|Dynamic/private port
+49634/tcp|dynamic|Dynamic/private port
+49635/tcp|dynamic|Dynamic/private port
+49636/tcp|dynamic|Dynamic/private port
+49637/tcp|dynamic|Dynamic/private port
+49638/tcp|dynamic|Dynamic/private port
+49639/tcp|dynamic|Dynamic/private port
+49640/tcp|dynamic|Dynamic/private port
+49641/tcp|dynamic|Dynamic/private port
+49642/tcp|dynamic|Dynamic/private port
+49643/tcp|dynamic|Dynamic/private port
+49644/tcp|dynamic|Dynamic/private port
+49645/tcp|dynamic|Dynamic/private port
+49646/tcp|dynamic|Dynamic/private port
+49647/tcp|dynamic|Dynamic/private port
+49648/tcp|dynamic|Dynamic/private port
+49649/tcp|dynamic|Dynamic/private port
+49650/tcp|dynamic|Dynamic/private port
+49651/tcp|dynamic|Dynamic/private port
+49652/tcp|dynamic|Dynamic/private port
+49653/tcp|dynamic|Dynamic/private port
+49654/tcp|dynamic|Dynamic/private port
+49655/tcp|dynamic|Dynamic/private port
+49656/tcp|dynamic|Dynamic/private port
+49657/tcp|dynamic|Dynamic/private port
+49658/tcp|dynamic|Dynamic/private port
+49659/tcp|dynamic|Dynamic/private port
+49660/tcp|dynamic|Dynamic/private port
+49661/tcp|dynamic|Dynamic/private port
+49662/tcp|dynamic|Dynamic/private port
+49663/tcp|dynamic|Dynamic/private port
+49664/tcp|dynamic|Dynamic/private port
+49665/tcp|dynamic|Dynamic/private port
+49666/tcp|dynamic|Dynamic/private port
+49667/tcp|dynamic|Dynamic/private port
+49668/tcp|dynamic|Dynamic/private port
+49669/tcp|dynamic|Dynamic/private port
+49670/tcp|dynamic|Dynamic/private port
+49671/tcp|dynamic|Dynamic/private port
+49672/tcp|dynamic|Dynamic/private port
+49673/tcp|dynamic|Dynamic/private port
+49674/tcp|dynamic|Dynamic/private port
+49675/tcp|dynamic|Dynamic/private port
+49676/tcp|dynamic|Dynamic/private port
+49677/tcp|dynamic|Dynamic/private port
+49678/tcp|dynamic|Dynamic/private port
+49679/tcp|dynamic|Dynamic/private port
+49680/tcp|dynamic|Dynamic/private port
+49681/tcp|dynamic|Dynamic/private port
+49682/tcp|dynamic|Dynamic/private port
+49683/tcp|dynamic|Dynamic/private port
+49684/tcp|dynamic|Dynamic/private port
+49685/tcp|dynamic|Dynamic/private port
+49686/tcp|dynamic|Dynamic/private port
+49687/tcp|dynamic|Dynamic/private port
+49688/tcp|dynamic|Dynamic/private port
+49689/tcp|dynamic|Dynamic/private port
+49690/tcp|dynamic|Dynamic/private port
+49691/tcp|dynamic|Dynamic/private port
+49692/tcp|dynamic|Dynamic/private port
+49693/tcp|dynamic|Dynamic/private port
+49694/tcp|dynamic|Dynamic/private port
+49695/tcp|dynamic|Dynamic/private port
+49696/tcp|dynamic|Dynamic/private port
+49697/tcp|dynamic|Dynamic/private port
+49698/tcp|dynamic|Dynamic/private port
+49699/tcp|dynamic|Dynamic/private port
+49700/tcp|dynamic|Dynamic/private port
+49701/tcp|dynamic|Dynamic/private port
+49702/tcp|dynamic|Dynamic/private port
+49703/tcp|dynamic|Dynamic/private port
+49704/tcp|dynamic|Dynamic/private port
+49705/tcp|dynamic|Dynamic/private port
+49706/tcp|dynamic|Dynamic/private port
+49707/tcp|dynamic|Dynamic/private port
+49708/tcp|dynamic|Dynamic/private port
+49709/tcp|dynamic|Dynamic/private port
+49710/tcp|dynamic|Dynamic/private port
+49711/tcp|dynamic|Dynamic/private port
+49712/tcp|dynamic|Dynamic/private port
+49713/tcp|dynamic|Dynamic/private port
+49714/tcp|dynamic|Dynamic/private port
+49715/tcp|dynamic|Dynamic/private port
+49716/tcp|dynamic|Dynamic/private port
+49717/tcp|dynamic|Dynamic/private port
+49718/tcp|dynamic|Dynamic/private port
+49719/tcp|dynamic|Dynamic/private port
+49720/tcp|dynamic|Dynamic/private port
+49721/tcp|dynamic|Dynamic/private port
+49722/tcp|dynamic|Dynamic/private port
+49723/tcp|dynamic|Dynamic/private port
+49724/tcp|dynamic|Dynamic/private port
+49725/tcp|dynamic|Dynamic/private port
+49726/tcp|dynamic|Dynamic/private port
+49727/tcp|dynamic|Dynamic/private port
+49728/tcp|dynamic|Dynamic/private port
+49729/tcp|dynamic|Dynamic/private port
+49730/tcp|dynamic|Dynamic/private port
+49731/tcp|dynamic|Dynamic/private port
+49732/tcp|dynamic|Dynamic/private port
+49733/tcp|dynamic|Dynamic/private port
+49734/tcp|dynamic|Dynamic/private port
+49735/tcp|dynamic|Dynamic/private port
+49736/tcp|dynamic|Dynamic/private port
+49737/tcp|dynamic|Dynamic/private port
+49738/tcp|dynamic|Dynamic/private port
+49739/tcp|dynamic|Dynamic/private port
+49740/tcp|dynamic|Dynamic/private port
+49741/tcp|dynamic|Dynamic/private port
+49742/tcp|dynamic|Dynamic/private port
+49743/tcp|dynamic|Dynamic/private port
+49744/tcp|dynamic|Dynamic/private port
+49745/tcp|dynamic|Dynamic/private port
+49746/tcp|dynamic|Dynamic/private port
+49747/tcp|dynamic|Dynamic/private port
+49748/tcp|dynamic|Dynamic/private port
+49749/tcp|dynamic|Dynamic/private port
+49750/tcp|dynamic|Dynamic/private port
+49751/tcp|dynamic|Dynamic/private port
+49752/tcp|dynamic|Dynamic/private port
+49753/tcp|dynamic|Dynamic/private port
+49754/tcp|dynamic|Dynamic/private port
+49755/tcp|dynamic|Dynamic/private port
+49756/tcp|dynamic|Dynamic/private port
+49757/tcp|dynamic|Dynamic/private port
+49758/tcp|dynamic|Dynamic/private port
+49759/tcp|dynamic|Dynamic/private port
+49760/tcp|dynamic|Dynamic/private port
+49761/tcp|dynamic|Dynamic/private port
+49762/tcp|dynamic|Dynamic/private port
+49763/tcp|dynamic|Dynamic/private port
+49764/tcp|dynamic|Dynamic/private port
+49765/tcp|dynamic|Dynamic/private port
+49766/tcp|dynamic|Dynamic/private port
+49767/tcp|dynamic|Dynamic/private port
+49768/tcp|dynamic|Dynamic/private port
+49769/tcp|dynamic|Dynamic/private port
+49770/tcp|dynamic|Dynamic/private port
+49771/tcp|dynamic|Dynamic/private port
+49772/tcp|dynamic|Dynamic/private port
+49773/tcp|dynamic|Dynamic/private port
+49774/tcp|dynamic|Dynamic/private port
+49775/tcp|dynamic|Dynamic/private port
+49776/tcp|dynamic|Dynamic/private port
+49777/tcp|dynamic|Dynamic/private port
+49778/tcp|dynamic|Dynamic/private port
+49779/tcp|dynamic|Dynamic/private port
+49780/tcp|dynamic|Dynamic/private port
+49781/tcp|dynamic|Dynamic/private port
+49782/tcp|dynamic|Dynamic/private port
+49783/tcp|dynamic|Dynamic/private port
+49784/tcp|dynamic|Dynamic/private port
+49785/tcp|dynamic|Dynamic/private port
+49786/tcp|dynamic|Dynamic/private port
+49787/tcp|dynamic|Dynamic/private port
+49788/tcp|dynamic|Dynamic/private port
+49789/tcp|dynamic|Dynamic/private port
+49790/tcp|dynamic|Dynamic/private port
+49791/tcp|dynamic|Dynamic/private port
+49792/tcp|dynamic|Dynamic/private port
+49793/tcp|dynamic|Dynamic/private port
+49794/tcp|dynamic|Dynamic/private port
+49795/tcp|dynamic|Dynamic/private port
+49796/tcp|dynamic|Dynamic/private port
+49797/tcp|dynamic|Dynamic/private port
+49798/tcp|dynamic|Dynamic/private port
+49799/tcp|dynamic|Dynamic/private port
+49800/tcp|dynamic|Dynamic/private port
+49801/tcp|dynamic|Dynamic/private port
+49802/tcp|dynamic|Dynamic/private port
+49803/tcp|dynamic|Dynamic/private port
+49804/tcp|dynamic|Dynamic/private port
+49805/tcp|dynamic|Dynamic/private port
+49806/tcp|dynamic|Dynamic/private port
+49807/tcp|dynamic|Dynamic/private port
+49808/tcp|dynamic|Dynamic/private port
+49809/tcp|dynamic|Dynamic/private port
+49810/tcp|dynamic|Dynamic/private port
+49811/tcp|dynamic|Dynamic/private port
+49812/tcp|dynamic|Dynamic/private port
+49813/tcp|dynamic|Dynamic/private port
+49814/tcp|dynamic|Dynamic/private port
+49815/tcp|dynamic|Dynamic/private port
+49816/tcp|dynamic|Dynamic/private port
+49817/tcp|dynamic|Dynamic/private port
+49818/tcp|dynamic|Dynamic/private port
+49819/tcp|dynamic|Dynamic/private port
+49820/tcp|dynamic|Dynamic/private port
+49821/tcp|dynamic|Dynamic/private port
+49822/tcp|dynamic|Dynamic/private port
+49823/tcp|dynamic|Dynamic/private port
+49824/tcp|dynamic|Dynamic/private port
+49825/tcp|dynamic|Dynamic/private port
+49826/tcp|dynamic|Dynamic/private port
+49827/tcp|dynamic|Dynamic/private port
+49828/tcp|dynamic|Dynamic/private port
+49829/tcp|dynamic|Dynamic/private port
+49830/tcp|dynamic|Dynamic/private port
+49831/tcp|dynamic|Dynamic/private port
+49832/tcp|dynamic|Dynamic/private port
+49833/tcp|dynamic|Dynamic/private port
+49834/tcp|dynamic|Dynamic/private port
+49835/tcp|dynamic|Dynamic/private port
+49836/tcp|dynamic|Dynamic/private port
+49837/tcp|dynamic|Dynamic/private port
+49838/tcp|dynamic|Dynamic/private port
+49839/tcp|dynamic|Dynamic/private port
+49840/tcp|dynamic|Dynamic/private port
+49841/tcp|dynamic|Dynamic/private port
+49842/tcp|dynamic|Dynamic/private port
+49843/tcp|dynamic|Dynamic/private port
+49844/tcp|dynamic|Dynamic/private port
+49845/tcp|dynamic|Dynamic/private port
+49846/tcp|dynamic|Dynamic/private port
+49847/tcp|dynamic|Dynamic/private port
+49848/tcp|dynamic|Dynamic/private port
+49849/tcp|dynamic|Dynamic/private port
+49850/tcp|dynamic|Dynamic/private port
+49851/tcp|dynamic|Dynamic/private port
+49852/tcp|dynamic|Dynamic/private port
+49853/tcp|dynamic|Dynamic/private port
+49854/tcp|dynamic|Dynamic/private port
+49855/tcp|dynamic|Dynamic/private port
+49856/tcp|dynamic|Dynamic/private port
+49857/tcp|dynamic|Dynamic/private port
+49858/tcp|dynamic|Dynamic/private port
+49859/tcp|dynamic|Dynamic/private port
+49860/tcp|dynamic|Dynamic/private port
+49861/tcp|dynamic|Dynamic/private port
+49862/tcp|dynamic|Dynamic/private port
+49863/tcp|dynamic|Dynamic/private port
+49864/tcp|dynamic|Dynamic/private port
+49865/tcp|dynamic|Dynamic/private port
+49866/tcp|dynamic|Dynamic/private port
+49867/tcp|dynamic|Dynamic/private port
+49868/tcp|dynamic|Dynamic/private port
+49869/tcp|dynamic|Dynamic/private port
+49870/tcp|dynamic|Dynamic/private port
+49871/tcp|dynamic|Dynamic/private port
+49872/tcp|dynamic|Dynamic/private port
+49873/tcp|dynamic|Dynamic/private port
+49874/tcp|dynamic|Dynamic/private port
+49875/tcp|dynamic|Dynamic/private port
+49876/tcp|dynamic|Dynamic/private port
+49877/tcp|dynamic|Dynamic/private port
+49878/tcp|dynamic|Dynamic/private port
+49879/tcp|dynamic|Dynamic/private port
+49880/tcp|dynamic|Dynamic/private port
+49881/tcp|dynamic|Dynamic/private port
+49882/tcp|dynamic|Dynamic/private port
+49883/tcp|dynamic|Dynamic/private port
+49884/tcp|dynamic|Dynamic/private port
+49885/tcp|dynamic|Dynamic/private port
+49886/tcp|dynamic|Dynamic/private port
+49887/tcp|dynamic|Dynamic/private port
+49888/tcp|dynamic|Dynamic/private port
+49889/tcp|dynamic|Dynamic/private port
+49890/tcp|dynamic|Dynamic/private port
+49891/tcp|dynamic|Dynamic/private port
+49892/tcp|dynamic|Dynamic/private port
+49893/tcp|dynamic|Dynamic/private port
+49894/tcp|dynamic|Dynamic/private port
+49895/tcp|dynamic|Dynamic/private port
+49896/tcp|dynamic|Dynamic/private port
+49897/tcp|dynamic|Dynamic/private port
+49898/tcp|dynamic|Dynamic/private port
+49899/tcp|dynamic|Dynamic/private port
+49900/tcp|dynamic|Dynamic/private port
+49901/tcp|dynamic|Dynamic/private port
+49902/tcp|dynamic|Dynamic/private port
+49903/tcp|dynamic|Dynamic/private port
+49904/tcp|dynamic|Dynamic/private port
+49905/tcp|dynamic|Dynamic/private port
+49906/tcp|dynamic|Dynamic/private port
+49907/tcp|dynamic|Dynamic/private port
+49908/tcp|dynamic|Dynamic/private port
+49909/tcp|dynamic|Dynamic/private port
+49910/tcp|dynamic|Dynamic/private port
+49911/tcp|dynamic|Dynamic/private port
+49912/tcp|dynamic|Dynamic/private port
+49913/tcp|dynamic|Dynamic/private port
+49914/tcp|dynamic|Dynamic/private port
+49915/tcp|dynamic|Dynamic/private port
+49916/tcp|dynamic|Dynamic/private port
+49917/tcp|dynamic|Dynamic/private port
+49918/tcp|dynamic|Dynamic/private port
+49919/tcp|dynamic|Dynamic/private port
+49920/tcp|dynamic|Dynamic/private port
+49921/tcp|dynamic|Dynamic/private port
+49922/tcp|dynamic|Dynamic/private port
+49923/tcp|dynamic|Dynamic/private port
+49924/tcp|dynamic|Dynamic/private port
+49925/tcp|dynamic|Dynamic/private port
+49926/tcp|dynamic|Dynamic/private port
+49927/tcp|dynamic|Dynamic/private port
+49928/tcp|dynamic|Dynamic/private port
+49929/tcp|dynamic|Dynamic/private port
+49930/tcp|dynamic|Dynamic/private port
+49931/tcp|dynamic|Dynamic/private port
+49932/tcp|dynamic|Dynamic/private port
+49933/tcp|dynamic|Dynamic/private port
+49934/tcp|dynamic|Dynamic/private port
+49935/tcp|dynamic|Dynamic/private port
+49936/tcp|dynamic|Dynamic/private port
+49937/tcp|dynamic|Dynamic/private port
+49938/tcp|dynamic|Dynamic/private port
+49939/tcp|dynamic|Dynamic/private port
+49940/tcp|dynamic|Dynamic/private port
+49941/tcp|dynamic|Dynamic/private port
+49942/tcp|dynamic|Dynamic/private port
+49943/tcp|dynamic|Dynamic/private port
+49944/tcp|dynamic|Dynamic/private port
+49945/tcp|dynamic|Dynamic/private port
+49946/tcp|dynamic|Dynamic/private port
+49947/tcp|dynamic|Dynamic/private port
+49948/tcp|dynamic|Dynamic/private port
+49949/tcp|dynamic|Dynamic/private port
+49950/tcp|dynamic|Dynamic/private port
+49951/tcp|dynamic|Dynamic/private port
+49952/tcp|dynamic|Dynamic/private port
+49953/tcp|dynamic|Dynamic/private port
+49954/tcp|dynamic|Dynamic/private port
+49955/tcp|dynamic|Dynamic/private port
+49956/tcp|dynamic|Dynamic/private port
+49957/tcp|dynamic|Dynamic/private port
+49958/tcp|dynamic|Dynamic/private port
+49959/tcp|dynamic|Dynamic/private port
+49960/tcp|dynamic|Dynamic/private port
+49961/tcp|dynamic|Dynamic/private port
+49962/tcp|dynamic|Dynamic/private port
+49963/tcp|dynamic|Dynamic/private port
+49964/tcp|dynamic|Dynamic/private port
+49965/tcp|dynamic|Dynamic/private port
+49966/tcp|dynamic|Dynamic/private port
+49967/tcp|dynamic|Dynamic/private port
+49968/tcp|dynamic|Dynamic/private port
+49969/tcp|dynamic|Dynamic/private port
+49970/tcp|dynamic|Dynamic/private port
+49971/tcp|dynamic|Dynamic/private port
+49972/tcp|dynamic|Dynamic/private port
+49973/tcp|dynamic|Dynamic/private port
+49974/tcp|dynamic|Dynamic/private port
+49975/tcp|dynamic|Dynamic/private port
+49976/tcp|dynamic|Dynamic/private port
+49977/tcp|dynamic|Dynamic/private port
+49978/tcp|dynamic|Dynamic/private port
+49979/tcp|dynamic|Dynamic/private port
+49980/tcp|dynamic|Dynamic/private port
+49981/tcp|dynamic|Dynamic/private port
+49982/tcp|dynamic|Dynamic/private port
+49983/tcp|dynamic|Dynamic/private port
+49984/tcp|dynamic|Dynamic/private port
+49985/tcp|dynamic|Dynamic/private port
+49986/tcp|dynamic|Dynamic/private port
+49987/tcp|dynamic|Dynamic/private port
+49988/tcp|dynamic|Dynamic/private port
+49989/tcp|dynamic|Dynamic/private port
+49990/tcp|dynamic|Dynamic/private port
+49991/tcp|dynamic|Dynamic/private port
+49992/tcp|dynamic|Dynamic/private port
+49993/tcp|dynamic|Dynamic/private port
+49994/tcp|dynamic|Dynamic/private port
+49995/tcp|dynamic|Dynamic/private port
+49996/tcp|dynamic|Dynamic/private port
+49997/tcp|dynamic|Dynamic/private port
+49998/tcp|dynamic|Dynamic/private port
+49999/tcp|dynamic|Dynamic/private port
+50000/tcp|dynamic|Dynamic/private port (often benchmarks)
+65535/tcp|dynamic|Maximum port number

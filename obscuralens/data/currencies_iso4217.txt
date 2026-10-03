@@ -1,0 +1,193 @@
+# ObscuraLens offline data pack: ISO 4217 currency codes.
+# Source registry: ISO 4217 (SIX Group maintenance agency) table a.1 active
+# codes - public registry data, cross-checked against the ISO 4217 amendment
+# history.
+# Generated for ObscuraLens offline packs - see obscuralens/utils/data_packs.py.
+#
+# Format: code|numeric|minor-units|currency-name
+#   - code is the 3-letter alphabetic code, numeric the zero-padded 3-digit
+#     ISO numeric code, minor-units the ISO minor-unit exponent (digits after
+#     the decimal point) or N/A where not applicable (metals, SDR, funds)
+#   - includes funds codes (BOV, CHE, CHW, CLF, COU, MXV, USN, UYI, UYW),
+#     special codes (XDR gold/SUCRE/etc.) and the current active list only -
+#     withdrawn codes are not included
+#   - sorted alphabetically by alphabetic code
+# '#' starts a comment; blank lines are ignored.
+AED|784|2|United Arab Emirates Dirham
+AFN|971|2|Afghan Afghani
+ALL|008|2|Albanian Lek
+AMD|051|2|Armenian Dram
+AOA|973|2|Angolan Kwanza
+ARS|032|2|Argentine Peso
+AUD|036|2|Australian Dollar
+AWG|533|2|Aruban Florin
+AZN|944|2|Azerbaijani Manat
+BAM|977|2|Bosnia and Herzegovina Convertible Mark
+BBD|052|2|Barbados Dollar
+BDT|050|2|Bangladeshi Taka
+BHD|048|3|Bahraini Dinar
+BIF|108|0|Burundian Franc
+BMD|060|2|Bermudian Dollar
+BND|096|2|Brunei Dollar
+BOB|068|2|Boliviano
+BOV|984|2|Bolivian Mvdol (Funds Code)
+BRL|986|2|Brazilian Real
+BSD|044|2|Bahamian Dollar
+BTN|064|2|Bhutanese Ngultrum
+BWP|072|2|Botswana Pula
+BYN|933|2|Belarusian Ruble
+BZD|084|2|Belize Dollar
+CAD|124|2|Canadian Dollar
+CDF|976|2|Congolese Franc
+CHE|947|2|WIR Euro (Complementary Currency)
+CHF|756|2|Swiss Franc
+CHW|948|2|WIR Franc (Complementary Currency)
+CLF|990|4|Unidad de Fomento (Funds Code)
+CLP|152|0|Chilean Peso
+CNY|156|2|Renminbi
+COP|170|2|Colombian Peso
+COU|970|2|Unidad de Valor Real (UVR) (Funds Code)
+CRC|188|2|Costa Rican Colon
+CUP|192|2|Cuban Peso
+CVE|132|2|Cape Verdean Escudo
+CZK|203|2|Czech Koruna
+DJF|262|0|Djiboutian Franc
+DKK|208|2|Danish Krone
+DOP|214|2|Dominican Peso
+DZD|012|2|Algerian Dinar
+EGP|818|2|Egyptian Pound
+ERN|232|2|Eritrean Nakfa
+ETB|230|2|Ethiopian Birr
+EUR|978|2|Euro
+FJD|242|2|Fiji Dollar
+FKP|238|2|Falkland Islands Pound
+GBP|826|2|Pound Sterling
+GEL|981|2|Georgian Lari
+GHS|936|2|Ghanaian Cedi
+GIP|292|2|Gibraltar Pound
+GMD|270|2|Gambian Dalasi
+GNF|324|0|Guinean Franc
+GTQ|320|2|Guatemalan Quetzal
+GYD|328|2|Guyanese Dollar
+HKD|344|2|Hong Kong Dollar
+HNL|340|2|Honduran Lempira
+HTG|332|2|Haitian Gourde
+HUF|348|2|Hungarian Forint
+IDR|360|2|Indonesian Rupiah
+ILS|376|2|Israeli New Shekel
+INR|356|2|Indian Rupee
+IQD|368|3|Iraqi Dinar
+IRR|364|2|Iranian Rial
+ISK|352|0|Icelandic Króna
+JMD|388|2|Jamaican Dollar
+JOD|400|3|Jordanian Dinar
+JPY|392|0|Japanese Yen
+KES|404|2|Kenyan Shilling
+KGS|417|2|Kyrgyzstani Som
+KHR|116|2|Cambodian Riel
+KMF|174|0|Comoro Franc
+KPW|408|2|North Korean Won
+KRW|410|0|South Korean Won
+KWD|414|3|Kuwaiti Dinar
+KYD|136|2|Cayman Islands Dollar
+KZT|398|2|Kazakhstani Tenge
+LAK|418|2|Lao Kip
+LBP|422|2|Lebanese Pound
+LKR|144|2|Sri Lankan Rupee
+LRD|430|2|Liberian Dollar
+LSL|426|2|Lesotho Loti
+LYD|434|3|Libyan Dinar
+MAD|504|2|Moroccan Dirham
+MDL|498|2|Moldovan Leu
+MGA|969|2|Malagasy Ariary
+MKD|807|2|Macedonian Denar
+MMK|104|2|Myanmar Kyat
+MNT|496|2|Mongolian Tögrög
+MOP|446|2|Macanese Pataca
+MRU|929|2|Mauritanian Ouguiya
+MUR|480|2|Mauritian Rupee
+MVR|462|2|Maldivian Rufiyaa
+MWK|454|2|Malawian Kwacha
+MXN|484|2|Mexican Peso
+MXV|979|2|Mexican Unidad de Inversion (UDI) (Funds Code)
+MYR|458|2|Malaysian Ringgit
+MZN|943|2|Mozambican Metical
+NAD|516|2|Namibian Dollar
+NGN|566|2|Nigerian Naira
+NIO|558|2|Nicaraguan Córdoba
+NOK|578|2|Norwegian Krone
+NPR|524|2|Nepalese Rupee
+NZD|554|2|New Zealand Dollar
+OMR|512|3|Omani Rial
+PAB|590|2|Panamanian Balboa
+PEN|604|2|Peruvian Sol
+PGK|598|2|Papua New Guinean Kina
+PHP|608|2|Philippine Peso
+PKR|586|2|Pakistani Rupee
+PLN|985|2|Polish Złoty
+PYG|600|0|Paraguayan Guaraní
+QAR|634|2|Qatari Riyal
+RON|946|2|Romanian Leu
+RSD|941|2|Serbian Dinar
+RUB|643|2|Russian Ruble
+RWF|646|0|Rwandan Franc
+SAR|682|2|Saudi Riyal
+SBD|090|2|Solomon Islands Dollar
+SCR|690|2|Seychelles Rupee
+SDG|938|2|Sudanese Pound
+SEK|752|2|Swedish Krona
+SGD|702|2|Singapore Dollar
+SHP|654|2|Saint Helena Pound
+SLE|925|2|Sierra Leonean Leone (New Leone)
+SOS|706|2|Somali Shilling
+SRD|968|2|Surinamese Dollar
+SSP|728|2|South Sudanese Pound
+STN|930|2|São Tomé and Príncipe Dobra
+SVC|222|2|Salvadoran Colón
+SYP|760|2|Syrian Pound
+SZL|748|2|Swazi Lilangeni
+THB|764|2|Thai Baht
+TJS|972|2|Tajikistani Somoni
+TMT|934|2|Turkmenistan Manat
+TND|788|3|Tunisian Dinar
+TOP|776|2|Tongan Paʻanga
+TRY|949|2|Turkish Lira
+TTD|780|2|Trinidad and Tobago Dollar
+TWD|901|2|New Taiwan Dollar
+TZS|834|2|Tanzanian Shilling
+UAH|980|2|Ukrainian Hryvnia
+UGX|800|0|Ugandan Shilling
+USD|840|2|United States Dollar
+USN|997|2|United States Dollar (Next day) (Funds Code)
+UYI|940|0|Uruguay Peso en Unidades Indexadas (URUIURUI) (Funds Code)
+UYU|858|2|Uruguayan Peso
+UYW|927|4|Unidad Previsional
+UZS|860|2|Uzbekistani Sum
+VED|926|2|Venezuelan Digital Bolívar
+VES|928|2|Venezuelan Sovereign Bolívar
+VND|704|0|Vietnamese Đồng
+VUV|548|0|Vanuatu Vatu
+WST|882|2|Samoan Tala
+XAD|396|2|Arab Accounting Dinar
+XAF|950|0|CFA Franc BEAC
+XAG|961|N/A|Silver (One Troy Ounce)
+XAU|959|N/A|Gold (One Troy Ounce)
+XBA|955|N/A|European Composite Unit (EURCO) (Bond Market Unit)
+XBB|956|N/A|European Monetary Unit (E.M.U.-6) (Bond Market Unit)
+XBC|957|N/A|European Unit of Account 9 (E.U.A.-9) (Bond Market Unit)
+XBD|958|N/A|European Unit of Account 17 (E.U.A.-17) (Bond Market Unit)
+XCD|951|2|East Caribbean Dollar
+XCG|532|2|Caribbean Guilder
+XDR|960|N/A|Special Drawing Rights
+XOF|952|0|CFA Franc BCEAO
+XPD|964|N/A|Palladium (One Troy Ounce)
+XPF|953|0|CFP Franc (Franc Pacifique)
+XPT|962|N/A|Platinum (One Troy Ounce)
+XSU|994|N/A|SUCRE
+XTS|963|N/A|Code Reserved for Testing
+XUA|965|N/A|ADB Unit of Account
+XXX|999|N/A|No Currency
+YER|886|2|Yemeni Rial
+ZAR|710|2|South African Rand
+ZMW|967|2|Zambian Kwacha
+ZWG|924|2|Zimbabwe Gold

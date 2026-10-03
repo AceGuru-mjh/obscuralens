@@ -1,0 +1,113 @@
+# Crypto screening pipeline
+# -------------------------
+# Screening workflow for a cryptocurrency address: enrich the address
+# across the chain explorers and attribution feeds, attach the activity-
+# profile score, and gate the run through the two attribution flags that
+# matter for compliance-style screening (mixer association and cluster
+# tags). The event timeline reconstructs the address's life from dated
+# fields, and the run exports JSON + Markdown artefacts.
+#
+# Typical starting points: an address extracted from a fraud case, a
+# deposit address pasted into a marketplace chat, or a wallet named in a
+# ransom note.
+#
+# IMPORTANT framing: the score describes the ADDRESS's transaction
+# behaviour (an activity profile), never a statement about a person.
+# Mixer tags mean funds were deliberately obfuscated; they are not proof
+# of wrongdoing by whoever shows you this address.
+#
+# Run it with:
+#   obscuralens pipeline run crypto-screening --set target=<address>
+#
+# Useful variable overrides (--set key=value):
+#   target     the address under investigation
+#   min_txs    transaction count that triggers the volume gate
+
+name: crypto-screening
+description: Screen a crypto address for attribution tags and activity profile
+
+# Default values; every $token below is replaced at run time and callers
+# can override any variable from the CLI without editing this file.
+variables:
+  target: 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
+  min_txs: 1000
+
+steps:
+  # 1. Full multi-source lookup of the address. The kind is auto-detected
+  #    from the address shape (base58/bech32 validated by the crypto
+  #    validator). Sources include chain explorers (balance, received/
+  #    sent totals, transaction counts, first-seen stamp) and attribution
+  #    feeds (cluster tags, mixer and dark-market associations).
+  - lookup: $target
+
+  # 2. Attach the activity-profile score. The crypto scorer weighs
+  #    attribution tags, pass-through patterns, dormancy and volume; the
+  #    result is framed as an activity profile of the address, and every
+  #    signal carries the real values it fired on.
+  - risk: true
+
+  # 3. Escalation gate #1: mixer association. Cluster attribution links
+  #    the address to a mixing service, meaning funds here were
+  #    deliberately obfuscated. That raises tracing cost and often
+  #    exchange-freeze risk; it is a screening flag, not a verdict.
+  - assert:
+      field: mixer_tagged
+      op: '=='
+      value: true
+      message: address is associated with a mixing service
+
+  # 4. Escalation gate #2: hostile cluster tag. Ransomware or darknet
+  #    attribution is the strongest address-level indicator available;
+  #    anything transacting with this address should be reviewed before
+  #    being accepted as a counterparty.
+  - assert:
+      field: tags
+      op: contains
+      value: ransomware
+      message: address carries a ransomware cluster tag
+
+  # 5. Volume gate: service-level transaction counts. A thousand-plus
+  #    transactions usually identifies an exchange hot wallet or payment
+  #    processor rather than an individual, which changes how cluster
+  #    attributions should be read (services touch many unrelated funds).
+  - assert:
+      field: tx_count
+      op: '>='
+      value: $min_txs
+      message: transaction volume suggests a service wallet
+
+  # 6. Build an event timeline from dated fields (first seen, notable
+  #    transaction stamps) so the report can show when the address
+  #    became active and whether activity is recent or stale.
+  - timeline: true
+
+  # 7. Correlate against local query history: previous investigations
+  #    that touched the same address or its cluster link this screening
+  #    to earlier cases - useful when the same funnel address reappears
+  #    across several fraud tickets.
+  - correlate: true
+
+  # 8. Export the JSON artefact with every gathered field, the score,
+  #    the timeline and the correlation summary. The file name folds in
+  #    the address so parallel screenings do not collide.
+  - output:
+      format: json
+      path: crypto-$target.json
+
+  # 9. Export the Markdown summary for the case notes. Relative paths
+  #    resolve under the configured report directory.
+  - output:
+      format: markdown
+      path: crypto-$target.md
+
+# Follow-up commands worth documenting in the ticket:
+#   obscuralens export graphml       address + correlation graph for Gephi
+#   obscuralens report --format html full HTML report of this run
+#   obscuralens case add --note "mixer-tagged address screened"  case update
+#
+# Reading the findings:
+#   * gate #1 or #2 passing -> treat as high-attention counterparty;
+#     document the tag, do not extend credit, escalate per policy
+#   * only gate #3         -> service wallet; attribution reads are weak
+#   * no gates             -> keep the artefacts; re-screen if new
+#                             attribution feeds land later

@@ -1,0 +1,175 @@
+# ObscuraLens offline data pack: MITRE CWE weakness catalog (selection).
+# Source registry: MITRE Common Weakness Enumeration (cwe.mitre.org), CWE
+# research view - public registry data.
+# Generated for ObscuraLens offline packs - see obscuralens/utils/data_packs.py.
+#
+# Format: CWE-ID|weakness-name
+#   - names are the official MITRE CWE names (including their parenthesised
+#     common terms, e.g. CWE-79 ... ('Cross-site Scripting'))
+#   - includes the complete CWE Top 25 Most Dangerous Software Weaknesses
+#     (2023/2024 editions: CWE-787, 79, 89, 20, 22, 352, 125, 78, 416, 862,
+#     863, 434, 200, 476, 502, 190, 284, 269, 327, 918, 611, 798, 119, 191,
+#     94, 915) plus ~140 widely-referenced weakness classes up to CWE-580
+#   - sorted numerically by CWE ID
+# '#' starts a comment; blank lines are ignored.
+CWE-20|Improper Input Validation
+CWE-22|Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')
+CWE-23|Relative Path Traversal
+CWE-36|Absolute Path Traversal
+CWE-73|External Control of File Name or Path
+CWE-77|Improper Neutralization of Special Elements used in a Command ('Command Injection')
+CWE-78|Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')
+CWE-79|Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')
+CWE-80|Improper Neutralization of Script-Related HTML Tags in a Web Page (Basic XSS)
+CWE-83|Improper Neutralization of Script in Attributes in a Web Page
+CWE-89|Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
+CWE-94|Improper Control of Generation of Code ('Code Injection')
+CWE-95|Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')
+CWE-116|Improper Encoding or Escaping of Output
+CWE-119|Improper Restriction of Operations within the Bounds of a Memory Buffer
+CWE-120|Buffer Copy without Checking Size of Input ('Classic Buffer Overflow')
+CWE-125|Out-of-bounds Read
+CWE-134|Use of Externally-Controlled Format String
+CWE-170|Improper Null Termination
+CWE-190|Integer Overflow or Wraparound
+CWE-191|Integer Underflow (Wrap or Wraparound)
+CWE-200|Exposure of Sensitive Information to an Unauthorized Actor
+CWE-208|Observable Timing Discrepancy
+CWE-209|Generation of Error Message Containing Sensitive Information
+CWE-242|Use of Inherently Dangerous Function
+CWE-244|Improper Clearing of Heap Memory Before Release ('Heap Inspection')
+CWE-250|Execution with Unnecessary Privileges
+CWE-252|Unchecked Return Value
+CWE-256|Plaintext Storage of a Password
+CWE-259|Use of Hard-coded Password
+CWE-261|Weak Encoding for Password
+CWE-267|Privilege Defined With Unsafe Actions
+CWE-269|Improper Privilege Management
+CWE-272|Least Privilege Violation
+CWE-276|Incorrect Default Permissions
+CWE-282|Improper Ownership Management
+CWE-284|Improper Access Control
+CWE-287|Improper Authentication
+CWE-288|Authentication Bypass Using an Alternate Path or Channel
+CWE-290|Authentication Bypass by Spoofing
+CWE-295|Improper Certificate Validation
+CWE-307|Improper Restriction of Excessive Authentication Attempts
+CWE-311|Missing Encryption of Sensitive Data
+CWE-319|Cleartext Transmission of Sensitive Information
+CWE-321|Use of Hard-coded Cryptographic Key
+CWE-326|Inadequate Encryption Strength
+CWE-327|Use of a Broken or Risky Cryptographic Algorithm
+CWE-331|Insufficient Entropy
+CWE-345|Insufficient Verification of Data Authenticity
+CWE-346|Origin Validation Error
+CWE-347|Improper Verification of Cryptographic Signature
+CWE-350|Reliance on Reverse DNS Resolution for a Security-Critical Action
+CWE-352|Cross-Site Request Forgery (CSRF)
+CWE-354|Improper Validation of Integrity Check Value
+CWE-359|Exposure of Private Personal Information to an Unauthorized Actor
+CWE-362|Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition')
+CWE-367|Time-of-check Time-of-use (TOCTOU) Race Condition
+CWE-377|Insecure Temporary File
+CWE-384|Session Fixation
+CWE-400|Uncontrolled Resource Consumption
+CWE-402|Transmission of Private Resources into a New Sphere ('Resource Leak')
+CWE-404|Improper Resource Shutdown or Release
+CWE-409|Improper Handling of Highly Compressed Data (Data Amplification)
+CWE-410|Insufficient Resource Pool
+CWE-412|Unrestricted Externally Accessible Lock
+CWE-413|Improper Resource Locking
+CWE-415|Double Free
+CWE-416|Use After Free
+CWE-419|Unprotected Primary Channel
+CWE-421|Race Condition During Access to Alternate Channel
+CWE-428|Unquoted Search Path or Element
+CWE-432|Dangerous Signal Handler not Disabled During Sensitive Operations
+CWE-434|Unrestricted Upload of File with Dangerous Type
+CWE-436|Interpretation Conflict
+CWE-439|Behavioral Change in New Version or Environment
+CWE-441|Unintended Proxy or Intermediary ('Confused Deputy')
+CWE-444|Inconsistent Interpretation of HTTP Requests ('HTTP Request/Response Smuggling')
+CWE-446|UI Discrepancy for Security Feature
+CWE-451|User Interface (UI) Misrepresentation of Critical Information
+CWE-453|Insecure Default Variable Initialization
+CWE-459|Incomplete Cleanup
+CWE-462|Duplicate Key in Associative List (Alist)
+CWE-467|Use of sizeof() on a Pointer Type
+CWE-468|Incorrect Pointer Scaling
+CWE-469|Use of Pointer Subtraction to Determine Size
+CWE-472|External Control of Assumed-Immutable Web Parameter
+CWE-475|Undefined Behavior for Input to API
+CWE-476|NULL Pointer Dereference
+CWE-480|Use of Incorrect Operator
+CWE-481|Assigning instead of Comparing
+CWE-483|Incorrect Block Delimitation
+CWE-486|Comparison of Classes by Name
+CWE-489|Active Debug Code
+CWE-492|Use of Inner Class Containing Sensitive Data
+CWE-493|Critical Public Variable Without Final Modifier
+CWE-497|Exposure of Sensitive System Information to an Unauthorized Control Sphere
+CWE-498|Cloneable Class Containing Sensitive Information
+CWE-499|Serializable Class Containing Sensitive Data
+CWE-501|Trust Boundary Violation
+CWE-502|Deserialization of Untrusted Data
+CWE-506|Embedded Malicious Code
+CWE-508|Non-Replicating Malicious Code
+CWE-509|Replicating Malicious Code (Virus or Worm)
+CWE-512|Spyware
+CWE-515|Covert Storage Channel
+CWE-520|.NET Misconfiguration: Use of Impersonation
+CWE-521|Weak Password Requirements
+CWE-522|Insufficiently Protected Credentials
+CWE-523|Unprotected Transport of Credentials
+CWE-524|Use of Cache Containing Sensitive Information
+CWE-525|Use of Web Browser Cache Containing Sensitive Information
+CWE-526|Cleartext Storage of Sensitive Information in an Environment Variable
+CWE-527|Exposure of Version-Control Repository to an Unauthorized Control Sphere
+CWE-528|Exposure of Core Dump File to an Unauthorized Control Sphere
+CWE-530|Exposure of Backup File to an Unauthorized Control Sphere
+CWE-531|Inclusion of Sensitive Information in Test Code
+CWE-532|Insertion of Sensitive Information into Log File
+CWE-535|Exposure of Information Through Shell Error Message
+CWE-536|Servlet Runtime Error Message Containing Sensitive Information
+CWE-538|Insertion of Sensitive Information into Externally-Accessible File or Directory
+CWE-540|Inclusion of Sensitive Information in Source Code
+CWE-541|Inclusion of Sensitive Information in an Include File
+CWE-543|Use of Singleton Pattern Without Synchronization in a Multithreaded Context
+CWE-544|Missing Standardized Error Handling Mechanism
+CWE-546|Suspicious Comment
+CWE-547|Use of Hard-coded, Security-relevant Constants
+CWE-548|Exposure of Information Through Directory Listing
+CWE-550|Server-generated Error Message Containing Sensitive Information
+CWE-551|Incorrect Behavior Order: Authorization Before Parsing and Canonicalization
+CWE-552|Files or Directories Accessible to External Parties
+CWE-553|Command Shell in Externally Accessible Directory
+CWE-554|ASP.NET Misconfiguration: Not Using Input Validation Framework
+CWE-555|J2EE Misconfiguration: Plaintext Password in Configuration File
+CWE-556|ASP.NET Misconfiguration: Use of Identity Impersonation
+CWE-558|Use of getlogin() in Multithreaded Application
+CWE-560|Use of umask() with chmod-style Argument
+CWE-561|Dead Code
+CWE-563|Assignment to Variable without Use
+CWE-564|SQL Injection: Hibernate
+CWE-565|Reliance on Cookies without Validation and Integrity Checking
+CWE-566|Authorization Bypass Through User-Controlled SQL Primary Key
+CWE-567|Unsynchronized Access to Shared Data in a Multithreaded Context
+CWE-568|finalize() Method Without super.finalize()
+CWE-570|Expression is Always False
+CWE-571|Expression is Always True
+CWE-572|Call to Thread run() instead of start()
+CWE-573|Improper Following of Specification by Caller
+CWE-574|EJB Bad Practices: Use of Synchronization Primitives
+CWE-575|EJB Bad Practices: Use of AWT Swing
+CWE-576|EJB Bad Practices: Use of Java I/O
+CWE-577|EJB Bad Practices: Use of Sockets
+CWE-578|EJB Bad Practices: Use of Class Loader
+CWE-579|J2EE Bad Practices: Non-serializable Object Stored in Session
+CWE-580|clone() Method Without super.clone()
+CWE-611|Improper Restriction of XML External Entity Reference
+CWE-787|Out-of-bounds Write
+CWE-798|Use of Hard-coded Credentials
+CWE-862|Missing Authorization
+CWE-863|Incorrect Authorization
+CWE-915|Improperly Controlled Modification of Dynamically-Determined Object Attributes
+CWE-918|Server-Side Request Forgery (SSRF)

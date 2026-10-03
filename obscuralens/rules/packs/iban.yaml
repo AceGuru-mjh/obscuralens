@@ -1,0 +1,166 @@
+# ObscuraLens explainable rule pack -- iban
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the IBAN tracker output: country, structure_valid,
+# checksum_valid, bank_name, sanctions_listed, length... IBAN rules are
+# identifier-integrity and due-diligence context, never allegations.
+# ---------------------------------------------------------------------------
+
+name: iban-rules
+description: >-
+  Explainable identifier-integrity and enhanced due-diligence context
+  heuristics for IBAN lookups.
+version: 1
+rules:
+  - id: IBAN-001
+    title: Structure fails ISO 13616
+    description: >-
+      The IBAN's length or character layout does not match the published
+      structure for its country. A structurally invalid IBAN cannot exist
+      as issued by a bank, so the string was mistyped or fabricated --
+      this rule exists for parity and should practically never fire on
+      real data.
+    severity: medium
+    weight: 15
+    tags: [validity]
+    references: ["ISO 13616-1"]
+    conditions:
+      - field: structure_valid
+        operator: is_false
+
+  - id: IBAN-002
+    title: Check digits invalid
+    description: >-
+      The two check digits fail the mod-97 validation. Every real IBAN
+      passes by construction; a failure proves a transcription error or
+      an invented account number.
+    severity: high
+    weight: 20
+    tags: [validity]
+    references: ["ISO 13616-1", "ISO 7064 MOD 97-10"]
+    conditions:
+      - field: checksum_valid
+        operator: is_false
+
+  - id: IBAN-003
+    title: Sanctions list match
+    description: >-
+      The institution appears on a sanctions or restricted-parties list.
+      This is a hard compliance stop rather than a heuristic: transactions
+      touching listed entities must be escalated per the applicable
+      regime, whatever the technical merits of the transfer.
+    severity: critical
+    weight: 30
+    tags: [compliance, sanctions]
+    conditions:
+      - field: sanctions_listed
+        operator: is_true
+
+  - id: IBAN-004
+    title: FATF-listed jurisdiction
+    description: >-
+      The issuing country appears on the FATF list of jurisdictions
+      under increased monitoring or call-for-action. It raises standard
+      due-diligence requirements; it is a regulatory fact about the
+      jurisdiction, not a claim about this account or its holder.
+    severity: medium
+    weight: 10
+    tags: [compliance, jurisdiction]
+    references: ["FATF high-risk and other monitored jurisdictions list"]
+    conditions:
+      - field: country
+        operator: in
+        value: [IR, KP, SY, MM, AF, YE, VE, CU, RU, BY]
+
+  - id: IBAN-005
+    title: Bank not in the registry
+    description: >-
+      No issuing institution could be resolved for the bank code. Either
+      the registry data is stale or the bank code was invented -- both
+      warrant manual verification before any payment narrative is built
+      on the account.
+    severity: info
+    weight: 5
+    tags: [registry]
+    conditions:
+      - field: bank_name
+        operator: empty
+        value: true
+
+  - id: IBAN-006
+    title: Banking-secrecy jurisdiction
+    description: >-
+      The issuing country is a classic secrecy jurisdiction where
+      beneficial-owner identification is slow. Useful as context for how
+      much effort an attribution will take; legitimate accounts exist
+      everywhere and this says nothing about the account at hand.
+    severity: low
+    weight: 10
+    tags: [jurisdiction, context]
+    conditions:
+      - field: country
+        operator: in
+        value: [PA, KY, LI, SC, BZ, VU, MH, BS, CK]
+
+  - id: IBAN-007
+    title: Impossibly short IBAN
+    description: >-
+      The string is shorter than 15 characters, below the shortest
+      published national IBAN length. No country issues IBANs this
+      short, so the value is truncated or not an IBAN at all.
+    severity: low
+    weight: 10
+    tags: [validity]
+    references: ["ISO 13616-1"]
+    conditions:
+      - field: length
+        operator: lt
+        value: 15
+
+  - id: IBAN-008
+    title: Longer than any published IBAN
+    description: >-
+      The string exceeds 34 characters, the maximum length in the ISO
+      13616 registry. As with over-short values this indicates a
+      mangled identifier rather than a real account.
+    severity: low
+    weight: 10
+    tags: [validity]
+    references: ["ISO 13616-1"]
+    conditions:
+      - field: length
+        operator: gt
+        value: 34
+
+  - id: IBAN-009
+    title: Not SEPA-reachable
+    description: >-
+      The account is not reachable through SEPA. Cross-border transfers
+      must use correspondent rails instead, which are slower and leave a
+      different paper trail -- relevant when reconstructing payment
+      timelines.
+    severity: info
+    weight: 0
+    tags: [payments, context]
+    conditions:
+      - field: sepa_reachable
+        operator: is_false
+
+  - id: IBAN-010
+    title: Valid, registered IBAN
+    description: >-
+      Structure, check digits and registry all agree -- a well-formed,
+      resolvable account identifier. Recorded as positive context so the
+      pack also documents what a clean IBAN looks like.
+    severity: info
+    weight: 0
+    tags: [validity, positive]
+    conditions:
+      - field: structure_valid
+        operator: is_true
+      - field: checksum_valid
+        operator: is_true

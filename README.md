@@ -1,8 +1,34 @@
-# ObscuraLens v5.0
+# ObscuraLens v5.1 — Desktop Beta
 
 > **Founder & maintainer:** MJH
 
-Multi-source OSINT console and investigation platform for **14 target kinds**: IP addresses, phone numbers, usernames, email addresses, domains, URLs, crypto addresses, file hashes, CVEs, AS numbers, MAC addresses, IBANs, IMEIs and geographic coordinates. Every lookup fans out to all available data sources in parallel, merges the fields, tracks **which source supplied each fact**, and tells you exactly what answered — no silent single-source lookups, no false-positive "hits". v5.0 adds a local-first analyst toolbox (encoders, JWT, hash identification, entity extraction, typosquats, EXIF, steganography), an advanced-analysis package (batch fan-out, webhook alerts, pattern-of-life, geospatial profiling, self-contained HTML reports), a complete single-page web UI and a one-command launcher. v4.0 layers the investigation workflow underneath: entity graphs and pivots, correlation across your stored history, chronological timelines, explainable heuristic risk scoring, case management, YAML pipelines, threat-intel feeds and graph exports for Gephi/Graphviz. See [docs/v5.md](docs/v5.md) for the full v5.0 tour.
+<div align="center">
+
+**Download the Desktop Beta (single-file Windows exe — no Python required):**
+
+[![Desktop Beta download](https://img.shields.io/badge/download-Desktop%20Beta%20exe-8f5c03?style=for-the-badge&logo=windows)](https://github.com/AceGuru-mjh/obscuralens/releases)
+
+macOS and Linux binaries ship with every beta release too.
+
+</div>
+
+Multi-source OSINT console and investigation platform for **14 target kinds**: IP addresses, phone numbers, usernames, email addresses, domains, URLs, crypto addresses, file hashes, CVEs, AS numbers, MAC addresses, IBANs, IMEIs and geographic coordinates. Every lookup fans out to all available data sources in parallel, merges the fields, tracks **which source supplied each fact**, and tells you exactly what answered — no silent single-source lookups, no false-positive "hits". v5.1 launches the **Desktop Beta**: the whole platform (CLI, web UI, offline data packs, risk rules, 14 languages) as a downloadable single-file executable with a launcher, update checker and diagnostics. v5.0 added a local-first analyst toolbox, advanced analysis, a complete single-page web UI and a one-command launcher; v4.0 layered the investigation workflow (pivots, correlation, timelines, risk scoring, cases, pipelines). See [docs/v5.1.md](docs/v5.1.md) for the full v5.1 tour and [docs/v5.md](docs/v5.md) for v5.0.
+
+## What's new in v5.1 (Desktop Beta)
+
+- **Desktop Beta program**: download `ObscuraLens-<version>-win-x64.exe` from [GitHub Releases](https://github.com/AceGuru-mjh/obscuralens/releases) and run `obscuralens.exe desktop` for the desktop experience: a single-instance launcher boots the local web UI in your browser with free-port probing and graceful Ctrl+C shutdown. `obscuralens update check` polls GitHub Releases for newer betas (never auto-downloads), and `obscuralens desktop --diagnostics` prints a full system report. A nightly channel rebuilds at 03:00 UTC. Full guide: [docs/desktop-beta.md](docs/desktop-beta.md).
+- **Release automation**: pushing a `v*-beta*` tag triggers the desktop-beta workflow — it builds and smoke-tests Windows/Linux/macOS binaries, attaches SHA-256 checksums and publishes the pre-release with download instructions. The PyInstaller spec now bundles **every** offline data pack, rule pack and report template into the exe (previously these were silently missing from the standalone build).
+- **Internationalization (14 languages)**: en, zh, ja, ko, de, fr, es, pt, ru, it, nl, pl, ar, hi — stdlib-only catalogue runtime with `{placeholder}` interpolation, plural rules, English fallback and Accept-Language matching. New `obscuralens i18n` command. See [docs/i18n.md](docs/i18n.md).
+- **Offline data catalog (10 new packs)**: IANA port registry (~2,600 entries), ISO 3166 countries, ISO 639 languages, ISO 4217 currencies, HTTP status codes, a MITRE CWE selection, the IANA root-zone TLD list (~1,400), file extensions, MIME types and a user-agent rotation pool — behind a typed, never-raising API with the new `obscuralens data` CLI. See [docs/data-packs.md](docs/data-packs.md).
+- **Python SDK**: sync + async REST API clients with retries, exponential backoff, Retry-After handling, a typed exception hierarchy and a `StaticTransport` test double for offline script testing. See [docs/sdk.md](docs/sdk.md).
+- **Explainable risk rule packs**: a YAML rule DSL (23 operators including `in_cidr`, `age_lt_days` and `known_pack`) with 15 packs covering every target kind — every hit explains itself. See [docs/rules.md](docs/rules.md).
+- **Report templates**: standalone HTML, Markdown and executive-summary Jinja2 templates with a renderer module (`esc`, `nl2br`, `fmt_pct` filters).
+- **8 new pipeline examples**: email triage, phishing URL review, CVE patch priority, crypto screening, malware hash response, brand username audit, network sweep and weekly exec brief.
+- **v5.0**: 4 new trackers (mac/iban/imei/coords), the experimental toolbox, the advanced-analysis package, the single-page web UI and the one-command launcher.
+- **v4.0**: 5 new trackers (URL/crypto/hash/CVE/ASN), correlation/timeline/risk, case management, YAML pipelines, threat-intel feeds, graph exports, source health + circuit breaker.
+- **v3.1**: web UI + REST API, Textual TUI, MCP server, Docker/GHCR, standalone exe, run scripts, scheduled monitoring, dev container and task runners.
+- **v3.0**: universal `investigate` with pivots + Mermaid graph, `watch` snapshots with change detection, plugin system, RIPEstat/urlscan.io/Wayback sources.
+- **v2.0**: non-interactive CLI, Domain tracker, field provenance, HTTP cache/rate limiting/proxy, Shodan InternetDB + IPinfo + AbuseIPDB, 7 JSON API username platforms, DNS/DKIM/DNSSEC posture, pytest suite + CI.
 
 ## What's new in v5.0
 
@@ -89,7 +115,10 @@ Optional extras: `pip install -e ".[web]"` (web UI/API), `".[tui]"` (terminal UI
 
 | Method | Command | Notes |
 |---|---|---|
+| **Desktop Beta (exe)** | download from [Releases](https://github.com/AceGuru-mjh/obscuralens/releases) → `ObscuraLens-…-win-x64.exe desktop` | single-file exe, no Python needed; local web UI in your browser; `--diagnostics`, `--check-update` flags |
 | **One-command start** | `./start.sh` (Linux/macOS) · `start.ps1` (Windows) | creates `.venv`, installs deps + web extras, serves the UI and opens the browser — zero manual steps; flags `--no-open`, `--port N`; also `make start` / `just start` |
+| **Desktop mode (installed)** | `obscuralens desktop` | same launcher as the exe: single-instance lock, free-port probing, browser auto-open |
+| **Update check** | `obscuralens update check` | polls GitHub Releases for a newer beta; never auto-downloads |
 | **Interactive console** | `obscuralens` | menu-driven; no arguments |
 | **Non-interactive CLI** | `obscuralens ip 8.8.8.8 -f json` | scriptable, pipes cleanly |
 | **One-command launcher** | `.\run.ps1 ip 8.8.8.8` / `./run.sh ip 8.8.8.8` | creates `.venv`, installs deps, runs |

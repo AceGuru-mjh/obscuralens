@@ -1,0 +1,257 @@
+# ObscuraLens explainable rule pack -- ip
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). Operators: eq neq in not_in contains
+#   not_contains startswith endswith regex gt gte lt lte exists not_exists
+#   empty not_empty is_true is_false in_cidr known_pack age_lt_days
+#   age_gt_days. See packs/shared.yaml for the full annotated schema.
+# Fields mirror the IP tracker output: abuse_confidence, is_tor, is_proxy,
+# ports, vulns, country_code, reverse_dns, hostnames, asn_bulletproof...
+# ---------------------------------------------------------------------------
+
+name: ip-rules
+description: >-
+  Explainable abuse, anonymisation and exposure heuristics for IPv4/IPv6
+  address lookups.
+version: 1
+rules:
+  - id: IP-001
+    title: Tor exit node
+    description: >-
+      The address is listed as a Tor exit node. Exit traffic is anonymous
+      by design, so activity attributed to this IP may come from any Tor
+      user -- it is an anonymisation signal, not proof of attacker
+      control.
+    severity: high
+    weight: 20
+    tags: [anonymisation, tor]
+    references: ["MITRE ATT&CK T1090.003"]
+    conditions:
+      - field: is_tor
+        operator: is_true
+
+  - id: IP-002
+    title: Proxy or VPN endpoint
+    description: >-
+      The address is flagged as a commercial proxy or VPN endpoint.
+      Geolocation and reputation claims are unreliable for shared egress
+      infrastructure, and abuse reports may reflect any customer.
+    severity: medium
+    weight: 10
+    tags: [anonymisation, proxy]
+    references: ["MITRE ATT&CK T1090"]
+    conditions:
+      - field: is_proxy
+        operator: is_true
+
+  - id: IP-003
+    title: High abuse confidence
+    description: >-
+      AbuseIPDB reports an abuse confidence of 75 or higher, meaning many
+      recent, distinct abuse reports. This is one of the strongest
+      community-derived indicators that the host is actively misused.
+    severity: critical
+    weight: 35
+    tags: [reputation, abuse]
+    conditions:
+      - field: abuse_confidence
+        operator: gte
+        value: 75
+
+  - id: IP-004
+    title: Elevated abuse confidence
+    description: >-
+      AbuseIPDB reports an abuse confidence between 50 and 74. Multiple
+      reports exist but the volume is not yet conclusive; correlate with
+      other signals before acting.
+    severity: high
+    weight: 20
+    tags: [reputation, abuse]
+    conditions:
+      - field: abuse_confidence
+        operator: gte
+        value: 50
+
+  - id: IP-005
+    title: Telnet (23/tcp) exposed
+    description: >-
+      An unauthenticated, plaintext remote-shell protocol is reachable.
+      Exposed telnet is almost always either an accident or a trap for
+      botnet scanners, and credentials cross it in the clear.
+    severity: medium
+    weight: 15
+    tags: [exposure, ports]
+    references: ["MITRE ATT&CK T1595.002"]
+    conditions:
+      - field: ports
+        operator: contains
+        value: 23
+
+  - id: IP-006
+    title: SMB (445/tcp) exposed
+    description: >-
+      The Windows file-sharing port is reachable from the internet.
+      Exposed SMB enabled WannaCry-style worm propagation and remains a
+      top ransomware entry vector.
+    severity: medium
+    weight: 10
+    tags: [exposure, ports]
+    references: ["MITRE ATT&CK T1210"]
+    conditions:
+      - field: ports
+        operator: contains
+        value: 445
+
+  - id: IP-007
+    title: RDP (3389/tcp) exposed
+    description: >-
+      Remote Desktop is reachable from the internet. Brute-force and
+      BlueKeep-class exploits make exposed RDP a leading initial-access
+      vector for ransomware crews.
+    severity: medium
+    weight: 10
+    tags: [exposure, ports]
+    references: ["MITRE ATT&CK T1133", "MITRE ATT&CK T1210"]
+    conditions:
+      - field: ports
+        operator: contains
+        value: 3389
+
+  - id: IP-008
+    title: Listed on a drop/blocklist
+    description: >-
+      The address appears on the Spamhaus DROP list of hijacked or
+      criminal infrastructure. DROP-listed space should be treated as
+      hostile until proven otherwise.
+    severity: high
+    weight: 25
+    tags: [reputation, blocklist]
+    conditions:
+      - field: spamhaus_drop
+        operator: is_true
+
+  - id: IP-009
+    title: Hosting jurisdiction with high observed abuse
+    description: >-
+      The hosting country appears disproportionately often in public abuse
+      reporting. This is a weak statistical signal about infrastructure
+      ecosystems, never a statement about any operator, and should only
+      weigh alongside concrete indicators.
+    severity: medium
+    weight: 10
+    tags: [geolocation, context]
+    conditions:
+      - field: country_code
+        operator: in
+        value: [CN, RU, IR, KP, SY, BY]
+
+  - id: IP-010
+    title: No reverse DNS or hostnames
+    description: >-
+      Neither a PTR record nor any hostname resolves to this address.
+      Anonymous reverse DNS is common for dynamic and bulletproof hosting
+      ranges, though plenty of legitimate hosts omit it too.
+    severity: info
+    weight: 5
+    tags: [dns, context]
+    conditions:
+      - field: reverse_dns
+        operator: empty
+        value: true
+      - field: hostnames
+        operator: empty
+        value: true
+
+  - id: IP-011
+    title: Bulletproof hosting flag
+    description: >-
+      The ASN is flagged as bulletproof hosting -- providers that
+      deliberately ignore abuse reports. Compromise and fraud operations
+      survive longer on such networks, so this materially raises the value
+      of the other signals.
+    severity: high
+    weight: 25
+    tags: [hosting, reputation]
+    conditions:
+      - field: asn_bulletproof
+        operator: is_true
+
+  - id: IP-012
+    title: Datacenter address
+    description: >-
+      The address belongs to a datacenter range rather than a consumer
+      ISP. Servers legitimately live there, but a datacenter IP claimed as
+      a personal connection is a classic deception indicator.
+    severity: info
+    weight: 5
+    tags: [hosting, context]
+    conditions:
+      - field: is_datacenter
+        operator: is_true
+
+  - id: IP-013
+    title: Private or reserved address
+    description: >-
+      The address falls into RFC 1918 private space, the CGN range or
+      link-local/reserved blocks. It cannot be internet-routable, so any
+      abuse reputation attached to it belongs to someone else's reuse of
+      the range.
+    severity: info
+    weight: 5
+    tags: [rfc1918, context]
+    references: ["RFC 1918", "RFC 6598"]
+    conditions:
+      - field: address
+        operator: in_cidr
+        value:
+          - 10.0.0.0/8
+          - 172.16.0.0/12
+          - 192.168.0.0/16
+          - 100.64.0.0/10
+          - 127.0.0.0/8
+          - 169.254.0.0/16
+
+  - id: IP-014
+    title: Many vulnerable services exposed
+    description: >-
+      InternetDB reports five or more distinct vulnerable services on
+      this host. Such concentration usually means an unmanaged machine --
+      a prime target for opportunistic compromise.
+    severity: high
+    weight: 20
+    tags: [exposure, vulnerabilities]
+    references: ["MITRE ATT&CK T1595.002"]
+    conditions:
+      - field: vulns
+        operator: gte
+        value: 5
+
+  - id: IP-015
+    title: Multiple engines flag it malicious
+    description: >-
+      Two or more VirusTotal engines label the address malicious.
+      Cross-engine agreement reduces the chance of a single-vendor false
+      positive.
+    severity: high
+    weight: 20
+    tags: [reputation, engines]
+    conditions:
+      - field: malicious
+        operator: gte
+        value: 2
+
+  - id: IP-016
+    title: Many open ports
+    description: >-
+      Ten or more ports are open. Broad exposure often indicates a
+      long-lived, poorly segmented server -- relevant context when
+      assessing what a compromise of this host would expose.
+    severity: info
+    weight: 5
+    tags: [exposure, ports]
+    conditions:
+      - field: port_count
+        operator: gte
+        value: 10
