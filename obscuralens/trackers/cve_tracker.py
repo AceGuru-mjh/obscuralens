@@ -1,6 +1,6 @@
 """
 CVE Tracker Module
-Aggregates vulnerability intelligence (NVD, OSV, cvelistV2, EPSS) for a CVE identifier.
+Aggregates vulnerability intelligence (NVD, OSV, cvelist, EPSS) for a CVE identifier.
 
 Sources (all keyless, see ``cve_sources`` for details):
 
@@ -8,7 +8,7 @@ Sources (all keyless, see ``cve_sources`` for details):
                    references and affected CPEs; optional API key for rate
                    limits.
 * ``osv``        - affected packages (de-duplicated) and CVSS vector.
-* ``cvelistV2``  - the CNA-published record straight from the CVEProject
+* ``cvelist``  - the CNA-published record straight from the CVEProject
                    repository (title, state, affected products).
 * ``epss``       - FIRST.org exploitation probability, rescaled to 0..100.
 

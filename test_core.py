@@ -503,6 +503,97 @@ def test_investigate_and_watch():
         check("investigate/watch", False, f"{type(e).__name__}: {e}")
 
 
+def test_v4_trackers():
+    print_section("v4 Trackers (url / crypto / hash / cve / asn)")
+    try:
+        from obscuralens.trackers import (
+            ASNTracker,
+            CryptoTracker,
+            CVETracker,
+            HashTracker,
+            URLTracker,
+        )
+
+        cases = [
+            ("url", URLTracker, "https://example.com/", 3,
+             ('final_url', 'http_status')),
+            ("crypto", CryptoTracker,
+             "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", 2,
+             ('btc_balance', 'btc_tx_count')),
+            ("hash", HashTracker, "44d88612fea8a8f36de82e1278abb02f", 1,
+             ('otx_pulses',)),
+            ("cve", CVETracker, "CVE-2021-44228", 3,
+             ('cvss_score', 'epss_score')),
+            ("asn", ASNTracker, "AS15169", 1, ('asn_name',)),
+        ]
+        for kind, cls, target, min_sources, required in cases:
+            try:
+                result = cls().track(target)
+            except Exception as e:
+                check(f"{kind} track", False, f"{type(e).__name__}: {e}")
+                continue
+            if not result['success']:
+                check(f"{kind} track", False,
+                      f"all sources failed: {result.get('sources_failed')}")
+                continue
+            info = result.get('info', {})
+            check(f"{kind} track", True,
+                  f"{len(result['sources_ok'])} sources, "
+                  f"{result['field_count']} fields")
+            check(f"{kind} sources >= {min_sources}",
+                  len(result['sources_ok']) >= min_sources,
+                  ', '.join(sorted(result['sources_ok'])))
+            missing = [k for k in required if k not in info]
+            check(f"{kind} key fields", not missing,
+                  f"missing={missing}" if missing else ','.join(required))
+            if result.get('sources_failed'):
+                print(f"      unavailable: {result['sources_failed']}")
+
+        # cvelist (raw GitHub mirror) is rate-limited under burst load, so a
+        # missing first attempt gets one retry before we call it a failure.
+        import time as _time
+        result = CVETracker().track("CVE-2021-44228")
+        if 'cvelist' not in result['sources_ok']:
+            _time.sleep(5)
+            result = CVETracker().track("CVE-2021-44228")
+        check("cvelist source live",
+              'cvelist' in result['sources_ok']
+              and 'cna_title' in result.get('info', {}),
+              f"sources={sorted(result['sources_ok'])}")
+    except Exception as e:
+        check("v4 trackers", False, f"{type(e).__name__}: {e}")
+
+
+def test_v4_commands():
+    print_section("v4 Commands (risk / correlate / intel)")
+    from obscuralens import commands
+
+    def capture(argv):
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer):
+                code = commands.run(argv)
+        except SystemExit as e:  # argparse --version/--help exit
+            code = e.code if isinstance(e.code, int) else 0
+        return code, buffer.getvalue()
+
+    try:
+        code, out = capture(['risk', 'ip', '8.8.8.8'])
+        check("risk command", code == 0 and out.strip() != "",
+              out.strip().splitlines()[0][:80] if out.strip() else "empty")
+
+        code, out = capture(['correlate', '8.8.8.8', '1.1.1.1'])
+        check("correlate command", code == 0, f"exit={code}")
+
+        code, out = capture(['intel', 'ip', '8.8.8.8'])
+        check("intel command", code == 0, f"exit={code}")
+
+        code, out = capture(['cve', 'not-a-cve'])
+        check("cve invalid input", code == 2, f"exit={code}")
+    except Exception as e:
+        check("v4 commands", False, f"{type(e).__name__}: {e}")
+
+
 def main():
     print("\n" + "=" * 62)
     print("ObscuraLens Core Functionality Test")
@@ -518,11 +609,13 @@ def main():
     test_username_tracker()
     test_domain_tracker()
     test_investigate_and_watch()
+    test_v4_trackers()
     test_reporting()
     test_visualization()
     test_cache_and_helpers()
     test_cli_imports()
     test_cli_commands()
+    test_v4_commands()
 
     print("\n" + "=" * 62)
     print(f"Results: {len(PASSED)} passed, {len(FAILED)} failed")
