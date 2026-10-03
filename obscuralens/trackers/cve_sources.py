@@ -9,7 +9,7 @@ are keyless:
                    An optional NVD API key (config service ``nvd``) raises the
                    rate limit but is never required.
 * ``osv``        - Google OSV.dev: package-level impact and severity vectors.
-* ``cvelistV2``  - The CVEProject cvelistV2 GitHub repository (raw JSON),
+* ``cvelist``  - The CVEProject cvelistV5 GitHub repository (raw JSON),
                    i.e. the authoritative CNA-published record.
 * ``epss``       - FIRST.org EPSS: probability the vuln is exploited soon.
 
@@ -50,7 +50,7 @@ def _english_value(entries: Optional[List[Dict[str, Any]]]) -> Optional[str]:
     """
     Return the ``value`` of the first ``lang == 'en'`` entry.
 
-    NVD, OSV and cvelistV2 all describe things in many languages; only the
+    NVD, OSV and cvelist all describe things in many languages; only the
     English text is kept so reports stay readable.
     """
     for entry in entries or []:
@@ -213,7 +213,7 @@ def _osv(cve_id: str) -> Dict[str, Any]:
 
 def _cvelist_url(cve_id: str) -> str:
     """
-    Build the raw GitHub URL for a cvelistV2 record.
+    Build the raw GitHub URL for a cvelist record.
 
     The repository buckets records by ``<sequence>//1000``:
     ``CVE-2021-44228`` lives in ``cves/2021/44xxx/CVE-2021-44228.json``.
@@ -223,13 +223,13 @@ def _cvelist_url(cve_id: str) -> str:
     if len(parts) != 3 or not (parts[1].isdigit() and parts[2].isdigit()):
         return ''
     bucket = int(parts[2]) // 1000
-    return (f"https://raw.githubusercontent.com/CVEProject/cvelistV2/main"
+    return (f"https://raw.githubusercontent.com/CVEProject/cvelistV5/main"
             f"/cves/{parts[1]}/{bucket}xxx/{parts[0]}-{parts[1]}-{parts[2]}.json")
 
 
-def _cvelistv2(cve_id: str) -> Dict[str, Any]:
+def _cvelist(cve_id: str) -> Dict[str, Any]:
     """
-    CVEProject cvelistV2 raw JSON (keyless), the CNA-published record.
+    CVEProject cvelistV5 raw JSON (keyless), the CNA-published record.
 
     This is the fastest public mirror of the record NVD eventually enriches:
     title, publication state and the affected product list, straight from the
@@ -327,7 +327,7 @@ def _epss(cve_id: str) -> Dict[str, Any]:
 FREE_SOURCES: Dict[str, Any] = {
     'nvd': _nvd,
     'osv': _osv,
-    'cvelistV2': _cvelistv2,
+    'cvelist': _cvelist,
     'epss': _epss,
 }
 
@@ -340,7 +340,7 @@ KEYED_SOURCES: Dict[str, Any] = {}
 SOURCE_CATALOG = {
     'nvd': 'NVD 2.0: description, CVSS, CWE, references, CPEs (keyless; optional key)',
     'osv': 'Google OSV.dev: affected packages and severity vector (keyless)',
-    'cvelistV2': 'CVEProject cvelistV2 raw CNA record (keyless)',
+    'cvelist': 'CVEProject cvelistV5 raw CNA record (keyless)',
     'epss': 'FIRST.org EPSS exploitation probability (keyless)',
 }
 

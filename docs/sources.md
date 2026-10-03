@@ -53,7 +53,7 @@ live under `obscuralens sources health` — see
 | virustotal | Reputation and detections | `virustotal` |
 | ipinfo | Hostname, org, privacy hints | `ipinfo` |
 | abuseipdb | Abuse reports and confidence score | `abuseipdb` |
-| greynoise | GreyNoise community: scanned/noise, Riot CDN | `greynoise` |
+| greynoise | GreyNoise community: scanned/noise, Riot CDN | optional `greynoise` |
 
 ## Domain (`obscuralens domain`)
 
@@ -158,7 +158,7 @@ SHA-384/SHA-512 validate but have no sources today).
 |---|---|---|
 | nvd | NVD 2.0: description, CVSS, CWE, references, CPEs | optional `nvd` |
 | osv | Google OSV.dev: affected packages and severity vector | none |
-| cvelistV2 | CVEProject cvelistV2 raw CNA record | none |
+| cvelist | CVEProject cvelistV5 raw CNA record | none |
 | epss | FIRST.org EPSS exploitation probability | none |
 
 ## ASN (`obscuralens asn`)

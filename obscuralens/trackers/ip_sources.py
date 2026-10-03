@@ -543,21 +543,43 @@ def _threat_feeds(ip: str) -> Dict[str, Any]:
 # v4.0 keyed additions
 # ---------------------------------------------------------------------------
 
-def _greynoise(ip: str, api_key: str) -> Dict[str, Any]:
-    """GreyNoise community context (keyed): scanned/noise + Riot CDN flag."""
-    ok, d, _ = http.get_json(
-        f"https://api.greynoise.io/v3/community/{ip}",
-        headers={'key': api_key, 'Accept': 'application/json'})
-    if not ok or not d or d.get('error'):
+def _greynoise(ip: str) -> Dict[str, Any]:
+    """
+    GreyNoise community context (keyless, optional key for higher limits).
+
+    The community endpoint answers without authentication; a configured key
+    is attached for higher rate limits. HTTP 404 with a JSON body means the
+    address was "not observed" scanning the internet — a real negative answer,
+    not a failure — so its message is kept alongside explicit False flags.
+    """
+    headers = {'Accept': 'application/json'}
+    key = config.get_api_key('greynoise')
+    if key:
+        headers['key'] = key
+
+    try:
+        response = http.get(f"https://api.greynoise.io/v3/community/{ip}",
+                            headers=headers)
+    except Exception:
         return {}
-    return {
-        'gn_noise': d.get('noise'),
-        'gn_riot': d.get('riot'),
+    if response.status_code not in (200, 404):
+        return {}
+    try:
+        d = response.json()
+    except ValueError:
+        return {}
+    if not isinstance(d, dict) or d.get('error'):
+        return {}
+
+    out: Dict[str, Any] = {
+        'gn_noise': bool(d.get('noise')),
+        'gn_riot': bool(d.get('riot')),
         'gn_classification': d.get('classification'),
         'gn_name': d.get('name'),
         'gn_last_seen': d.get('last_seen'),
         'gn_message': d.get('message'),
     }
+    return {k: v for k, v in out.items() if _keep(v)}
 
 
 # ---------------------------------------------------------------------------
@@ -579,6 +601,7 @@ FREE_SOURCES: Dict[str, Any] = {
     'otx': _otx,
     'hackertarget': _hackertarget,
     'threat_feeds': _threat_feeds,
+    'greynoise': _greynoise,
 }
 
 KEYED_SOURCES: Dict[str, Any] = {
@@ -586,7 +609,6 @@ KEYED_SOURCES: Dict[str, Any] = {
     'virustotal': _virustotal,
     'ipinfo': _ipinfo,
     'abuseipdb': _abuseipdb,
-    'greynoise': _greynoise,
 }
 
 # Human-readable metadata used by `obscuralens sources` and the README.
@@ -609,7 +631,7 @@ SOURCE_CATALOG = {
     'virustotal': 'Reputation and detections (keyed)',
     'ipinfo': 'Hostname, org, privacy hints (keyed)',
     'abuseipdb': 'Abuse reports and confidence score (keyed)',
-    'greynoise': 'GreyNoise community: scanned/noise, Riot CDN (keyed)',
+    'greynoise': 'GreyNoise community: scanned/noise, Riot CDN (keyless, optional key)',
 }
 
 
@@ -660,7 +682,6 @@ def gather_all(ip: str, keys: Optional[Dict[str, str]] = None) -> Dict[str, Any]
         'virustotal': ('virustotal', lambda k: _virustotal(ip, k)),
         'ipinfo': ('ipinfo', lambda k: _ipinfo(ip, k)),
         'abuseipdb': ('abuseipdb', lambda k: _abuseipdb(ip, k)),
-        'greynoise': ('greynoise', lambda k: _greynoise(ip, k)),
     }
     for service, (source_name, factory) in key_map.items():
         key = keys.get(service)
