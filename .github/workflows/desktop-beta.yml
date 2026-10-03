@@ -125,8 +125,8 @@ jobs:
       - name: Merge checksums
         run: |
           cd release
-          cat *.sha256 > checksums.sha256 || true
-          rm -f *.sha256
+          cat ObscuraLens-*.sha256 > checksums.sha256 || true
+          rm -f ObscuraLens-*.sha256
           ls -lh .
 
       - name: Derive tag and version
