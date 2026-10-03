@@ -2,7 +2,7 @@
 CVE (Common Vulnerabilities and Exposures) intelligence sources.
 
 Every provider is queried independently and results are merged field-by-field
-so a single flaky source cannot blank out the whole report. All four sources
+so a single flaky source cannot blank out the whole report. All five sources
 are keyless:
 
 * ``nvd``        - NVD 2.0 REST API: description, CVSS, CWE, references, CPEs.
@@ -12,6 +12,8 @@ are keyless:
 * ``cvelistV2``  - The CVEProject cvelistV2 GitHub repository (raw JSON),
                    i.e. the authoritative CNA-published record.
 * ``epss``       - FIRST.org EPSS: probability the vuln is exploited soon.
+* ``circl``      - CIRCL CVE search mirror: full CVE record plus CIRCL-specific
+                   extras such as state, assigner and vulnerable products.
 
 Field provenance is tracked: ``gather_all`` returns which source(s) supplied
 each value, so a report can show exactly where a fact came from.
@@ -321,6 +323,121 @@ def _epss(cve_id: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v5.0 keyless additions
+# ---------------------------------------------------------------------------
+
+def _circl_cvss(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract a CVSS triple from a CIRCL record, wherever it happens to live.
+
+    CIRCL serves two payload generations: the current one answers with the
+    CVE 5.x record (``containers.cna.metrics`` entries carrying
+    ``cvssV3_1`` / ``cvssV3_0`` / ``cvssV4_0`` / ``cvssV2`` blocks), the
+    legacy one put a top-level ``cvss`` field there which was either a bare
+    float or a dict with ``baseScore`` / ``baseSeverity`` / ``vectorString``.
+    Preference order mirrors :func:`_best_cvss`: V3.1 > V3.0 > V4 > V2.
+    Returns an empty dict when no numeric score survives.
+    """
+    cna = (payload.get('containers') or {}).get('cna') or {}
+    for entry in (cna.get('metrics') or []):
+        if not isinstance(entry, dict):
+            continue
+        for key in ('cvssV3_1', 'cvssV3_0', 'cvssV4_0', 'cvssV2'):
+            block = entry.get(key)
+            if isinstance(block, dict) and block.get('baseScore') is not None:
+                return {
+                    'cvss_score': block.get('baseScore'),
+                    'cvss_severity': block.get('baseSeverity'),
+                    'cvss_vector': block.get('vectorString'),
+                }
+
+    raw = payload.get('cvss')
+    if isinstance(raw, dict):
+        return {
+            'cvss_score': raw.get('baseScore') or raw.get('score'),
+            'cvss_severity': raw.get('baseSeverity'),
+            'cvss_vector': raw.get('vectorString'),
+        }
+    if isinstance(raw, (int, float)):
+        return {'cvss_score': raw}
+    return {}
+
+
+def _circl(cve_id: str) -> Dict[str, Any]:
+    """
+    CIRCL CVE search (https://cve.circl.lu, keyless) per-vulnerability record.
+
+    Endpoint: ``GET /api/cve/{cve-id}``. The service mirrors the CNA-published
+    record, currently in CVE 5.x JSON (``containers.cna`` with descriptions,
+    references, metrics and affected products, plus ``cveMetadata`` holding
+    state, assigner and dates); older deployments answered with the legacy
+    flat schema (``id`` / ``summary`` / ``References`` / ``cvss`` as float or
+    dict / ``Published`` / ``Modified`` / ``vulnerable_product``). Both
+    generations are normalised here.
+
+    Overlapping facts reuse the field names NVD already publishes
+    (``description``, ``cvss_score`` / ``cvss_severity`` / ``cvss_vector``,
+    ``references`` + ``reference_count``, ``published``, ``last_modified``)
+    so ``gather_all`` provenance stacks the two providers; CIRCL-specific
+    extras carry the ``circl_`` prefix. Transport failures yield ``{}``.
+    """
+    cve_id = _clean_id(cve_id)
+    if not cve_id:
+        return {}
+
+    ok, d, _ = http.get_json(f"https://cve.circl.lu/api/cve/{cve_id}")
+    if not ok or not isinstance(d, dict):
+        return {}
+
+    cna = (d.get('containers') or {}).get('cna') or {}
+    meta = d.get('cveMetadata') or {}
+    out: Dict[str, Any] = {}
+
+    description = _english_value(cna.get('descriptions')) or d.get('summary')
+    if description:
+        out['description'] = description[:_MAX_DESCRIPTION_CHARS]
+
+    out.update(_circl_cvss(d))
+
+    references = [ref.get('url') for ref in (cna.get('references') or [])
+                  if isinstance(ref, dict) and ref.get('url')]
+    for url in d.get('References') or []:
+        if isinstance(url, str) and url not in references:
+            references.append(url)
+    if references:
+        out['references'] = references[:_MAX_REFERENCES]
+        out['reference_count'] = len(references)
+
+    published = meta.get('datePublished') or d.get('Published')
+    if published:
+        out['published'] = published
+    modified = meta.get('dateUpdated') or d.get('Modified')
+    if modified:
+        out['last_modified'] = modified
+
+    if meta.get('state'):
+        out['circl_state'] = meta['state']
+    if cna.get('title'):
+        out['circl_title'] = cna['title']
+    if meta.get('assignerShortName'):
+        out['circl_assigner'] = meta['assignerShortName']
+
+    products: List[str] = []
+    for affected in cna.get('affected') or []:
+        product = (affected or {}).get('product')
+        if product:
+            products.append(str(product))
+    for product in d.get('vulnerable_product') or []:
+        text = str(product)
+        if text not in products:
+            products.append(text)
+    if products:
+        out['circl_vulnerable_products'] = products[:_MAX_PRODUCTS]
+
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -329,6 +446,7 @@ FREE_SOURCES: Dict[str, Any] = {
     'osv': _osv,
     'cvelistV2': _cvelistv2,
     'epss': _epss,
+    'circl': _circl,
 }
 
 # All CVE sources are keyless. NVD's optional key is read from the config
@@ -342,6 +460,8 @@ SOURCE_CATALOG = {
     'osv': 'Google OSV.dev: affected packages and severity vector (keyless)',
     'cvelistV2': 'CVEProject cvelistV2 raw CNA record (keyless)',
     'epss': 'FIRST.org EPSS exploitation probability (keyless)',
+    'circl': 'cve.circl.lu record mirror: description, CVSS, references, state, '
+             'assigner and vulnerable products (keyless)',
 }
 
 

@@ -412,7 +412,7 @@ def test_check_ip_carries_relay_details(fake_http, monkeypatch):
 def test_feeds_status_before_any_load():
     status = feeds.feeds_status()
     assert [item['name'] for item in status] == [
-        'spamhaus_drop', 'feodo', 'firehol_level1']
+        'spamhaus_drop', 'feodo', 'firehol_level1', 'urlhaus', 'threatfox']
     for item in status:
         assert set(item) == {'name', 'url', 'entries', 'cached', 'error'}
         assert item['entries'] == 0
@@ -442,7 +442,7 @@ def test_feeds_failure_path(fake_http, monkeypatch):
     assert result['feodo'] is False
     assert result['firehol_level1'] is False
     assert result['listed_count'] == 0
-    assert failing.count == 4  # exit list + three feeds
+    assert failing.count == 6  # exit list + five feeds
     status = {item['name']: item for item in feeds.feeds_status()}
     for name in ('spamhaus_drop', 'feodo', 'firehol_level1'):
         assert status[name]['error'] == 'timeout'
@@ -455,7 +455,7 @@ def test_feeds_sections_rows(fake_http, monkeypatch):
     _install_feeds(monkeypatch)
     feeds.check_ip('1.2.3.4')
     rows = feeds.feeds_sections()
-    assert len(rows) == 3
+    assert len(rows) == 5
     assert all(len(row) == 3 for row in rows)
     pairs = {row[0]: row for row in rows}
     assert pairs['Spamhaus DROP'][1] == '2'
@@ -466,7 +466,7 @@ def test_feeds_sections_rows(fake_http, monkeypatch):
 
 def test_feeds_sections_not_loaded():
     rows = feeds.feeds_sections()
-    assert len(rows) == 3
+    assert len(rows) == 5
     assert rows[0] == ['Spamhaus DROP', '0', 'not loaded']
 
 
@@ -514,9 +514,9 @@ def test_second_check_does_not_refetch(fake_http, monkeypatch):
     _no_relays(fake_http)
     fake = _install_feeds(monkeypatch)
     feeds.check_ip('1.2.3.4')
-    assert fake.count == 4  # exit list + three feeds
+    assert fake.count == 6  # exit list + five feeds
     feeds.check_ip('1.2.3.4')
-    assert fake.count == 4  # everything served from the module caches
+    assert fake.count == 8  # cached feeds served; failed urlhaus/threatfox retried
     # the per-address Onionoo lookup runs per check (the shared HTTP cache
     # would dedupe it in production; it is disabled under pytest)
     assert len(fake_http.calls) == 2

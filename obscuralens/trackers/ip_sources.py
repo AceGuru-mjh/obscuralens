@@ -506,7 +506,8 @@ def _threat_feeds(ip: str) -> Dict[str, Any]:
     """
     Cross-check the address against threat intelligence:
     Tor exit list + relay details and the Spamhaus DROP / Feodo / FireHOL
-    level-1 blocklists. Feeds are cached for ``app.feed_cache_ttl``.
+    level-1 blocklists plus (v5.0) the abuse.ch URLhaus and ThreatFox IOC
+    feeds. Feeds are cached for ``app.feed_cache_ttl``.
     """
     if not config.app_config.feeds_enabled:
         return {}
@@ -527,6 +528,8 @@ def _threat_feeds(ip: str) -> Dict[str, Any]:
         'spamhaus_drop': bool(verdict.get('spamhaus_drop')),
         'feodo_tracker': bool(verdict.get('feodo')),
         'firehol_level1': bool(verdict.get('firehol_level1')),
+        'urlhaus_listed': bool(verdict.get('urlhaus')),
+        'threatfox_listed': bool(verdict.get('threatfox')),
         'threat_feeds_listed': verdict.get('listed_count', 0),
     }
     relay = verdict.get('relay') or {}
@@ -561,6 +564,132 @@ def _greynoise(ip: str, api_key: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v5.0 keyless additions
+# ---------------------------------------------------------------------------
+
+def _ipapi_is(ip: str) -> Dict[str, Any]:
+    """
+    ipapi.is (keyless): geo, ASN, company and hosting/proxy flags.
+
+    Endpoint: ``https://api.ipapi.is/?q={ip}`` (free tier, rate-limited).
+
+    The payload shape depends on the tier: the keyless tier answers with
+    flat fields (``company`` and ``asn`` as strings like
+    ``"AS54113 Fastly, Inc."``), while richer tiers nest them
+    (``company.name``, ``asn`` as an integer plus ``asn.desc``, a
+    ``location`` object with ``country_code``/``postal`` and boolean flags
+    such as ``is_datacenter`` / ``is_vpn``). Both shapes are normalised
+    here: ``asn`` becomes the bare AS number, ``asn_org`` its description,
+    ``company`` the organisation name, and the datacenter / VPN / proxy /
+    Tor booleans become report fields. A ``risk_score`` (0-100) is passed
+    through when present. Transport or quota failures yield ``{}``.
+    """
+    ok, d, _ = http.get_json(f"https://api.ipapi.is/?q={ip}", cache_ttl=1800)
+    if not ok or not isinstance(d, dict) or d.get('is_bogon') is True:
+        return {}
+
+    location = d.get('location') if isinstance(d.get('location'), dict) else {}
+    company = d.get('company')
+    if isinstance(company, dict):
+        company = company.get('name')
+    asn_raw = d.get('asn')
+
+    asn: Any = None
+    asn_org: Optional[str] = None
+    if isinstance(asn_raw, dict):
+        asn = asn_raw.get('asn')
+        asn_org = asn_raw.get('desc') or asn_raw.get('as_name')
+    elif isinstance(asn_raw, int):
+        asn = asn_raw
+    elif isinstance(asn_raw, str) and asn_raw:
+        # Free-tier form: "AS54113 Fastly, Inc."
+        parts = asn_raw.split(None, 1)
+        number = parts[0].upper().removeprefix('AS')
+        try:
+            asn = int(number)
+        except ValueError:
+            asn = None
+        asn_org = parts[1].strip() if len(parts) > 1 else None
+
+    return {
+        'country': d.get('country') or location.get('country'),
+        'country_code': d.get('country_code') or location.get('country_code'),
+        'continent': d.get('continent') or location.get('continent'),
+        'city': d.get('city') or location.get('city'),
+        'region': d.get('region') or location.get('region'),
+        'postal': d.get('postal') or location.get('postal'),
+        'latitude': d.get('lat') or location.get('lat'),
+        'longitude': d.get('lon') or location.get('lng'),
+        'timezone': d.get('timezone') or location.get('timezone'),
+        'asn': asn,
+        'asn_org': asn_org,
+        'company': company,
+        'datacenter': d.get('is_datacenter'),
+        'vpn': d.get('is_vpn'),
+        'is_proxy': d.get('is_proxy'),
+        'is_tor': d.get('is_tor'),
+        'is_mobile': d.get('is_mobile'),
+        'risk_score': d.get('risk_score'),
+    }
+
+
+def _ipinfo_io(ip: str) -> Dict[str, Any]:
+    """
+    ipinfo.io (keyless free tier): geo, hostname, timezone and ASN/org.
+
+    Endpoint: ``https://ipinfo.io/{ip}/json`` - no token required for the
+    anonymous free tier (about 1000 requests/day; a keyed ``ipinfo`` source
+    also exists above for higher volume).
+
+    The response is flat: ``city`` / ``region`` / ``country`` (a two-letter
+    code, so it feeds ``country_code`` rather than ``country``) /
+    ``postal`` / ``timezone`` / ``loc`` ("lat,lon") / ``org``
+    ("AS15169 Google LLC") / optional ``hostname``. The ``org`` string is
+    split into an AS number and an organisation name, mirroring the field
+    names the keyed reader already uses (``ipinfo_asn`` /
+    ``ipinfo_asn_name`` / ``ipinfo_hostname``) so provenance merges when
+    both run. Quota or transport failures (including the JSON ``error``
+    body) yield ``{}``.
+    """
+    ok, d, _ = http.get_json(f"https://ipinfo.io/{ip}/json", cache_ttl=1800)
+    if not ok or not isinstance(d, dict) or d.get('error'):
+        return {}
+
+    lat: Optional[str] = None
+    lon: Optional[str] = None
+    loc = d.get('loc')
+    if isinstance(loc, str) and ',' in loc:
+        lat, lon = loc.split(',', 1)
+
+    asn_number: Any = None
+    asn_name: Optional[str] = None
+    org = d.get('org') or ''
+    if isinstance(org, str) and org:
+        parts = org.split(None, 1)
+        number = parts[0].upper().removeprefix('AS')
+        try:
+            asn_number = int(number)
+        except ValueError:
+            asn_number = None
+            asn_name = org
+        if asn_number is not None:
+            asn_name = parts[1].strip() if len(parts) > 1 else None
+
+    return {
+        'city': d.get('city'),
+        'region': d.get('region'),
+        'country_code': d.get('country'),
+        'postal': d.get('postal'),
+        'timezone': d.get('timezone'),
+        'latitude': lat,
+        'longitude': lon,
+        'ipinfo_asn': asn_number,
+        'ipinfo_asn_name': asn_name,
+        'ipinfo_hostname': d.get('hostname'),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -579,6 +708,8 @@ FREE_SOURCES: Dict[str, Any] = {
     'otx': _otx,
     'hackertarget': _hackertarget,
     'threat_feeds': _threat_feeds,
+    'ipapi.is': _ipapi_is,
+    'ipinfo.io': _ipinfo_io,
 }
 
 KEYED_SOURCES: Dict[str, Any] = {
@@ -605,6 +736,8 @@ SOURCE_CATALOG = {
     'otx': 'AlienVault OTX pulses, malware samples and passive DNS (keyless)',
     'hackertarget': 'Reverse IP hostnames (keyless, daily quota)',
     'threat_feeds': 'Tor exit list, Spamhaus DROP, Feodo and FireHOL level-1 (keyless)',
+    'ipapi.is': 'Geolocation, ASN, company, datacenter/VPN/proxy flags and risk score (keyless)',
+    'ipinfo.io': 'Geolocation, hostname, timezone and ASN via ipinfo.io free tier (keyless)',
     'shodan': 'Full Shodan host data (keyed)',
     'virustotal': 'Reputation and detections (keyed)',
     'ipinfo': 'Hostname, org, privacy hints (keyed)',

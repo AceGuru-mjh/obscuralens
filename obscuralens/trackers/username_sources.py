@@ -9,7 +9,7 @@ layout change degrades to "no data" instead of raising.
 import json
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def _epoch_date(value: Any) -> Optional[str]:
@@ -526,6 +526,97 @@ def blogger(html: str) -> Dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# v5.0 platform extractors
+#
+# Patreon / Etsy / Substack / Replit are the genuinely new HTML platforms of
+# the v5.0 source wave. The remaining platforms requested alongside these
+# (twitch, vimeo, flickr, deviantart, soundcloud, medium, bitbucket, and
+# dockerhub) already shipped in earlier waves: the first seven live in
+# ``username_tracker.HTML_PLATFORMS`` and DockerHub is checked through its
+# JSON API (see ``API_PLATFORMS`` below), which is a strictly better signal
+# than scraping its JavaScript shell.
+# ---------------------------------------------------------------------------
+
+def patreon(html: str) -> Dict[str, Any]:
+    """
+    Patreon creator page (https://www.patreon.com/{u}), keyless HTML scrape.
+
+    Returns the OpenGraph ``name`` / ``bio`` / ``avatar`` triplet. Quirk:
+    anonymous clients almost always land on a Cloudflare "Just a moment..."
+    interstitial (HTTP 403), so in practice this extractor only runs when the
+    request happens to clear the wall - the verdict rules below then keep the
+    honest "cannot determine" answer instead of inventing a hit.
+    """
+    return {
+        'name': _clean(_meta(html, 'title')),
+        'bio': _clean(_meta(html, 'description'), 400),
+        'avatar': _meta(html, 'image'),
+        'patrons': _count_number(_first(r'([\d.,]+[KMB]?)\s*patrons', html, re.I)),
+    }
+
+
+def etsy(html: str) -> Dict[str, Any]:
+    """
+    Etsy shop page (https://www.etsy.com/shop/{u}), keyless HTML scrape.
+
+    Returns the OpenGraph triplet plus a best-effort item count from the
+    "N items" listing header. Quirk: Etsy fronts the shop pages with a bot
+    wall (HTTP 403 with a bare ``etsy.com`` title) for scripted clients, so
+    the platform verdict stays "unknown" unless real shop content comes
+    through.
+    """
+    return {
+        'name': _clean(_meta(html, 'title')),
+        'bio': _clean(_meta(html, 'description'), 400),
+        'avatar': _meta(html, 'image'),
+        'items': _count_number(_first(r'([\d.,]+[KMB]?)\s*items', html, re.I)),
+    }
+
+
+def substack(html: str) -> Dict[str, Any]:
+    """
+    Substack publication root page (https://{u}.substack.com), keyless.
+
+    Returns the OpenGraph triplet plus a best-effort subscriber count - many
+    publications render "N subscribers" on the landing page. Quirks: the
+    publication may redirect to a custom domain (``example.com`` instead of
+    ``example.substack.com``) while keeping the "| Substack" page title, and a
+    missing publication answers HTTP 404 with a "Not Found" title, which the
+    tracker's generic rules already treat as a hard miss.
+    """
+    return {
+        'name': _clean(_meta(html, 'title')),
+        'bio': _clean(_meta(html, 'description'), 400),
+        'avatar': _meta(html, 'image'),
+        'subscribers': _count_number(_first(r'([\d.,]+[KMB]?)\s*subscribers', html, re.I)),
+    }
+
+
+def replit(html: str) -> Dict[str, Any]:
+    """
+    Replit profile page (https://replit.com/@{u}), keyless HTML scrape.
+
+    Returns the OpenGraph triplet, but only when the page is not the
+    login-gate shell: existing profiles bounce logged-out visitors to
+    ``/login?source=root-profile&goto=/@{u}``, whose generic
+    "Sign Up - Replit" banner is profile-agnostic noise rather than
+    evidence, so the shell yields no fields at all. The platform verdict in
+    ``_rule_replit`` below keys off that redirect instead of the HTML.
+    """
+    title = _clean(_meta(html, 'title')) or ''
+    bio = _clean(_meta(html, 'description'), 400)
+    shell = title.lower() in ('replit', 'sign up - replit', 'log in - replit') \
+        or (bio or '').lower().startswith('build and deploy software')
+    if shell:
+        return {}
+    return {
+        'name': title or None,
+        'bio': bio,
+        'avatar': _meta(html, 'image'),
+    }
+
+
 EXTRACTORS: Dict[str, Any] = {
     'GitHub': github,
     'Reddit': reddit,
@@ -562,6 +653,11 @@ EXTRACTORS: Dict[str, Any] = {
     'Hackaday.io': hackaday,
     'Last.fm': lastfm,
     'Kaggle': kaggle,
+    # v5.0 additions
+    'Patreon': patreon,
+    'Etsy': etsy,
+    'Substack': substack,
+    'Replit': replit,
 }
 
 
@@ -795,3 +891,120 @@ def api_profile(platform: str, data: Any) -> Dict[str, Any]:
         return {}
     return {k: v for k, v in profile.items()
             if v is not None and v != '' and v != [] and v != {}}
+
+
+# ---------------------------------------------------------------------------
+# v5.0 HTML platform registry + verdict rules
+#
+# ``username_tracker.HTML_PLATFORMS`` owns the 34 platform entries that ship
+# with the tracker itself. The v5.0 wave adds the four platforms below in the
+# exact same ``{"name", "url"}`` shape, so the tracker can adopt them with a
+# one-line union (``HTML_PLATFORMS + username_sources.HTML_PLATFORMS``)
+# without duplicating anything: twitch, vimeo, flickr, deviantart, soundcloud,
+# medium and bitbucket were already registered as HTML platforms in v4.0, and
+# DockerHub is covered (with a far stronger signal) by the JSON API entry in
+# ``API_PLATFORMS`` above.
+# ---------------------------------------------------------------------------
+
+HTML_PLATFORMS: List[Dict[str, str]] = [
+    {"name": "Patreon", "url": "https://www.patreon.com/{}"},
+    {"name": "Etsy", "url": "https://www.etsy.com/shop/{}"},
+    {"name": "Substack", "url": "https://{}.substack.com"},
+    {"name": "Replit", "url": "https://replit.com/@{}"},
+]
+
+
+def _rule_patreon(username: str, body: str, low: str,
+                  response: Any) -> Optional[Tuple[str, str, str]]:
+    """
+    Patreon verdict rule: Cloudflare interstitials are never evidence.
+
+    Endpoint: ``https://www.patreon.com/{username}``. Anonymous clients are
+    served a "Just a moment..." challenge (HTTP 403) for existing and missing
+    creators alike, so the only honest answer is "unknown". Non-challenged
+    bodies fall through (``None``) to the generic profile-evidence rule.
+    """
+    if 'just a moment' in low[:3000] or 'cf-chl' in low or 'challenge-platform' in low:
+        return 'unknown', 'low', 'patreon cloudflare challenge, cannot determine'
+    return None
+
+
+def _rule_etsy(username: str, body: str, low: str,
+               response: Any) -> Optional[Tuple[str, str, str]]:
+    """
+    Etsy verdict rule: bot-wall interstitials are never evidence.
+
+    Endpoint: ``https://www.etsy.com/shop/{username}``. Scripted clients get
+    an HTTP 403 "etsy.com" shell whether the shop exists or not; the body of
+    that shell carries no shop facts, so the honest verdict is "unknown".
+    Real shop pages fall through to the generic evidence rule.
+    """
+    if 'access denied' in low[:3000] or 'are you a human' in low[:3000] \
+            or 'pardon our interruption' in low[:3000]:
+        return 'unknown', 'low', 'etsy bot-wall, cannot determine'
+    return None
+
+
+def _rule_substack(username: str, body: str, low: str,
+                   response: Any) -> Optional[Tuple[str, str, str]]:
+    """
+    Substack verdict rule: the publication title is the signature.
+
+    Endpoint: ``https://{username}.substack.com``. Existing publications -
+    including ones redirected to a custom domain - render a
+    ``<something> | Substack`` title; missing ones answer HTTP 404 (handled by
+    the tracker's generic 404 rule). A title mentioning Substack is therefore
+    a medium-confidence hit; anything else falls through to the generic
+    profile-evidence rule.
+    """
+    title = _meta(body, 'title') or ''
+    if title and 'substack' in title.lower():
+        return 'found', 'medium', f'substack publication page: {title[:60]}'
+    return None
+
+
+def _rule_replit(username: str, body: str, low: str,
+                 response: Any) -> Optional[Tuple[str, str, str]]:
+    """
+    Replit verdict rule: the login-redirect vs 404 split.
+
+    Endpoint: ``https://replit.com/@{username}``. Missing profiles answer
+    HTTP 404 directly (generic rule reports a high-confidence miss). Existing
+    profiles bounce logged-out visitors to
+    ``/login?source=root-profile&goto=/@{username}`` - a redirect that embeds
+    the very profile path it is hiding, so it counts as a medium-confidence
+    hit; anything else falls through to the generic rule.
+    """
+    final_url = (getattr(response, 'url', '') or '').lower()
+    if '/login' in final_url and username.lower() in final_url:
+        return 'found', 'medium', 'replit profile exists but requires login'
+    return None
+
+
+#: Platform name -> verdict rule, mirroring the tracker's ``_rule_*``
+#: contract: ``(username, body, low, response) -> (status, confidence,
+#: reason)`` or ``None`` to fall through to the generic evidence rule.
+HTML_VERDICT_RULES: Dict[str, Any] = {
+    'Patreon': _rule_patreon,
+    'Etsy': _rule_etsy,
+    'Substack': _rule_substack,
+    'Replit': _rule_replit,
+}
+
+# Human-readable metadata for the twelve v5.0 platform checks (the four new
+# HTML platforms plus the eight requested ones that earlier waves had
+# already registered elsewhere).
+SOURCE_CATALOG: Dict[str, str] = {
+    'Patreon': 'Creator page - usually Cloudflare-walled (HTML, keyless)',
+    'Etsy': 'Shop page - usually bot-walled (HTML, keyless)',
+    'Substack': 'Publication root page, 404 vs titled-page split (HTML, keyless)',
+    'Replit': 'Profile page, 404 vs login-redirect split (HTML, keyless)',
+    'Twitch': 'Channel page, title-signature verdict (HTML, keyless; v4.0)',
+    'Vimeo': 'Profile page, 200-vs-404 status split (HTML, keyless; v4.0)',
+    'Flickr': 'Profile page, 200-vs-404 status split (HTML, keyless; v4.0)',
+    'DeviantArt': 'Profile page (HTML, keyless; v4.0)',
+    'SoundCloud': 'Profile page, 200-vs-404 status split (HTML, keyless; v4.0)',
+    'Medium': 'Profile page - bot-walled, honest unknown (HTML, keyless; v4.0)',
+    'DockerHub': 'Account via hub.docker.com JSON API (keyless; v4.0)',
+    'Bitbucket': 'Workspace page (HTML, keyless; v4.0)',
+}

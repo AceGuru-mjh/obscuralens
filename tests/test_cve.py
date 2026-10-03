@@ -84,9 +84,32 @@ CNA = {
 EPSS = {'data': [{'cve': 'CVE-2021-44228', 'epss': '0.97',
                   'percentile': '0.9987', 'date': '2024-06-01'}]}
 
+# CIRCL mirrors the CNA-published CVE 5.1 record (same family as the
+# cvelistV2 payload, with cveMetadata carrying state/assigner/dates and no
+# numeric CVSS block for this particular CVE - matching the live service).
+CIRCL = {
+    'dataType': 'CVE_RECORD',
+    'dataVersion': '5.1',
+    'cveMetadata': {
+        'cveId': 'CVE-2021-44228',
+        'state': 'PUBLISHED',
+        'assignerShortName': 'apache',
+        'datePublished': '2021-12-10T00:00:00.000Z',
+        'dateUpdated': '2022-01-10T06:00:00.000Z',
+    },
+    'containers': {'cna': {
+        'title': 'Remote code execution in Apache Log4j2',
+        'descriptions': [{'lang': 'en', 'value': 'JNDI lookup RCE.'}],
+        'metrics': [{'other': {'type': 'unknown',
+                               'content': {'other': 'critical'}}}],
+        'affected': [{'vendor': 'apache', 'product': 'Apache Log4j2'}],
+        'references': [{'url': 'https://example.test/circl'}],
+    }},
+}
+
 
 def _all_sources(url, **kwargs):
-    """Dispatch any of the four CVE source URLs to a fixture payload."""
+    """Dispatch any of the five CVE source URLs to a fixture payload."""
     if 'services.nvd.nist.gov' in url:
         return True, _nvd_payload(), ''
     if 'api.osv.dev' in url:
@@ -95,6 +118,8 @@ def _all_sources(url, **kwargs):
         return True, CNA, ''
     if 'api.first.org' in url:
         return True, EPSS, ''
+    if 'cve.circl.lu' in url:
+        return True, CIRCL, ''
     return False, None, f'unexpected url {url}'
 
 
@@ -386,7 +411,8 @@ def test_gather_all_nvd_key_override(fake_http):
 
 
 def test_registries_are_consistent():
-    assert set(cve_sources.FREE_SOURCES) == {'nvd', 'osv', 'cvelistV2', 'epss'}
+    assert set(cve_sources.FREE_SOURCES) == {
+        'nvd', 'osv', 'cvelistV2', 'epss', 'circl'}
     assert cve_sources.KEYED_SOURCES == {}
     assert set(cve_sources.SOURCE_CATALOG) == set(cve_sources.FREE_SOURCES)
 
@@ -401,7 +427,7 @@ def test_tracker_success_shape(fake_http, recording_db):
 
     assert result['cve'] == 'CVE-2021-44228'
     assert result['success'] is True
-    assert result['sources_ok'] == ['cvelistV2', 'epss', 'nvd', 'osv']
+    assert result['sources_ok'] == ['circl', 'cvelistV2', 'epss', 'nvd', 'osv']
     assert result['sources_failed'] == {}
     assert result['errors'] == []
     assert result['field_count'] > 5
@@ -430,7 +456,7 @@ def test_tracker_partial_failure_still_succeeds(fake_http, recording_db):
     fake_http.json = dispatch
     result = CVETracker().track('CVE-2021-44228')
     assert result['success'] is True
-    assert result['sources_ok'] == ['nvd', 'osv']
+    assert result['sources_ok'] == ['circl', 'nvd', 'osv']
     # Readers swallow transport errors and return {} - the merged report then
     # records the source as "no data" rather than crashing the scan.
     assert result['sources_failed'] == {'cvelistV2': 'no data', 'epss': 'no data'}
@@ -486,6 +512,6 @@ def test_batch_track_preserves_order(fake_http, recording_db):
 
 def test_tracker_helpers():
     tracker = CVETracker()
-    assert tracker.source_names() == ['cvelistV2', 'epss', 'nvd', 'osv']
+    assert tracker.source_names() == ['circl', 'cvelistV2', 'epss', 'nvd', 'osv']
     assert set(tracker.source_catalog()) == set(cve_sources.SOURCE_CATALOG)
     assert 'keyless' in tracker.source_catalog()['nvd']

@@ -404,7 +404,7 @@ def test_tracker_all_sources_fail(fake_http, tmp_env):
     assert result['success'] is False
     assert result['sources_ok'] == []
     assert set(result['sources_failed']) == {
-        'blockchain.info', 'blockstream.info', 'blockchair'}
+        'blockchain.info', 'blockstream.info', 'blockchair', 'mempool.space'}
     assert set(result['sources_failed'].values()) == {'no data'}
     assert result['errors'] == ['all data sources failed']
     # Chain and address are still recorded.
@@ -440,13 +440,22 @@ def test_tracker_full_btc_pipeline(fake_http, tmp_env, monkeypatch):
                 'receiving_transaction_count': 2,
                 'spending_transaction_count': 3,
             }}}}, '')
+        if 'mempool.space/api/address/' in url:
+            return (True, {
+                'address': BTC_ADDR,
+                'chain_stats': {'funded_txo_sum': 150000000,
+                                'spent_txo_sum': 50000000, 'tx_count': 3},
+                'mempool_stats': {'funded_txo_sum': 0, 'spent_txo_sum': 0,
+                                  'tx_count': 0},
+            }, '')
         return (False, None, 'unexpected url: ' + url)
 
     fake_http.json = dispatch
     result = CryptoTracker().track(BTC_ADDR)
 
     assert result['success'] is True
-    assert result['sources_ok'] == ['blockchain.info', 'blockchair', 'blockstream.info']
+    assert result['sources_ok'] == ['blockchain.info', 'blockchair',
+                                    'blockstream.info', 'mempool.space']
     assert result['sources_failed'] == {}
     assert result['errors'] == []
     assert result['info']['chain'] == 'btc'
@@ -457,9 +466,11 @@ def test_tracker_full_btc_pipeline(fake_http, tmp_env, monkeypatch):
     assert result['info']['blockstream_last_activity'] == ISO_LATE
     assert result['info']['blockchair_balance'] == 1.23456789
     assert result['info']['blockchair_tx_count'] == 5
+    assert result['info']['mempool_pending'] == 0
     assert result['info']['first_seen'] == ISO_GENESIS
     assert result['info']['last_seen'] == ISO_LATE
-    assert result['field_sources']['btc_balance'] == ['blockchain.info']
+    assert result['field_sources']['btc_balance'] == ['blockchain.info',
+                                                      'mempool.space']
     assert result['field_count'] >= 12
     assert db.get_query_by_id(
         db.search_history(BTC_ADDR)[0].id).query_type == 'crypto'
