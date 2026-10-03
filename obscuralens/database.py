@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from .config import config
+from .utils.helpers import sanitize_secrets
 
 
 @dataclass
@@ -93,16 +94,25 @@ class DatabaseManager:
     def save_query(self, query_type: str, query_value: str,
                    result_data: Dict[str, Any], success: bool = True,
                    error_message: str = "") -> int:
-        """Save a query to history (and prune old rows beyond the cap)."""
+        """Save a query to history (and prune old rows beyond the cap).
+
+        Secret-looking strings are redacted first so a pasted token can
+        never persist in the history database.
+        """
         if not config.app_config.save_history:
             return -1
+
+        query_value = sanitize_secrets(query_value)
+        error_message = sanitize_secrets(error_message)
+        result_json = sanitize_secrets(
+            json.dumps(result_data, ensure_ascii=False, default=str))
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO query_history (query_type, query_value, result_data, success, error_message)
                 VALUES (?, ?, ?, ?, ?)
-            ''', (query_type, query_value, json.dumps(result_data), success, error_message))
+            ''', (query_type, query_value, result_json, success, error_message))
             inserted = cursor.lastrowid
             conn.commit()
 

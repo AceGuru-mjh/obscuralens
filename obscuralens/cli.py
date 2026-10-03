@@ -1044,7 +1044,7 @@ class ObscuraLensCLI:
                 print(f"\n  {Colors.CYAN}{service}:{Colors.RESET} {masked} (configured)")
                 if not confirm_action(f"  Replace {service} key?"):
                     continue
-            value = input(f"  {service} API key: ").strip()
+            value = self._prompt_secret(f"  {service} API key")
             if value:
                 config.set_api_key(service, value)
                 print_success(f"{service} key saved")
@@ -1052,6 +1052,21 @@ class ObscuraLensCLI:
         config.save_secrets()
         print_success("Secrets written to config/secrets.yaml")
         input("\nPress Enter to continue...")
+
+    @staticmethod
+    def _prompt_secret(prompt: str) -> str:
+        """
+        Read a secret without echoing it to the terminal.
+
+        Falls back to plain input when getpass is unavailable (non-tty),
+        in which case the value is still never stored anywhere but memory
+        until explicitly saved.
+        """
+        try:
+            import getpass
+            return getpass.getpass(f"{prompt}: ").strip()
+        except Exception:
+            return input(f"{prompt}: ").strip()
 
     def api_status_menu(self) -> None:
         clear_screen()
