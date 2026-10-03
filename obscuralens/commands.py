@@ -4,6 +4,8 @@ Non-interactive command-line interface.
 Examples:
     obscuralens ip 8.8.8.8 --format json
     obscuralens username github --fast
+    obscuralens mac b8:27:eb:11:22:33
+    obscuralens tools jwt <token>
     obscuralens batch ip targets.txt --format csv --output results.csv
     obscuralens history --search 8.8.8.8
     obscuralens stats
@@ -39,14 +41,19 @@ from .plugins import loaded_plugins, reload_plugins
 from .reporting import ReportGenerator, batch_sections, sections_for
 from .utils import render_table, set_colors
 from .utils.formatting import fmt_value, rows_from_fields
+from .utils.formatting import label as _label
 from .utils.validators import (
     validate_asn,
+    validate_coords,
     validate_crypto_address,
     validate_cve,
     validate_domain,
     validate_email,
     validate_hash,
+    validate_iban,
+    validate_imei,
     validate_ip,
+    validate_mac,
     validate_phone,
     validate_url,
     validate_username,
@@ -54,22 +61,42 @@ from .utils.validators import (
 from .watchlist import watchlist
 
 KINDS = ('ip', 'phone', 'username', 'email', 'domain', 'url', 'crypto',
-         'hash', 'cve', 'asn')
+         'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords')
 FORMATS = ('table', 'json', 'markdown', 'html', 'csv', 'mermaid')
 
 _TRACKERS: Dict[str, Any] = {}
+
+#: Input validators for every supported target kind (v5.0 added the last four).
+_VALIDATORS: Dict[str, Any] = {
+    'ip': validate_ip, 'phone': validate_phone,
+    'username': validate_username, 'email': validate_email,
+    'domain': validate_domain, 'url': validate_url,
+    'crypto': validate_crypto_address, 'hash': validate_hash,
+    'cve': validate_cve, 'asn': validate_asn,
+    'mac': validate_mac, 'iban': validate_iban,
+    'imei': validate_imei, 'coords': validate_coords,
+}
+
+
+def _validator(kind: str) -> Optional[Any]:
+    """Return the input validator for a target kind (None when unknown)."""
+    return _VALIDATORS.get(kind)
 
 
 def _tracker(kind: str):
     if kind not in _TRACKERS:
         from .trackers import (
             ASNTracker,
+            CoordsTracker,
             CryptoTracker,
             CVETracker,
             DomainTracker,
             EmailTracker,
             HashTracker,
+            IBANTracker,
+            IMEITracker,
             IPTracker,
+            MACTracker,
             PhoneTracker,
             URLTracker,
             UsernameTracker,
@@ -85,6 +112,10 @@ def _tracker(kind: str):
             'hash': HashTracker,
             'cve': CVETracker,
             'asn': ASNTracker,
+            'mac': MACTracker,
+            'iban': IBANTracker,
+            'imei': IMEITracker,
+            'coords': CoordsTracker,
         }[kind]()
     return _TRACKERS[kind]
 
@@ -173,6 +204,25 @@ def build_parser() -> argparse.ArgumentParser:
     p_asn.add_argument('target', help='AS number, e.g. AS15169 or 15169')
     add_common(p_asn)
 
+    # -- v5.0 target kinds ----------------------------------------------------
+
+    p_mac = sub.add_parser('mac', help='look up a MAC address (vendor, flags)')
+    p_mac.add_argument('target', help='MAC address, e.g. b8:27:eb:11:22:33')
+    add_common(p_mac)
+
+    p_iban = sub.add_parser('iban', help='validate and dissect an IBAN')
+    p_iban.add_argument('target', help='IBAN, e.g. DE89370400440532013000')
+    add_common(p_iban)
+
+    p_imei = sub.add_parser('imei', help='decode an IMEI (TAC, manufacturer)')
+    p_imei.add_argument('target', help='IMEI (15/16 digits), e.g. 356938035643809')
+    add_common(p_imei)
+
+    p_coords = sub.add_parser('coords', help='reverse-geocode coordinates')
+    p_coords.add_argument('target',
+                          help='DD/DMS/UTM/MGRS coordinates, e.g. "48.8584, 2.2945"')
+    add_common(p_coords)
+
     p_inv = sub.add_parser(
         'investigate',
         help='auto-detect a target and follow related pivots')
@@ -219,6 +269,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument('--port', type=int, default=8000)
     p_serve.add_argument('--reload', action='store_true',
                          help='auto-reload on code changes (development)')
+    p_serve.add_argument('--open', dest='open_browser', action='store_true',
+                         default=None,
+                         help='open the web UI in a browser after startup '
+                              '(default: auto when run interactively)')
+    p_serve.add_argument('--no-open', dest='open_browser', action='store_false',
+                         help='never open a browser automatically')
     add_common(p_serve)
 
     p_tui = sub.add_parser('tui', help='terminal UI (needs [tui] extra)')
@@ -434,6 +490,113 @@ def build_parser() -> argparse.ArgumentParser:
     p_phish.add_argument('target')
     add_common(p_phish)
 
+    # -- v5.0 analyst toolbox ----------------------------------------------------
+
+    p_tools = sub.add_parser(
+        'tools', help='offline analyst toolbox (encoders, JWT, hashes, ...)')
+    tools_sub = p_tools.add_subparsers(dest='action', metavar='<action>')
+
+    def add_tools_common(p: argparse.ArgumentParser) -> None:
+        p.add_argument('-f', '--format', choices=('table', 'json'), default=None,
+                       help='output format (default: table)')
+        p.add_argument('-o', '--output', metavar='FILE',
+                       help='write output to FILE instead of stdout')
+        p.add_argument('--no-color', action='store_true',
+                       help='disable ANSI colours')
+
+    p_enc = tools_sub.add_parser(
+        'encode', help='encode text through every scheme')
+    p_enc.add_argument('text', help='text to encode')
+    p_enc.add_argument('--scheme', metavar='NAME',
+                       help='one scheme (hex/base32/base64/base85/url_percent/'
+                            'html_entity/rot13/caesar/binary/decimal/reversed/'
+                            'morse/gzip); default: all schemes + digests')
+    add_tools_common(p_enc)
+
+    p_dec = tools_sub.add_parser('decode', help='decode an encoded value')
+    p_dec.add_argument('value', help='the encoded value')
+    p_dec.add_argument('--scheme', metavar='NAME',
+                       help='decode with one named scheme')
+    p_dec.add_argument('--all', action='store_true',
+                       help='rank decode candidates from every scheme')
+    add_tools_common(p_dec)
+
+    p_jwt = tools_sub.add_parser('jwt', help='inspect a JSON Web Token')
+    p_jwt.add_argument('token', help='JWT in compact serialization')
+    add_tools_common(p_jwt)
+
+    p_hid = tools_sub.add_parser('hash-id', help='identify a hash format')
+    p_hid.add_argument('hash', help='the hash string to identify')
+    add_tools_common(p_hid)
+
+    p_tcoords = tools_sub.add_parser(
+        'coords', help='convert coordinates between formats')
+    p_tcoords.add_argument('value', help='DD / DMS / UTM / MGRS coordinates')
+    add_tools_common(p_tcoords)
+
+    p_extr = tools_sub.add_parser(
+        'extract', help='extract OSINT entities from text')
+    p_extr.add_argument('text', nargs='?', default='',
+                        help='text to scan (or use --file / --stdin)')
+    p_extr.add_argument('--file', metavar='PATH', help='read text from a file')
+    p_extr.add_argument('--stdin', action='store_true',
+                        help='read text from standard input')
+    add_tools_common(p_extr)
+
+    p_squat = tools_sub.add_parser(
+        'squat', help='typosquat / homoglyph variant analysis')
+    p_squat.add_argument('domain', help='domain to defend, e.g. google.com')
+    p_squat.add_argument('--min-risk', type=int, default=None, metavar='N',
+                         help='only show variants scoring N or higher')
+    p_squat.add_argument('--category', metavar='CAT',
+                         help='restrict to one family (e.g. homoglyph)')
+    add_tools_common(p_squat)
+
+    p_exif = tools_sub.add_parser('exif', help='image metadata triage')
+    p_exif.add_argument('path', help='path to an image file')
+    add_tools_common(p_exif)
+
+    p_stego = tools_sub.add_parser('stego', help='steganography analysis')
+    p_stego.add_argument('path', help='path to an image file')
+    add_tools_common(p_stego)
+
+    # -- v5.0 analysis commands ----------------------------------------------------
+
+    p_report = sub.add_parser(
+        'report', help='self-contained HTML investigation report')
+    p_report.add_argument('kind', choices=KINDS, help='target type')
+    p_report.add_argument('target', help='target value')
+    p_report.add_argument('--format', choices=('html',), default='html',
+                          help='report format (html)')
+    p_report.add_argument('--output', metavar='FILE',
+                          help='write the report to FILE (default: report dir)')
+    p_report.add_argument('--no-color', action='store_true')
+
+    p_patterns = sub.add_parser(
+        'patterns', help='pattern-of-life analysis from stored history')
+    p_patterns.add_argument('kind', choices=KINDS, help='target type')
+    p_patterns.add_argument('target', help='target value')
+    add_common(p_patterns)
+
+    p_geo = sub.add_parser('geo', help='geographic profiling of stored history')
+    geo_sub = p_geo.add_subparsers(dest='action', metavar='<action>')
+    add_common(geo_sub.add_parser(
+        'profile', help='country breakdown + analyst summary'))
+    add_common(geo_sub.add_parser(
+        'clusters', help='geohash clusters of coordinate lookups'))
+    add_common(geo_sub.add_parser(
+        'regions', help='most frequently looked-up regions'))
+
+    p_alerts = sub.add_parser('alerts', help='webhook alert configuration')
+    alerts_sub = p_alerts.add_subparsers(dest='action', metavar='<action>')
+    add_common(alerts_sub.add_parser('show', help='config + recent events'))
+    p_alerts_set = alerts_sub.add_parser('set', help='configure the webhook')
+    p_alerts_set.add_argument('--url', metavar='URL', help='webhook URL')
+    p_alerts_set.add_argument('--events', metavar='LIST',
+                              help='comma-separated event list')
+    add_common(p_alerts_set)
+    add_common(alerts_sub.add_parser('test', help='send a test notification'))
+
     return parser
 
 
@@ -524,7 +687,7 @@ def _emit_result(args: argparse.Namespace, kind: str, result: Dict[str, Any],
     elif fmt == 'csv':
         _emit(_csv_from_result(kind, result), args.output)
     elif fmt in ('markdown', 'html'):
-        sections = sections_for(kind, result)
+        sections = _sections_for_kind(kind, result)
         sections.extend(_extra_sections(result))
         generator = ReportGenerator()
         data = {'sections': sections}
@@ -532,9 +695,61 @@ def _emit_result(args: argparse.Namespace, kind: str, result: Dict[str, Any],
                 else generator.render_html(data, title))
         _emit(text, args.output)
     else:
-        sections = sections_for(kind, result)
+        sections = _sections_for_kind(kind, result)
         sections.extend(_extra_sections(result))
         _emit(_render_sections_text(sections), args.output)
+
+
+def _sections_for_kind(kind: str, result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Reporting sections for a result, with a generic v5.0 fallback.
+
+    Kinds that have no dedicated builder in ``reporting.sections`` (the
+    v5.0 mac/iban/imei/coords kinds until they land there) are rendered
+    through a provenance-aware generic layout instead.
+    """
+    sections = sections_for(kind, result)
+    return sections if sections else _generic_sections(kind, result)
+
+
+def _generic_sections(kind: str, result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Provenance-aware fallback sections for kinds without a builder."""
+    sections: List[Dict[str, Any]] = []
+    info = result.get('info') or {}
+    rows = rows_from_fields(info)
+    if rows:
+        sections.append({'title': f'{kind.upper()} FIELDS', 'type': 'table',
+                         'columns': ['Field', 'Value'], 'rows': rows})
+
+    provenance = result.get('field_sources') or {}
+    if provenance:
+        prov_rows = [[_label(field), ', '.join(str(s) for s in sources)]
+                     for field, sources in sorted(provenance.items())]
+        sections.append({'title': 'FIELD SOURCES', 'type': 'table',
+                         'columns': ['Field', 'Source(s)'], 'rows': prov_rows})
+
+    ok_sources = list(result.get('sources_ok') or [])
+    failed = result.get('sources_failed') or {}
+    if isinstance(failed, dict):
+        failed_rows = [[name, str(err) or 'failed']
+                       for name, err in failed.items()]
+    else:
+        failed_rows = [[name, 'failed'] for name in failed]
+    source_rows = [[name, 'OK'] for name in ok_sources] + failed_rows
+    if source_rows:
+        sections.append({'title': 'SOURCES QUERIED', 'type': 'table',
+                         'columns': ['Source', 'Status'], 'rows': source_rows})
+    return sections
+
+
+def _emit_tools(args: argparse.Namespace, payload: Dict[str, Any],
+                sections: List[Dict[str, Any]]) -> None:
+    """Emit a toolbox result: JSON to stdout/file or rendered sections."""
+    fmt = getattr(args, 'format', None) or 'table'
+    if fmt == 'json':
+        _emit(json.dumps(payload, indent=2, ensure_ascii=False, default=str),
+              getattr(args, 'output', None))
+    else:
+        _emit(_render_sections_text(sections), getattr(args, 'output', None))
 
 
 def _extra_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -671,6 +886,43 @@ def _cmd_asn(args: argparse.Namespace) -> int:
     return _run_lookup(args, 'asn', args.target, f"ASN Report - {args.target}")
 
 
+# ---------------------------------------------------------------------------
+# v5.0 kind handlers: mac / iban / imei / coords
+# ---------------------------------------------------------------------------
+
+def _cmd_mac(args: argparse.Namespace) -> int:
+    ok, error = validate_mac(args.target)
+    if not ok:
+        _err(error)
+        return 2
+    return _run_lookup(args, 'mac', args.target, f"MAC Report - {args.target}")
+
+
+def _cmd_iban(args: argparse.Namespace) -> int:
+    ok, error = validate_iban(args.target)
+    if not ok:
+        _err(error)
+        return 2
+    return _run_lookup(args, 'iban', args.target, f"IBAN Report - {args.target}")
+
+
+def _cmd_imei(args: argparse.Namespace) -> int:
+    ok, error = validate_imei(args.target)
+    if not ok:
+        _err(error)
+        return 2
+    return _run_lookup(args, 'imei', args.target, f"IMEI Report - {args.target}")
+
+
+def _cmd_coords(args: argparse.Namespace) -> int:
+    ok, error = validate_coords(args.target)
+    if not ok:
+        _err(error)
+        return 2
+    return _run_lookup(args, 'coords', args.target,
+                       f"Coordinates Report - {args.target}")
+
+
 def _cmd_batch(args: argparse.Namespace) -> int:
     path = Path(args.file)
     if not path.exists():
@@ -682,40 +934,88 @@ def _cmd_batch(args: argparse.Namespace) -> int:
         _err('no targets in file')
         return 2
 
-    validator = {
-        'ip': validate_ip, 'phone': validate_phone, 'username': validate_username,
-        'email': validate_email, 'domain': validate_domain,
-    }[args.kind]
-    invalid = [t for t in targets if not validator(t)[0]]
+    validator = _validator(args.kind)
+    invalid = [t for t in targets if validator and not validator(t)[0]]
     if invalid:
         _err(f"{len(invalid)} invalid target(s), e.g. {invalid[0]!r}")
         return 2
 
-    _info(f"Looking up {len(targets)} {args.kind} target(s)...")
-    tracker = _tracker(args.kind)
-    if args.kind == 'phone':
-        results = tracker.batch_track(targets, args.region, args.workers)
-    elif args.kind == 'username':
-        results = tracker.batch_track(targets)
-    else:
-        results = tracker.batch_track(targets, args.workers)
+    risk = getattr(args, 'risk', False)
+    advanced_batch = None
+    if risk:
+        # v5.0: the advanced engine adds per-result risk sections and a
+        # run summary. It is optional: the legacy tracker path below still
+        # covers plain batch runs unchanged.
+        try:
+            from .advanced import batch as advanced_batch
+        except ImportError as e:
+            advanced_batch = None
+            _info(f"advanced batch module unavailable ({e}); "
+                  f"using the legacy engine")
+
+    results = None
+    if advanced_batch is not None:
+        try:
+            payload = advanced_batch.run_batch(args.kind, targets, risk=True,
+                                               max_workers=args.workers)
+            results = payload.get('results', [])
+            summary = payload.get('summary') or {}
+            if summary:
+                _info("Batch summary: "
+                      + ', '.join(f"{k}={v}" for k, v in summary.items()))
+        except Exception as e:  # contract drift should never kill a batch run
+            results = None
+            _info(f"advanced batch engine failed ({type(e).__name__}: {e}); "
+                  f"using the legacy engine")
+
+    if results is None:
+        _info(f"Looking up {len(targets)} {args.kind} target(s)...")
+        tracker = _tracker(args.kind)
+        if args.kind == 'phone':
+            results = tracker.batch_track(targets, args.region, args.workers)
+        elif args.kind == 'username':
+            results = tracker.batch_track(targets)
+        else:
+            results = tracker.batch_track(targets, args.workers)
+        if risk:
+            try:
+                from .correlation import attach_risk
+                for result in results:
+                    attach_risk(args.kind, result)
+            except ImportError:
+                _info('risk scoring unavailable (correlation package missing)')
 
     fmt = args.format or 'table'
-    if fmt == 'json':
-        _emit(json.dumps(results, indent=2, ensure_ascii=False, default=str),
-              args.output)
-    elif fmt == 'csv':
-        _emit(_csv_from_batch(args.kind, results), args.output)
-    elif fmt in ('markdown', 'html'):
-        generator = ReportGenerator()
-        data = {'sections': batch_sections(args.kind, results)}
-        text = (generator.render_markdown(data, f"Batch {args.kind} report")
-                if fmt == 'markdown' else
-                generator.render_html(data, f"Batch {args.kind} report"))
-        _emit(text, args.output)
-    else:
-        _emit(_render_sections_text(batch_sections(args.kind, results)),
-              args.output)
+    emitted = False
+    if advanced_batch is not None and fmt in ('csv', 'json', 'markdown'):
+        try:
+            text = {
+                'csv': advanced_batch.to_csv,
+                'json': advanced_batch.to_json,
+                'markdown': advanced_batch.to_markdown,
+            }[fmt](results)
+            _emit(text, args.output)
+            emitted = True
+        except Exception as e:
+            _info(f"advanced batch formatter failed ({type(e).__name__}: {e}); "
+                  f"using the legacy renderer")
+
+    if not emitted:
+        if fmt == 'json':
+            _emit(json.dumps(results, indent=2, ensure_ascii=False, default=str),
+                  args.output)
+        elif fmt == 'csv':
+            _emit(_csv_from_batch(args.kind, results), args.output)
+        elif fmt in ('markdown', 'html'):
+            generator = ReportGenerator()
+            data = {'sections': batch_sections(args.kind, results)}
+            text = (generator.render_markdown(data, f"Batch {args.kind} report")
+                    if fmt == 'markdown' else
+                    generator.render_html(data, f"Batch {args.kind} report"))
+            _emit(text, args.output)
+        else:
+            _emit(_render_sections_text(batch_sections(args.kind, results)),
+                  args.output)
 
     successes = sum(1 for r in results if r.get('success'))
     _info(f"{successes}/{len(results)} succeeded")
@@ -804,12 +1104,16 @@ def _cmd_sources(args: argparse.Namespace) -> int:
         return _cmd_sources_health(args)
 
     from .trackers.asn_sources import SOURCE_CATALOG as ASN_CATALOG
+    from .trackers.coords_sources import SOURCE_CATALOG as COORDS_CATALOG
     from .trackers.crypto_sources import SOURCE_CATALOG as CRYPTO_CATALOG
     from .trackers.cve_sources import SOURCE_CATALOG as CVE_CATALOG
     from .trackers.domain_sources import SOURCE_CATALOG as DOMAIN_CATALOG
     from .trackers.email_sources import SOURCE_CATALOG as EMAIL_CATALOG
     from .trackers.hash_sources import SOURCE_CATALOG as HASH_CATALOG
+    from .trackers.iban_sources import SOURCE_CATALOG as IBAN_CATALOG
+    from .trackers.imei_sources import SOURCE_CATALOG as IMEI_CATALOG
     from .trackers.ip_sources import SOURCE_CATALOG as IP_CATALOG
+    from .trackers.mac_sources import SOURCE_CATALOG as MAC_CATALOG
     from .trackers.url_sources import SOURCE_CATALOG as URL_CATALOG
 
     catalogs: Dict[str, Dict[str, str]] = {
@@ -821,6 +1125,11 @@ def _cmd_sources(args: argparse.Namespace) -> int:
         'hash': HASH_CATALOG,
         'cve': CVE_CATALOG,
         'asn': ASN_CATALOG,
+        # v5.0 kinds
+        'mac': MAC_CATALOG,
+        'iban': IBAN_CATALOG,
+        'imei': IMEI_CATALOG,
+        'coords': COORDS_CATALOG,
     }
     if args.kind and args.kind in catalogs:
         catalogs = {args.kind: catalogs[args.kind]}
@@ -1153,8 +1462,39 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     except ImportError as e:
         _err(str(e))
         return 2
+    open_browser = getattr(args, 'open_browser', None)
+    if open_browser is None:
+        open_browser = sys.stdin.isatty() and sys.stdout.isatty()
+    if open_browser:
+        _schedule_browser_open(args.host, args.port)
     serve(host=args.host, port=args.port, reload=args.reload)
     return 0
+
+
+def _schedule_browser_open(host: str, port: int, delay: float = 1.2) -> None:
+    """Open the web UI in the default browser shortly after startup.
+
+    The server prints its startup banner and binds its socket inside
+    ``serve()``; a short daemon timer lands the browser right after that
+    message without blocking or crashing on headless machines.
+    """
+    import threading
+
+    url_host = '127.0.0.1' if host in ('0.0.0.0', '::', '') else host
+
+    def _open() -> None:
+        try:
+            import webbrowser
+            webbrowser.open(f'http://{url_host}:{port}')
+        except Exception:  # browser launch is best-effort, never fatal
+            _info('could not open a browser automatically')
+
+    try:
+        timer = threading.Timer(delay, _open)
+        timer.daemon = True
+        timer.start()
+    except Exception:
+        pass  # never let a timer failure block the server
 
 
 def _cmd_tui(args: argparse.Namespace) -> int:
@@ -1179,13 +1519,7 @@ def _cmd_mcp(args: argparse.Namespace) -> int:
 def _cmd_risk(args: argparse.Namespace) -> int:
     from .correlation import risk_sections, score
 
-    validator = {
-        'ip': validate_ip, 'phone': validate_phone,
-        'username': validate_username, 'email': validate_email,
-        'domain': validate_domain, 'url': validate_url,
-        'crypto': validate_crypto_address, 'hash': validate_hash,
-        'cve': validate_cve, 'asn': validate_asn,
-    }.get(args.kind)
+    validator = _validator(args.kind)
     if validator:
         ok, error = validator(args.target)
         if not ok:
@@ -1770,13 +2104,7 @@ def _cmd_experimental(args: argparse.Namespace) -> int:
             if kind is None:
                 _err(f"cannot determine target type: {target!r}")
                 return 2
-        validator = {
-            'ip': validate_ip, 'phone': validate_phone,
-            'username': validate_username, 'email': validate_email,
-            'domain': validate_domain, 'url': validate_url,
-            'crypto': validate_crypto_address, 'hash': validate_hash,
-            'cve': validate_cve, 'asn': validate_asn,
-        }.get(kind)
+        validator = _validator(kind)
         if validator:
             ok, error = validator(target)
             if not ok:
@@ -1870,6 +2198,764 @@ def _cmd_experimental(args: argparse.Namespace) -> int:
     return 2
 
 
+# ---------------------------------------------------------------------------
+# v5.0 handlers: analyst toolbox (`tools`)
+# ---------------------------------------------------------------------------
+
+def _cmd_tools(args: argparse.Namespace) -> int:
+    action = getattr(args, 'action', None)
+    handlers: Dict[str, Any] = {
+        'encode': _cmd_tools_encode,
+        'decode': _cmd_tools_decode,
+        'jwt': _cmd_tools_jwt,
+        'hash-id': _cmd_tools_hash_id,
+        'coords': _cmd_tools_coords,
+        'extract': _cmd_tools_extract,
+        'squat': _cmd_tools_squat,
+        'exif': _cmd_tools_exif,
+        'stego': _cmd_tools_stego,
+    }
+    handler = handlers.get(action)
+    if handler is None:
+        _err('usage: obscuralens tools encode|decode|jwt|hash-id|coords|'
+             'extract|squat|exif|stego')
+        return 2
+    return handler(args)
+
+
+def _cmd_tools_encode(args: argparse.Namespace) -> int:
+    """Encode text through one or every scheme, plus known digests."""
+    from .experimental.encoders import SCHEMES, encode_all, hash_all
+
+    scheme_name = (args.scheme or '').strip().lower()
+    if scheme_name:
+        scheme = SCHEMES.get(scheme_name)
+        if scheme is None:
+            _err(f"unknown scheme {args.scheme!r}; "
+                 f"available: {', '.join(SCHEMES)}")
+            return 2
+        try:
+            value = scheme['encode'](args.text)
+        except (ValueError, UnicodeError) as e:
+            _err(f"cannot encode with {scheme_name}: {e}")
+            return 1
+        payload: Dict[str, Any] = {
+            'text': args.text, 'scheme': scheme_name,
+            'label': scheme['label'], 'value': value,
+        }
+        sections = [{
+            'title': f"Encoded - {scheme['label']}", 'type': 'grid',
+            'data': {'input': args.text, 'scheme': scheme_name, 'value': value},
+        }]
+        _emit_tools(args, payload, sections)
+        return 0
+
+    encoded = encode_all(args.text)
+    digests = hash_all(args.text)
+    payload = {'text': args.text, 'encodings': encoded, 'digests': digests}
+    sections = [
+        {'title': 'Encodings', 'type': 'table',
+         'columns': ['Scheme', 'Value'],
+         'rows': [[name, value] for name, value in encoded.items()]},
+        {'title': 'Digests', 'type': 'table',
+         'columns': ['Hash', 'Value'],
+         'rows': [[name, value] for name, value in digests.items()]},
+    ]
+    _emit_tools(args, payload, sections)
+    return 0
+
+
+def _cmd_tools_decode(args: argparse.Namespace) -> int:
+    """Decode a value with one scheme, or rank every scheme (--all)."""
+    from .experimental.encoders import SCHEMES, decode_auto
+
+    if args.all or not args.scheme:
+        candidates = decode_auto(args.value)
+        payload: Dict[str, Any] = {'value': args.value, 'candidates': candidates}
+        sections = [{
+            'title': 'Decode Candidates (best first)', 'type': 'table',
+            'columns': ['Scheme', 'Score', 'Result', 'Note'],
+            'rows': [[c.get('scheme', ''), c.get('score', ''),
+                      c.get('result', ''), c.get('note', '')]
+                     for c in candidates],
+        }]
+        if not candidates:
+            sections.append({
+                'title': 'No Readable Decode', 'type': 'text',
+                'content': 'No scheme produced printable output for this value.'})
+        _emit_tools(args, payload, sections)
+        return 0
+
+    scheme_name = args.scheme.strip().lower()
+    scheme = SCHEMES.get(scheme_name)
+    if scheme is None:
+        _err(f"unknown scheme {args.scheme!r}; "
+             f"available: {', '.join(SCHEMES)}")
+        return 2
+    try:
+        decoded = scheme['decode'](args.value)
+    except (ValueError, UnicodeError) as e:
+        _err(f"cannot decode with {scheme_name}: {e}")
+        return 1
+    payload = {'value': args.value, 'scheme': scheme_name, 'decoded': decoded}
+    sections = [{
+        'title': f"Decoded - {scheme['label']}", 'type': 'grid',
+        'data': {'input': args.value, 'scheme': scheme_name, 'decoded': decoded},
+    }]
+    _emit_tools(args, payload, sections)
+    return 0
+
+
+def _cmd_tools_jwt(args: argparse.Namespace) -> int:
+    """Inspect a JWT: header, payload, claims, key hints and warnings."""
+    from .experimental.jwt_tools import inspect_jwt
+
+    inspected = inspect_jwt(args.token)
+    if inspected.get('error'):
+        _err(f"invalid JWT: {inspected['error']}")
+        return 1
+
+    header = inspected.get('header') or {}
+    payload_claims = inspected.get('payload') or {}
+    claims = inspected.get('claims') or {}
+    identifiers = inspected.get('identifiers') or {}
+    key_info = inspected.get('key_info') or {}
+    token_stats = inspected.get('token_stats') or {}
+    alg = inspected.get('alg') or {}
+
+    sections: List[Dict[str, Any]] = [
+        {'title': 'Header', 'type': 'table', 'columns': ['Claim', 'Value'],
+         'rows': [[key, value] for key, value in header.items()]},
+        {'title': 'Payload', 'type': 'table', 'columns': ['Claim', 'Value'],
+         'rows': [[key, value] for key, value in payload_claims.items()]},
+    ]
+
+    claim_rows = []
+    for name in ('iat', 'nbf', 'exp'):
+        summary = claims.get(name) or {}
+        expired = summary.get('expired')
+        state = ''
+        if expired is True:
+            state = 'expired'
+        elif expired is False:
+            state = 'valid'
+        claim_rows.append([name.upper(), summary.get('raw', ''),
+                           summary.get('datetime') or '', state])
+    sections.append({'title': 'Time Claims', 'type': 'table',
+                     'columns': ['Claim', 'Raw', 'Datetime (UTC)', 'Status'],
+                     'rows': claim_rows})
+
+    summary_grid: Dict[str, Any] = {}
+    for key in ('iss', 'sub', 'aud', 'jti'):
+        if identifiers.get(key):
+            summary_grid[key] = identifiers[key]
+    if alg:
+        summary_grid['alg'] = alg.get('value')
+        summary_grid['alg family'] = alg.get('family')
+    for key in ('kid', 'jku', 'x5u'):
+        if key_info.get(key):
+            summary_grid[f'header {key}'] = key_info[key]
+    if key_info.get('x5c_present'):
+        summary_grid['x5c chain'] = f"{key_info.get('x5c_count', 0)} certificate(s)"
+    for key in ('total_length', 'header_length', 'payload_length',
+                'signature_length'):
+        if token_stats.get(key) is not None:
+            summary_grid[key.replace('_', ' ')] = token_stats[key]
+    if summary_grid:
+        sections.append({'title': 'Token Summary', 'type': 'grid',
+                         'data': summary_grid})
+
+    notes = inspected.get('notes') or []
+    if notes:
+        sections.append({'title': 'Notes & Warnings', 'type': 'text',
+                         'content': '\n'.join(f'- {note}' for note in notes)})
+    _emit_tools(args, inspected, sections)
+    return 0
+
+
+def _cmd_tools_hash_id(args: argparse.Namespace) -> int:
+    """Identify the likely format(s) of a hash-like string."""
+    from .experimental.hash_identify import identify_hash
+
+    if not (args.hash or '').strip():
+        _err('hash value cannot be empty')
+        return 2
+    candidates = identify_hash(args.hash)
+    payload = {'hash': args.hash, 'candidates': candidates}
+    sections = [{
+        'title': 'Hash Candidates', 'type': 'table',
+        'columns': ['Name', 'Confidence', 'Bytes', 'Note'],
+        'rows': [[c.get('name', ''), c.get('confidence', ''),
+                  c.get('length', ''), c.get('note', '')]
+                 for c in candidates],
+    }]
+    if not candidates:
+        sections.append({'title': 'No Candidates', 'type': 'text',
+                         'content': 'No candidate matched this value.'})
+    _emit_tools(args, payload, sections)
+    return 0
+
+
+def _cmd_tools_coords(args: argparse.Namespace) -> int:
+    """Parse coordinates and convert them to every supported format."""
+    from .utils.coordinate_math import (
+        latlon_to_ddm,
+        latlon_to_dms,
+        latlon_to_geohash,
+        latlon_to_maidenhead,
+        latlon_to_mgrs,
+        latlon_to_utm,
+    )
+    from .utils.validators import parse_coords
+
+    parsed = parse_coords(args.value)
+    if parsed is None:
+        _err(f"unrecognised coordinate format: {args.value!r}")
+        return 2
+    lat, lon = parsed
+
+    def safe(label: str, func: Any, *func_args: Any) -> List[str]:
+        try:
+            return [label, str(func(*func_args))]
+        except (ValueError, TypeError, OverflowError):
+            return [label, 'out of range']
+
+    utm = latlon_to_utm(lat, lon)
+    rows = [
+        ['Input', args.value],
+        ['Decimal degrees', f"{lat:.6f}, {lon:.6f}"],
+        safe('DMS latitude', latlon_to_dms, lat, 'lat'),
+        safe('DMS longitude', latlon_to_dms, lon, 'lon'),
+        safe('Degrees decimal minutes', latlon_to_ddm, lat, lon),
+        ['UTM', f"{utm[0]}{utm[1]} {utm[2]:.0f} {utm[3]:.0f}"],
+        safe('MGRS', latlon_to_mgrs, lat, lon),
+        safe('Geohash', latlon_to_geohash, lat, lon),
+        safe('Maidenhead', latlon_to_maidenhead, lat, lon),
+    ]
+    payload = {'input': args.value, 'latitude': lat, 'longitude': lon,
+               'formats': {row[0]: row[1] for row in rows}}
+    sections = [{'title': 'Coordinate Formats', 'type': 'table',
+                 'columns': ['Format', 'Value'], 'rows': rows}]
+    _emit_tools(args, payload, sections)
+    return 0
+
+
+def _cmd_tools_extract(args: argparse.Namespace) -> int:
+    """Extract OSINT pivot entities from text, a file or stdin."""
+    from .experimental.entity_extract import extract_entities, summarize_entities
+
+    if args.stdin:
+        text = sys.stdin.read()
+    elif args.file:
+        path = Path(args.file)
+        if not path.exists():
+            _err(f"file not found: {path}")
+            return 2
+        text = path.read_text(encoding='utf-8', errors='replace')
+    else:
+        text = args.text or ''
+    if not text.strip():
+        _err('no text to scan (pass TEXT, --file PATH or --stdin)')
+        return 2
+
+    found = extract_entities(text)
+    summary = summarize_entities(found)
+    payload = {'summary': summary, 'entities': found}
+    sections = [{
+        'title': 'Entity Counts', 'type': 'table',
+        'columns': ['Kind', 'Count'],
+        'rows': [[kind, count] for kind, count in summary.items()],
+    }]
+    for kind, values in found.items():
+        if values:
+            sections.append({
+                'title': f"{kind} ({len(values)})", 'type': 'table',
+                'columns': ['Value'], 'rows': [[value] for value in values]})
+    _emit_tools(args, payload, sections)
+    return 0
+
+
+def _cmd_tools_squat(args: argparse.Namespace) -> int:
+    """Generate and risk-score typosquat variants of a domain."""
+    from .experimental.squatting import generate_variants, score_variants
+
+    variants = generate_variants(args.domain)
+    if not variants:
+        _err(f"cannot parse domain: {args.domain!r}")
+        return 2
+    scored = score_variants(variants, args.domain)
+
+    min_risk = args.min_risk if args.min_risk is not None else 0
+    category = (args.category or '').strip().lower()
+    shown = [v for v in scored
+             if int(v.get('risk', 0)) >= min_risk
+             and (not category or str(v.get('category', '')).lower() == category)]
+
+    payload = {'domain': args.domain, 'total_variants': len(scored),
+               'shown': len(shown), 'min_risk': min_risk,
+               'category': category or None, 'variants': shown}
+    sections = [
+        {'title': f"Squatting Variants - {args.domain}", 'type': 'grid',
+         'data': {'domain': args.domain,
+                  'variants generated': len(scored),
+                  'shown': len(shown)}},
+        {'title': 'Variants (risk descending)', 'type': 'table',
+         'columns': ['Domain', 'Category', 'Risk', 'Description'],
+         'rows': [[v.get('domain', ''), v.get('category', ''),
+                   v.get('risk', ''), v.get('description', '')] for v in shown]},
+    ]
+    if not shown:
+        sections.append({'title': 'No Variants', 'type': 'text',
+                         'content': 'No variant matched the given filters.'})
+    _emit_tools(args, payload, sections)
+    return 0
+
+
+def _cmd_tools_exif(args: argparse.Namespace) -> int:
+    """Local-only EXIF / metadata triage for an image file."""
+    from .experimental.exif_reader import analyze
+
+    path = Path(args.path)
+    if not path.exists():
+        _err(f"file not found: {path}")
+        return 2
+    _info(f"Analyzing {path} ...")
+    report = analyze(str(path))
+    if report.get('error') and not report.get('file'):
+        _err(f"cannot read file: {report['error']}")
+        return 1
+
+    sections: List[Dict[str, Any]] = []
+    file_facts = report.get('file') or {}
+    if file_facts:
+        sections.append({'title': 'File', 'type': 'table',
+                         'columns': ['Field', 'Value'],
+                         'rows': rows_from_fields(file_facts)})
+    exif = report.get('exif') or {}
+    if exif:
+        sections.append({'title': 'EXIF Metadata', 'type': 'table',
+                         'columns': ['Field', 'Value'],
+                         'rows': rows_from_fields(exif)})
+    gps = report.get('gps') or {}
+    if gps:
+        sections.append({'title': 'GPS', 'type': 'table',
+                         'columns': ['Field', 'Value'],
+                         'rows': rows_from_fields(gps)})
+    timeline = report.get('timeline') or []
+    if timeline:
+        sections.append({'title': 'Timeline Hints', 'type': 'table',
+                         'columns': ['When (ISO 8601)'],
+                         'rows': [[stamp] for stamp in timeline]})
+    notes = report.get('osint_notes') or []
+    if notes:
+        sections.append({'title': 'OSINT Notes', 'type': 'text',
+                         'content': '\n'.join(f'- {note}' for note in notes)})
+    strings = report.get('strings') or []
+    if strings:
+        sections.append({
+            'title': f"Interesting Strings (first {min(30, len(strings))})",
+            'type': 'table', 'columns': ['Offset', 'Encoding', 'Value'],
+            'rows': [[s.get('offset', ''), s.get('encoding', ''),
+                      s.get('value', '')] for s in strings[:30]]})
+    if report.get('error'):
+        sections.append({'title': 'Parser Notes', 'type': 'text',
+                         'content': str(report['error'])})
+    if len(sections) <= 1:
+        sections.append({'title': 'No Metadata', 'type': 'text',
+                         'content': 'No EXIF/GPS metadata found in this image.'})
+    _emit_tools(args, report, sections)
+    return 0
+
+
+def _cmd_tools_stego(args: argparse.Namespace) -> int:
+    """Local-only steganography triage for an image file."""
+    from .experimental.steganography import analyze as stego_analyze
+
+    path = Path(args.path)
+    if not path.exists():
+        _err(f"file not found: {path}")
+        return 2
+    _info(f"Analyzing {path} ...")
+    report = stego_analyze(str(path))
+    if report.get('error') and 'lsb' not in report:
+        _err(f"cannot read file: {report['error']}")
+        return 1
+
+    summary = report.get('summary') or {}
+    sections: List[Dict[str, Any]] = [{
+        'title': 'Steganography Verdict', 'type': 'grid',
+        'data': {'format': report.get('format', ''),
+                 'verdict': summary.get('verdict', ''),
+                 'suspicion': summary.get('suspicion', 0)},
+    }]
+    findings = summary.get('findings') or []
+    if findings:
+        sections.append({'title': f"Findings ({len(findings)})", 'type': 'text',
+                         'content': '\n'.join(f'- {item}' for item in findings)})
+    entropy = report.get('entropy') or {}
+    if entropy:
+        sections.append({'title': 'Entropy', 'type': 'grid',
+                         'data': {'overall (bits/byte)':
+                                  entropy.get('overall_entropy_bits', ''),
+                                  'sampled bytes':
+                                  entropy.get('sampled_bytes', '')}})
+        regions = entropy.get('high_entropy_regions') or []
+        if regions:
+            sections.append({
+                'title': 'High-Entropy Regions', 'type': 'table',
+                'columns': ['From', 'To', 'Mean entropy'],
+                'rows': [[r.get('offset_from', ''), r.get('offset_to', ''),
+                          r.get('mean_entropy', '')] for r in regions]})
+    embedded = report.get('embedded_files') or {}
+    carved = embedded.get('findings') or []
+    if carved:
+        sections.append({
+            'title': f"Embedded Files ({len(carved)})", 'type': 'table',
+            'columns': ['Type', 'Offset', 'Details'],
+            'rows': [[c.get('type', ''), c.get('offset', ''),
+                      c.get('details', '')] for c in carved]})
+    strings = report.get('strings') or []
+    if strings:
+        sections.append({'title': 'Strings (lite)', 'type': 'text',
+                         'content': '\n'.join(str(s) for s in strings[:10])})
+    _emit_tools(args, report, sections)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# v5.0 handlers: report / patterns / geo / alerts
+# ---------------------------------------------------------------------------
+
+def _cmd_report(args: argparse.Namespace) -> int:
+    """Build and save a self-contained HTML investigation report."""
+    try:
+        from .advanced import report_builder
+    except ImportError as e:
+        _err(f"report builder unavailable: {e}")
+        return 1
+
+    _info(f"Building {args.kind} report for {args.target} ...")
+    try:
+        html = report_builder.build_report(args.kind, args.target)
+        path = args.output or report_builder.report_path(args.kind, args.target)
+        report_builder.save_report(path, html)
+    except Exception as e:
+        _err(f"report build failed: {type(e).__name__}: {e}")
+        return 1
+    _emit(str(path), None)
+    return 0
+
+
+_WEEKDAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
+
+
+def _as_int(value: Any) -> int:
+    """Best-effort int conversion (0 when not numeric)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _ascii_bar(count: int, max_count: int, width: int = 40) -> str:
+    """ASCII bar in the repo's style (filled blocks + light shade)."""
+    if max_count <= 0:
+        return ''
+    filled = int(round(width * float(count) / float(max_count)))
+    filled = max(0, min(width, filled))
+    return '█' * filled + '░' * (width - filled)
+
+
+def _hour_counts(histogram: Any) -> List[List[Any]]:
+    """Normalise an hour histogram (dict or 24-slot list) into rows."""
+    pairs: List[List[Any]] = []
+    if isinstance(histogram, dict):
+        by_hour: Dict[int, int] = {}
+        for key, value in histogram.items():
+            try:
+                by_hour[int(str(key).strip())] = _as_int(value)
+            except (TypeError, ValueError):
+                continue
+        pairs = [[f'{hour:02d}', by_hour.get(hour, 0)] for hour in range(24)]
+    elif isinstance(histogram, (list, tuple)):
+        for hour in range(min(24, len(histogram))):
+            pairs.append([f'{hour:02d}', _as_int(histogram[hour])])
+    return pairs
+
+
+def _weekday_counts(histogram: Any) -> List[List[Any]]:
+    """Normalise a weekday histogram (dict or 7-slot list) into rows."""
+    names = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday',
+             'saturday', 'sunday')
+    pairs: List[List[Any]] = []
+    if isinstance(histogram, dict):
+        lowered = {str(key).strip().lower(): _as_int(value)
+                   for key, value in histogram.items()}
+        for index in range(7):
+            value = None
+            for candidate in (names[index], _WEEKDAYS[index].lower(),
+                              str(index), str(index + 1)):
+                if candidate in lowered:
+                    value = lowered[candidate]
+                    break
+            pairs.append([_WEEKDAYS[index], _as_int(value)])
+    elif isinstance(histogram, (list, tuple)):
+        for index in range(min(7, len(histogram))):
+            pairs.append([_WEEKDAYS[index], _as_int(histogram[index])])
+    return pairs
+
+
+def _pattern_sections(report: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Render a pattern-of-life report as sections (v5.0)."""
+    sections: List[Dict[str, Any]] = []
+
+    cadence = report.get('cadence')
+    if isinstance(cadence, dict) and cadence:
+        sections.append({'title': 'Cadence', 'type': 'grid', 'data': cadence})
+
+    hours = _hour_counts(report.get('hour_histogram'))
+    if hours:
+        peak = max((count for _, count in hours), default=0)
+        sections.append({'title': 'Hour Of Day', 'type': 'table',
+                         'columns': ['Hour', 'Lookups', 'Distribution'],
+                         'rows': [[name, count, _ascii_bar(count, peak)]
+                                  for name, count in hours]})
+
+    weekdays = _weekday_counts(report.get('weekday_histogram'))
+    if weekdays:
+        peak = max((count for _, count in weekdays), default=0)
+        sections.append({'title': 'Day Of Week', 'type': 'table',
+                         'columns': ['Day', 'Lookups', 'Distribution'],
+                         'rows': [[name, count, _ascii_bar(count, peak)]
+                                  for name, count in weekdays]})
+
+    matrix = report.get('activity_matrix')
+    if isinstance(matrix, dict) and matrix:
+        rows = []
+        for day, counts in matrix.items():
+            if isinstance(counts, dict):
+                by_hour = {}
+                for key, value in counts.items():
+                    try:
+                        by_hour[int(str(key).strip())] = _as_int(value)
+                    except (TypeError, ValueError):
+                        continue
+                text = ' '.join(f"{by_hour.get(hour, 0):2d}"
+                                for hour in range(24))
+            elif isinstance(counts, (list, tuple)):
+                text = ' '.join(f"{_as_int(value):2d}" for value in counts[:24])
+            else:
+                continue
+            rows.append([str(day), text])
+        if rows:
+            sections.append({'title': 'Activity Matrix (lookups per hour)',
+                             'type': 'table', 'columns': ['Day', 'Hours 00-23'],
+                             'rows': rows})
+
+    bursts = report.get('bursts')
+    if isinstance(bursts, (list, tuple)) and bursts \
+            and isinstance(bursts[0], dict):
+        columns = [str(key) for key in bursts[0]]
+        sections.append({'title': f"Bursts ({len(bursts)})", 'type': 'table',
+                         'columns': columns,
+                         'rows': [[item.get(column, '') for column in columns]
+                                  for item in bursts
+                                  if isinstance(item, dict)]})
+
+    peak_window = report.get('peak_window')
+    if isinstance(peak_window, dict) and peak_window:
+        sections.append({'title': 'Peak Window', 'type': 'grid',
+                         'data': peak_window})
+
+    verdict = report.get('verdict')
+    if verdict:
+        lines = verdict if isinstance(verdict, (list, tuple)) else [verdict]
+        sections.append({'title': 'Verdict', 'type': 'text',
+                         'content': '\n'.join(f'- {line}' for line in lines
+                                              if line)})
+    return sections
+
+
+def _cmd_patterns(args: argparse.Namespace) -> int:
+    """Pattern-of-life analysis for one target from stored history."""
+    try:
+        from .advanced import patterns
+    except ImportError as e:
+        _err(f"pattern analysis unavailable: {e}")
+        return 1
+
+    _info(f"Analysing stored activity for {args.target} ...")
+    try:
+        report = patterns.pattern_report(args.kind, args.target)
+    except Exception as e:
+        _err(f"pattern analysis failed: {type(e).__name__}: {e}")
+        return 1
+    if not report:
+        _err('no stored lookups for this target - run a lookup first')
+        return 1
+
+    if (args.format or 'table') == 'json':
+        _emit(json.dumps(report, indent=2, ensure_ascii=False, default=str),
+              args.output)
+        return 0
+    sections = _pattern_sections(report)
+    if not sections:
+        sections = [{'title': 'Pattern Report', 'type': 'grid',
+                     'data': {'kind': args.kind, 'target': args.target}}]
+    _emit(_render_sections_text(sections), args.output)
+    return 0
+
+
+def _cmd_geo(args: argparse.Namespace) -> int:
+    """Geographic profiling of the stored lookup history."""
+    action = getattr(args, 'action', None)
+    if action is None:
+        _err('usage: obscuralens geo profile|clusters|regions')
+        return 2
+    try:
+        from .advanced import geospatial
+    except ImportError as e:
+        _err(f"geospatial module unavailable: {e}")
+        return 1
+
+    fmt = args.format or 'table'
+
+    if action == 'profile':
+        breakdown = geospatial.country_breakdown()
+        summary = geospatial.geo_profile_summary()
+        payload = {'summary': summary, 'countries': breakdown}
+        if fmt == 'json':
+            _emit(json.dumps(payload, indent=2, ensure_ascii=False,
+                             default=str), args.output)
+            return 0
+        top_country = summary.get('top_country') or {}
+        top_region = summary.get('top_region') or {}
+        sections = [
+            {'title': 'Geo Profile Summary', 'type': 'grid', 'data': {
+                'distinct countries': summary.get('distinct_countries', 0),
+                'top country': top_country.get('country', '(none)'),
+                'top region': top_region.get('region', '(none)'),
+                'coords lookups': summary.get('coords_lookups', 0),
+                'geohash clusters': summary.get('geohash_clusters', 0),
+                'history span (days)': summary.get('span_days') or 0,
+                'records scanned': breakdown.get('total_records', 0),
+                'geo-tagged records': breakdown.get('total_geo_tagged', 0),
+            }},
+        ]
+        countries = breakdown.get('countries') or []
+        rows = [[c.get('country', ''), c.get('code') or '-', c.get('count', 0),
+                 ', '.join(c.get('targets') or [])] for c in countries]
+        sections.append({'title': 'Countries', 'type': 'table',
+                         'columns': ['Country', 'Code', 'Lookups', 'Targets'],
+                         'rows': rows or [['(none)', '-', 0, '']]})
+        _emit(_render_sections_text(sections), args.output)
+        return 0
+
+    if action == 'clusters':
+        clusters = geospatial.geohash_clusters()
+        payload = {'clusters': clusters}
+        if fmt == 'json':
+            _emit(json.dumps(payload, indent=2, ensure_ascii=False,
+                             default=str), args.output)
+            return 0
+        rows = [[c.get('geohash', ''), c.get('count', 0),
+                 ', '.join(str(v) for v in c.get('center') or []),
+                 ', '.join(c.get('targets') or [])] for c in clusters]
+        sections = [{'title': 'Geohash Clusters', 'type': 'table',
+                     'columns': ['Geohash', 'Lookups', 'Center (lat, lon)',
+                                 'Targets'],
+                     'rows': rows or [['(none)', 0, '', '']]}]
+        _emit(_render_sections_text(sections), args.output)
+        return 0
+
+    if action == 'regions':
+        regions = geospatial.most_looked_up_regions()
+        payload = {'regions': regions}
+        if fmt == 'json':
+            _emit(json.dumps(payload, indent=2, ensure_ascii=False,
+                             default=str), args.output)
+            return 0
+        rows = [[r.get('region', ''), r.get('country') or '-', r.get('count', 0),
+                 ', '.join(r.get('targets') or [])] for r in regions]
+        sections = [{'title': 'Most Looked-Up Regions', 'type': 'table',
+                     'columns': ['Region', 'Country', 'Lookups', 'Targets'],
+                     'rows': rows or [['(none)', '-', 0, '']]}]
+        _emit(_render_sections_text(sections), args.output)
+        return 0
+
+    return 2
+
+
+def _cmd_alerts(args: argparse.Namespace) -> int:
+    """Webhook alert configuration (show / set / test)."""
+    action = getattr(args, 'action', None)
+    if action is None:
+        _err('usage: obscuralens alerts show|set|test')
+        return 2
+    try:
+        from .advanced import alerts
+    except ImportError as e:
+        _err(f"alerts module unavailable: {e}")
+        return 1
+
+    fmt = args.format or 'table'
+
+    if action == 'show':
+        cfg = alerts.get_config()
+        recent = alerts.recent()
+        payload = {'config': cfg, 'recent': recent}
+        if fmt == 'json':
+            _emit(json.dumps(payload, indent=2, ensure_ascii=False,
+                             default=str), args.output)
+            return 0
+        sections = [{'title': 'Alert Configuration', 'type': 'grid',
+                     'data': cfg if isinstance(cfg, dict)
+                     else {'config': str(cfg)}}]
+        if isinstance(recent, (list, tuple)) and recent:
+            rows = [[item] for item in recent]
+            sections.append({'title': f"Recent Events ({len(recent)})",
+                             'type': 'table', 'columns': ['Event'], 'rows': rows})
+        elif isinstance(recent, dict) and recent:
+            sections.append({'title': 'Recent Events', 'type': 'grid',
+                             'data': recent})
+        else:
+            sections.append({'title': 'Recent Events', 'type': 'text',
+                             'content': 'No notifications recorded yet.'})
+        _emit(_render_sections_text(sections), args.output)
+        return 0
+
+    if action == 'set':
+        if not args.url:
+            _err('--url is required (obscuralens alerts set --url URL)')
+            return 2
+        events = [e.strip() for e in (args.events or '').split(',')
+                  if e.strip()]
+        try:
+            try:
+                result = alerts.configure(args.url, events=events or None)
+            except TypeError:
+                result = alerts.configure(args.url, events or None)
+        except Exception as e:
+            _err(f"alert configuration failed: {type(e).__name__}: {e}")
+            return 1
+        _emit(str(result), args.output)
+        return 0
+
+    if action == 'test':
+        try:
+            result = alerts.test()
+        except Exception as e:
+            _err(f"test notification failed: {type(e).__name__}: {e}")
+            return 1
+        if isinstance(result, dict) and result.get('error'):
+            _err(f"test notification failed: {result['error']}")
+            return 1
+        _emit(str(result), args.output)
+        return 0
+
+    return 2
+
+
 _HANDLERS = {
     'ip': _cmd_ip,
     'phone': _cmd_phone,
@@ -1881,6 +2967,11 @@ _HANDLERS = {
     'hash': _cmd_hash,
     'cve': _cmd_cve,
     'asn': _cmd_asn,
+    # v5.0 kinds
+    'mac': _cmd_mac,
+    'iban': _cmd_iban,
+    'imei': _cmd_imei,
+    'coords': _cmd_coords,
     'batch': _cmd_batch,
     'history': _cmd_history,
     'stats': _cmd_stats,
@@ -1904,6 +2995,12 @@ _HANDLERS = {
     'pipeline': _cmd_pipeline,
     'intel': _cmd_intel,
     'experimental': _cmd_experimental,
+    # v5.0 commands
+    'tools': _cmd_tools,
+    'report': _cmd_report,
+    'patterns': _cmd_patterns,
+    'geo': _cmd_geo,
+    'alerts': _cmd_alerts,
 }
 
 

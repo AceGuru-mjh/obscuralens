@@ -14,6 +14,12 @@ TOOL_NAMES = {
     # v4.0 tools
     'url_lookup', 'crypto_lookup', 'hash_lookup', 'cve_lookup', 'asn_lookup',
     'risk_report', 'correlate', 'timeline', 'threat_intel', 'source_health',
+    # v5.0 tools
+    'mac_lookup', 'iban_lookup', 'imei_lookup', 'coords_lookup',
+    'tools_encode', 'tools_decode', 'tools_jwt', 'tools_hash_id',
+    'tools_extract', 'tools_squat', 'tools_exif', 'tools_stego',
+    'tools_coords_convert', 'tools_geo_profile', 'tools_patterns',
+    'tools_batch',
 }
 
 
@@ -48,7 +54,14 @@ def test_tools_list_contains_all_tools_with_valid_schemas():
     tools = response['result']['tools']
     assert {tool['name'] for tool in tools} == TOOL_NAMES
     no_target_required = ('watch_list', 'watch_check', 'correlate', 'timeline',
-                          'threat_intel', 'source_health', 'risk_report')
+                          'threat_intel', 'source_health', 'risk_report',
+                          # v5.0 tools take mac/iban/... instead of target
+                          'mac_lookup', 'iban_lookup', 'imei_lookup',
+                          'coords_lookup', 'tools_encode', 'tools_decode',
+                          'tools_jwt', 'tools_hash_id', 'tools_extract',
+                          'tools_squat', 'tools_exif', 'tools_stego',
+                          'tools_coords_convert', 'tools_geo_profile',
+                          'tools_patterns', 'tools_batch')
     for tool in tools:
         assert isinstance(tool['description'], str) and tool['description']
         schema = tool['inputSchema']
@@ -163,4 +176,4 @@ def test_main_end_to_end(monkeypatch):
     assert len(out_lines) == 2
     first, second = json.loads(out_lines[0]), json.loads(out_lines[1])
     assert first['result']['serverInfo']['name'] == 'obscuralens'
-    assert len(second['result']['tools']) == 18  # 8 core + 10 v4.0 tools
+    assert len(second['result']['tools']) == 34  # 8 core + 10 v4.0 + 16 v5.0 tools

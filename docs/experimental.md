@@ -1,7 +1,8 @@
 # Experimental features
 
 The `obscuralens/experimental/` package holds features that are useful but
-not yet battle-hardened enough to promise stability:
+not yet battle-hardened enough to promise stability — the v4 modules and the
+v5.0 analyst toolbox (marked *(v5.0)* below):
 
 | Module | What it does | CLI |
 |---|---|---|
@@ -9,6 +10,13 @@ not yet battle-hardened enough to promise stability:
 | `username_permutations` | username variant generation + bounded sweeps | `experimental permute` |
 | `web_crawler` | bounded, robots-aware same-domain crawler | `experimental crawl` |
 | `phishing_score` | heuristic phishing score for a URL or domain | `experimental phish` |
+| `encoders` *(v5.0)* | polyglot encode/decode workbench + all-checksums | `tools encode` / `tools decode` |
+| `jwt_tools` *(v5.0)* | JWT decode + inspection, never verification | `tools jwt` |
+| `hash_identify` *(v5.0)* | structural hash-format identification | `tools hash-id` |
+| `entity_extract` *(v5.0)* | entity extraction + reversible redaction | `tools extract` |
+| `squatting` *(v5.0)* | typosquat variant generation + risk scoring | `tools squat` |
+| `exif_reader` *(v5.0)* | zero-dependency image metadata triage (local) | `tools exif` |
+| `steganography` *(v5.0)* | LSB steganalysis + entropy + carving (local) | `tools stego` |
 
 **These are experimental and may change or be removed in any release.**
 They are covered by tests, but their output shape, config keys and CLI
@@ -26,7 +34,8 @@ app:
 Set it to `false` to disable the whole surface in one place (the command
 then exits with code 2 and a clear message). Programmatically, the gate
 lives inside `summarize`, `scan_variants` and `crawl`; `phishing_score` and
-`generate_variants` are pure functions with no gate.
+`generate_variants` are pure functions with no gate. The v5.0 `tools`
+commands refuse to run under the same master switch.
 
 ## LLM narrative summaries
 
@@ -225,6 +234,254 @@ it, so a score is always explainable.
   suffix list), so `co.uk`-style hosts under-count subdomain depth.
 - Benign sites can score points (long hosts, keyword collisions); a score
   is a triage hint, never a blocklist verdict.
+
+## Toolbox (v5.0)
+
+Seven local-first utilities, wired to `obscuralens tools …`, the web UI's
+Tools view, `/api/tools/*` and MCP. Everything runs offline unless noted.
+
+### Encoders and decoders
+
+A polyglot workbench for mysterious strings — phishing URL parameters,
+webhook payloads, CTF fragments, tokens pasted into chats.
+
+```powershell
+obscuralens tools encode "admin:password"
+# hex           61646d696e3a70617373776f7264
+# base64        YWRtaW46cGFzc3dvcmQ=
+# rot13         nqzva:cnffjbeq
+# morse         .- -.. -- .. -. .--. .- ... ... .-- --- .-. -.. …
+# …one row per scheme, plus the digest table (md5, sha1, …)
+obscuralens tools encode "admin:password" --scheme base64
+obscuralens tools decode aGVsbG8gSlNPTg==            # auto-rank every scheme
+obscuralens tools decode 68656c6c6f --scheme hex     # one chosen scheme
+```
+
+- **`encode_all(text)`** — one input encoded through every scheme at once
+  (CLI default; `--scheme NAME` restricts to one). Canonical scheme names:
+  `hex`, `base32`, `base64`, `base85`, `url_percent`, `html_entity`,
+  `rot13`, `caesar`, `binary`, `decimal`, `reversed`, `morse`, `gzip`.
+  Schemes that cannot encode the input are silently skipped.
+- **`decode_auto(value)`** — the "magic decoder": every scheme tries, only
+  candidates decoding to ≥ 90 % printable text survive, each is scored
+  (printability, letter ratio, embedded common-English words) and the list
+  comes back best-first as
+  `{'scheme', 'result', 'score': 0-100, 'note'}`, capped at 24 candidates.
+  A note flags "output identical to input" no-op decodes as weak evidence.
+- **`hash_all(text)`** — every standard digest at once (md5, sha1, sha224,
+  sha256, sha384, sha512, sha3_256, sha3_512, blake2s, blake2b, crc32) —
+  paste-ready for hash-lookup services.
+- Parameterised helpers live in the Python module: `caesar_encode/decode`
+  (any shift) and `xor_key_encode/decode`. **XOR is encoding obfuscation,
+  not encryption** — it exists for CTF triage and spotting trivially
+  obfuscated exfiltration, and is labelled as such.
+
+Honest limitations: the readability heuristic is English-centric; a valid
+non-English decode can score below gibberish. Decode candidates are ranked
+guesses, not identifications — always confirm the winner by re-encoding.
+
+### JWT inspection
+
+Splits a compact JWS token (`header.payload.signature`) apart, decodes the
+base64url segments and adds analyst notes: claim timelines (`iat`/`nbf`/
+`exp` with human datetimes and expiry verdicts), algorithm risk (`alg:
+none` is flagged CRITICAL; `jku`/`x5u` header URLs are called out as
+key-confusion/SSRF surfaces), key-material hints (`kid`, `x5c` chain) and
+token size statistics.
+
+```powershell
+obscuralens tools jwt eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIx…
+# header    {'alg': 'HS256', 'typ': 'JWT'}
+# payload   {'sub': '1234567890', 'name': '…', 'iat': 1516239022}
+# claims    exp: 2027-11-01T… (valid) · iat: 2018-01-18T…
+# notes     signature is 32 byte(s) - HS256 sized …
+```
+
+**No signature verification is attempted — by design.** Verifying an
+asymmetric JWT needs the signer's public key; verifying a symmetric one
+needs the shared secret; an analyst rarely holds either. Half-verified
+tokens are worse than openly-unverified ones, so the module only *decodes
+and describes*, and every result carries the standing reminder: **unsigned
+claims are untrusted claims** — treat the payload as attacker-controlled
+data until the signature is verified with real key material.
+
+### Hash format identification
+
+Paste an opaque digest (breach dump, malware config, database row) and get
+the candidate algorithms it could be, ranked by confidence:
+
+```powershell
+obscuralens tools hash-id 5d41402abc4b2a76b9719d911017c592
+# name        confidence  note
+# MD5         high        32 hex characters …
+# MD4         medium      same size family …
+# NTLM        medium      …
+obscuralens tools hash-id $2b$12$KIXQ…
+# bcrypt      high        cost factor 12 (strong) …
+```
+
+- **`identify_hash(value)`** returns
+  `[{'name', 'confidence', 'length', 'charset', 'note'}]`, high → medium →
+  low. Recognised shapes: hex digests (8/16/32/40/56/64/96/128 chars),
+  base64-armored digests, bcrypt (`$2a$/$2b$/$2y$`, cost extracted),
+  Argon2 PHC strings (variant, memory, time, lanes parsed), MySQL 4.1+
+  (`*` + 40 hex) and raw JWT compact serializations (redirected to
+  `jwt_tools`).
+- Detection is **structural only**: length + charset + prefix markers. Two
+  algorithms sharing a digest length cannot be split, so same-length
+  alternatives are listed at medium confidence with notes — most notably
+  the **Keccak-256 trap**: 64 hex characters are *not* necessarily SHA-256;
+  Ethereum/EVM hashing uses original-padding Keccak, and assuming SHA-256
+  there has burned many an analyst.
+- **`checksum_matches(value, candidates)`** is a tiny offline wordlist
+  matcher: is this digest the md5/sha1/sha2 of any of these candidate
+  plaintexts? (capped at 10 000 candidates, six algorithms). Password-hash
+  triage for small lists — not a cracker.
+
+### Entity extraction
+
+Paste an email body, forum post, paste-dump entry or threat-report
+paragraph and pull every OSINT pivot target out of it. The pipeline is
+**validator-driven**: a regex proposes, the shared `utils.validators`
+module disposes — mod-97 for IBANs, Luhn for IMEIs, shape rules for crypto
+addresses, range checks for coordinates. The same verdict logic as the
+production trackers, not a second drifting copy.
+
+```powershell
+obscuralens tools extract "Contact bob@evil.example from 45.148.10.99,
+see https://evil.example/login (CVE-2021-44228, BTC 1A1zP1…)"
+obscuralens tools extract --file pasted-report.txt
+Get-Content leak.txt | obscuralens tools extract --stdin
+# emails   [bob@evil.example]
+# urls     [https://evil.example/login]
+# domains  [evil.example]
+# ipv4     [45.148.10.99]
+# cves     [CVE-2021-44228]
+# crypto_addresses [1A1zP1…]
+# …
+```
+
+Two-phase design: **strong entities** (emails, URLs, IPs, MACs, IBANs,
+IMEIs, crypto, hashes, CVEs, coords, ASNs) are extracted first and masked
+out of the working text, so a 15-digit IMEI can never double-report as a
+tracking number or phone; **weak candidates** (`phone_candidates`,
+`user_handles`, `tracking_ids`) run against the leftovers and are labelled
+as leads to verify, not confirmed entities. Domains are scanned against the
+original text so hosts inside URLs and emails also count. Every list is
+de-duplicated, order-preserving and capped at 50 entries.
+
+`redact_entities(text)` / `redact_with_map(text, kinds)` turn the same
+pipeline into a safe-sharing formatter: entities become numbered
+placeholders (`[EMAIL #1]`) and the reversible mapping comes back to the
+caller — the analyst's private decode table, kept out of the shared
+document.
+
+### Typosquat generation
+
+A pure-Python, fully offline re-implementation of the variant families
+that made dnstwist the standard tool for domain-defence triage:
+
+```powershell
+obscuralens tools squat example.com
+# Domain          Category        Risk  Description
+# exmaple.com     transposition    94    adjacent letters swapped
+# exanple.com     substitution     91    keyboard-adjacent key slip
+# example.co      tld_swap         88    different registry …
+# …
+obscuralens tools squat example.com --min-risk 80     # dangerous first
+obscuralens tools squat example.com --category homoglyph
+```
+
+- **`generate_variants(domain)`** — fifteen families in a fixed order
+  (omission, insertion, substitution, transposition, duplication,
+  hyphenation, subdomain, vowel swap, plural, singular, bitsquat,
+  homoglyph, ASCII lookalike, TLD swap, combo-squat), each entry
+  `{'domain', 'category', 'description'}`; de-duplicated, original
+  excluded, capped at 300 variants. URLs are tolerated (scheme/path
+  stripped); the registrable core (last two labels) is what mutates.
+- **`score_variants(variants, original)`** — adds a 0–100 deception-risk
+  score and sorts descending: Damerau-Levenshtein distance from the
+  original sets the base (distance 1 → 88, 2 → 74 …), category bonuses
+  reward hard-to-spot families (homoglyph +22, bitsquat +18, ASCII +18,
+  combo-squat +16, subdomain +14 …) and a `phishing_keywords` pack hit
+  adds +8. The full rubric (distance bases, category bonuses, keyword
+  bonus) is documented in the module so every score is auditable.
+- The list is a **watch list**: feed it to domain registration checks
+  (RDAP), passive DNS or the domain tracker to see which lookalikes
+  actually resolve. Nothing here proves registration — it ranks what to
+  check first.
+
+### EXIF reader — local image metadata triage
+
+Parses JPEG (APP0 JFIF, APP1 EXIF + XMP, APP2 ICC, APP13 Photoshop,
+COM comments), PNG (tEXt/zTXt/iTXt/tIME/eXIf with CRC verification), GIF,
+BMP and WebP containers **straight from the byte stream using only the
+Python standard library** — no Pillow, no exiftool, no network.
+
+```powershell
+obscuralens tools exif IMG_2031.jpg
+# format     jpeg · 4032×3024 · 2.4 MB
+# camera     Apple iPhone 13 Pro (lens: …)
+# gps        48.8584, 2.2945  (ready for `obscuralens coords`)
+# timeline   2024-06-01T14:32:08 (original) · …
+# osint_notes GPS coordinates present; camera timezone offset +02:00
+#             suggests the camera clock was set to UTC+2 …
+```
+
+`analyze(path_or_bytes)` combines the container metadata with friendly
+EXIF, GPS (decimal + DMS + a `lat, lon` string ready for the coords
+tracker), a camera summary, timeline hints, interesting strings, file
+hashes (md5/sha256) and actionable `osint_notes`. Malformed or truncated
+files never raise: you get `{'error': …, 'parsed': …}` partials.
+`read_metadata` returns the raw format-specific dict; `strings_report`
+extracts embedded ASCII/UTF-16LE strings.
+
+**Privacy framing.** This module is a core reason ObscuraLens can promise
+that image triage runs locally and nothing leaves your machine: EXIF
+blocks carry GPS coordinates, device serials, owner names and editing
+history — precisely the data you should never paste into a random online
+EXIF-lookup site. Everything here is parsed in-process.
+
+### Steganography analysis — local LSB steganalysis
+
+Pure-standard-library spatial-domain steganalysis:
+
+```powershell
+obscuralens tools stego suspicious.png
+# format    png
+# suspicion 71.3 / 100
+# verdict   highly suspicious
+# findings  · LSB: chi-square pair imbalance in plane 0 (r channel)
+#           · trailing data: 4 813 bytes after IEND
+#           · embedded ZIP blob at offset 0x9c40 …
+```
+
+- **PNG** — full chunk walk, IDAT re-inflation and a correct scanline
+  unfilter (None/Sub/Up/Average/Paeth), per-channel LSB bit-plane
+  statistics for planes 0–3 (run lengths, chi-square pair tests, entropy)
+  and a weighted 0–100 suspicion score per plane.
+- **BMP** — 24/32-bit bottom-up pixel walk honouring row padding.
+- **GIF** — a complete LZW decoder (clear-code aware) so palette-index
+  LSBs can be analyzed per frame.
+- **Every format** — byte-entropy profiling (Shannon histogram + 64
+  sliding windows + high-entropy blob detection) and signature carving
+  for embedded ZIP / RAR / 7z / PDF / JPEG / PNG / gzip / ELF / PE /
+  SQLite / RIFF blobs, plus trailing-data-after-IEND/EOI detection.
+
+`analyze(path_or_bytes)` returns
+`{'format', 'summary': {'suspicion', 'verdict', 'findings'}, 'lsb',
+'entropy', 'embedded_files', 'strings'}`. Verdict bands: `clean` < 35,
+`suspicious` < 65, `highly suspicious` ≥ 65; the scoring rubric
+(`SUSPICION_WEIGHTS`) is exported so every verdict is auditable.
+
+**Privacy framing.** All analysis runs locally, nothing leaves your
+machine — stego detection is exactly the task people otherwise paste into
+online "stego detector" sites, leaking the very evidence under
+investigation. The module never touches the network.
+
+**JPEG note.** DCT-domain stego (jsteg / F5 / outguess class) is out of
+scope; for JPEG the module still runs entropy, carving and trailing-data
+checks and says so in the findings.
 
 ## Stability promise
 
