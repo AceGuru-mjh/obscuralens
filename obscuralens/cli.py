@@ -115,6 +115,8 @@ class ObscuraLensCLI:
                 '11': self.watchlist_menu,
                 '12': self.investigate_menu,
                 '13': self.v4_tools_menu,
+                '14': self.v5_tools_menu,
+                '15': self.v5_trackers_menu,
                 '0': self.exit_program,
             }
             action = handlers.get(choice)
@@ -141,6 +143,8 @@ class ObscuraLensCLI:
             ('11', 'Watchlist'),
             ('12', 'Universal Investigate'),
             ('13', 'Investigation Tools (v4)'),
+            ('14', 'v5 Toolbox (tools, batch, report, patterns, geo)'),
+            ('15', 'v5 Kinds (MAC / IBAN / IMEI / Coords)'),
             ('0', 'Exit'),
         ]
         width = 58
@@ -1316,6 +1320,187 @@ class ObscuraLensCLI:
             self._run_command(['pipeline', 'list'])
             return
         print_error('Invalid option.')
+
+    # ------------------------------------------------------------------
+    # v5.0 toolbox and target kinds
+    # ------------------------------------------------------------------
+
+    def v5_tools_menu(self) -> None:
+        """v5.0 toolbox: analyst tools, batch engine, reports, geo, alerts."""
+        clear_screen()
+        print_section("V5 TOOLBOX")
+
+        items = [
+            ('1', 'Analyst Tools (encode / decode / jwt / hash-id / coords /'
+                  ' extract / squat / exif / stego)'),
+            ('2', 'Batch Lookup (advanced engine)'),
+            ('3', 'Report Builder (HTML)'),
+            ('4', 'Pattern Analysis'),
+            ('5', 'Geographic Profile'),
+            ('6', 'Alerts Configuration'),
+            ('0', 'Back'),
+        ]
+        for num, text in items:
+            print(f"  {Colors.CYAN}[{num}]{Colors.RESET} {text}")
+
+        choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
+
+        if choice == '1':
+            self.tools_toolbox_menu()
+        elif choice == '2':
+            self.v5_batch_lookup()
+        elif choice == '3':
+            kind = get_input('Kind (ip / domain / email / mac / iban / imei /'
+                             ' coords / ...)')
+            target = get_input('Target')
+            if kind and target:
+                self._run_command(['report', kind, target])
+        elif choice == '4':
+            kind = get_input('Kind (ip / domain / email / ...)')
+            target = get_input('Target')
+            if kind and target:
+                self._run_command(['patterns', kind, target])
+        elif choice == '5':
+            self._run_command(['geo', 'profile'])
+        elif choice == '6':
+            self.alerts_config_menu()
+        elif choice != '0':
+            print_error('Invalid option.')
+
+    def tools_toolbox_menu(self) -> None:
+        """Input-driven loop over the offline analyst toolbox."""
+        while True:
+            clear_screen()
+            print_section("ANALYST TOOLS")
+            items = [
+                ('1', 'Encode text (all schemes + digests)'),
+                ('2', 'Decode a value'),
+                ('3', 'Inspect a JWT'),
+                ('4', 'Identify a hash'),
+                ('5', 'Convert coordinates'),
+                ('6', 'Extract entities from text'),
+                ('7', 'Typosquat variant analysis'),
+                ('8', 'Image EXIF triage'),
+                ('9', 'Steganography analysis'),
+                ('0', 'Back'),
+            ]
+            for num, text in items:
+                print(f"  {Colors.CYAN}[{num}]{Colors.RESET} {text}")
+
+            choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
+            if choice in ('0', ''):
+                return
+            self._dispatch_tool(choice)
+
+    def _dispatch_tool(self, choice: str) -> None:
+        """Prompt for input and dispatch one toolbox operation."""
+        simple = {
+            '1': ('encode', 'Text to encode'),
+            '3': ('jwt', 'JWT token'),
+            '4': ('hash-id', 'Hash string'),
+            '5': ('coords', 'Coordinates (DD / DMS / UTM / MGRS)'),
+            '8': ('exif', 'Path to image file'),
+            '9': ('stego', 'Path to image file'),
+        }
+        if choice in simple:
+            command, prompt = simple[choice]
+            value = get_input(prompt)
+            if value:
+                self._run_command(['tools', command, value])
+            return
+        if choice == '2':
+            value = get_input('Value to decode')
+            if not value:
+                return
+            if confirm_action('Auto-detect the scheme (ranked candidates)?'):
+                self._run_command(['tools', 'decode', value, '--all'])
+            else:
+                scheme = get_input('Scheme (hex / base64 / rot13 / ...)')
+                if scheme:
+                    self._run_command(['tools', 'decode', value,
+                                       '--scheme', scheme])
+            return
+        if choice == '6':
+            text = get_input('Text to scan (blank to read from a file)')
+            if text:
+                self._run_command(['tools', 'extract', text])
+                return
+            path = get_input('File to scan', required=False)
+            if path:
+                self._run_command(['tools', 'extract', '--file', path])
+            return
+        if choice == '7':
+            domain = get_input('Domain to defend (e.g. google.com)')
+            if domain:
+                self._run_command(['tools', 'squat', domain])
+            return
+        print_error('Invalid option.')
+
+    def v5_batch_lookup(self) -> None:
+        """Batch lookup driven by the v5.0 advanced engine."""
+        kind = get_input('Kind (ip / domain / email / mac / iban / imei /'
+                         ' coords / ...)')
+        path = get_input('File with one target per line')
+        if not kind or not path:
+            return
+        argv = ['batch', kind, path]
+        if confirm_action('Attach risk scoring (advanced engine)?'):
+            argv.append('--risk')
+        self._run_command(argv)
+
+    def alerts_config_menu(self) -> None:
+        """Webhook alert configuration submenu."""
+        clear_screen()
+        print_section("ALERTS CONFIGURATION")
+        print("  [1] Show configuration + recent events")
+        print("  [2] Set webhook URL / events")
+        print("  [3] Send a test notification")
+        print("  [0] Back")
+
+        choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
+        if choice == '1':
+            self._run_command(['alerts', 'show'])
+        elif choice == '2':
+            url = get_input('Webhook URL')
+            events = get_input('Events (comma-separated, blank keeps defaults)',
+                               required=False)
+            if url:
+                argv = ['alerts', 'set', '--url', url]
+                if events:
+                    argv += ['--events', events]
+                self._run_command(argv)
+        elif choice == '3':
+            self._run_command(['alerts', 'test'])
+
+    def v5_trackers_menu(self) -> None:
+        """v5.0 target kinds: MAC, IBAN, IMEI and coordinates."""
+        clear_screen()
+        print_section("V5 TARGET KINDS")
+
+        items = [
+            ('1', 'MAC Address Tracker'),
+            ('2', 'IBAN Tracker'),
+            ('3', 'IMEI Tracker'),
+            ('4', 'Coordinates Tracker'),
+            ('0', 'Back'),
+        ]
+        for num, text in items:
+            print(f"  {Colors.CYAN}[{num}]{Colors.RESET} {text}")
+
+        choice = input(f"\n{Colors.GREEN}Select: {Colors.RESET}").strip()
+        simple = {
+            '1': ('mac', 'Enter MAC address (e.g. b8:27:eb:11:22:33)'),
+            '2': ('iban', 'Enter IBAN (e.g. DE89370400440532013000)'),
+            '3': ('imei', 'Enter IMEI (e.g. 356938035643809)'),
+            '4': ('coords', 'Enter coordinates (e.g. 48.8584, 2.2945)'),
+        }
+        if choice in simple:
+            command, prompt = simple[choice]
+            target = get_input(prompt)
+            if target:
+                self._run_command([command, target])
+        elif choice != '0':
+            print_error('Invalid option.')
 
     def experimental_menu(self) -> None:
         clear_screen()

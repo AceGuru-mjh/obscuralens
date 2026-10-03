@@ -1,0 +1,128 @@
+# Country centroid pack for ObscuraLens (v5.0) - used by the coords tracker
+# and advanced/geospatial.py for offline nearest-country estimation and
+# GeoJSON map pins when reverse geocoding is unavailable.
+#
+# Format (one entry per line): CC|lat|lon|name
+#   CC   - ISO 3166-1 alpha-2 code (upper-cased on load)
+#   lat  - approximate geographic centroid, decimal degrees
+#   lon  - approximate geographic centroid, decimal degrees
+#   name - plain-ASCII short name (display names resolve via utils.geo)
+#
+# ~70 major countries; centroids are approximate by design (map-pin
+# accuracy, not cadastral). Comment lines start with '#'.
+
+US|39.8|-98.6|United States
+CA|56.1|-106.3|Canada
+MX|23.6|-102.5|Mexico
+GT|15.7|-90.2|Guatemala
+CU|21.5|-79.6|Cuba
+HT|19.0|-72.7|Haiti
+DO|18.7|-70.2|Dominican Republic
+PA|8.5|-80.1|Panama
+CR|9.7|-84.1|Costa Rica
+CO|4.6|-74.3|Colombia
+VE|7.1|-66.2|Venezuela
+BR|-10.8|-52.9|Brazil
+AR|-35.4|-64.2|Argentina
+CL|-33.7|-71.4|Chile
+PE|-9.2|-75.0|Peru
+BO|-16.7|-64.7|Bolivia
+EC|-1.4|-78.4|Ecuador
+UY|-32.8|-56.0|Uruguay
+PY|-23.4|-58.4|Paraguay
+GB|54.0|-2.5|United Kingdom
+IE|53.4|-8.2|Ireland
+FR|46.6|2.4|France
+DE|51.2|10.4|Germany
+ES|40.2|-3.7|Spain
+PT|39.6|-8.0|Portugal
+IT|42.8|12.5|Italy
+CH|46.8|8.2|Switzerland
+AT|47.6|14.1|Austria
+NL|52.2|5.5|Netherlands
+BE|50.6|4.6|Belgium
+LU|49.8|6.1|Luxembourg
+DK|56.0|9.9|Denmark
+NO|64.6|11.5|Norway
+SE|62.2|17.4|Sweden
+FI|64.5|26.0|Finland
+IS|64.9|-19.0|Iceland
+PL|52.0|19.4|Poland
+CZ|49.8|15.5|Czechia
+SK|48.7|19.5|Slovakia
+HU|47.2|19.4|Hungary
+RO|45.9|25.0|Romania
+BG|42.7|25.4|Bulgaria
+GR|39.1|22.0|Greece
+TR|39.0|35.2|Turkey
+UA|48.4|31.4|Ukraine
+BY|53.7|28.0|Belarus
+LT|55.2|23.9|Lithuania
+LV|56.9|24.9|Latvia
+EE|58.7|25.5|Estonia
+HR|45.1|15.2|Croatia
+RS|44.1|20.9|Serbia
+SI|46.1|14.8|Slovenia
+BA|43.9|17.7|Bosnia and Herzegovina
+MK|41.6|21.7|North Macedonia
+AL|41.2|20.0|Albania
+ME|42.7|19.4|Montenegro
+MD|47.2|28.5|Moldova
+RU|61.5|99.5|Russia
+CN|35.9|104.2|China
+JP|36.5|138.2|Japan
+KR|36.5|127.9|South Korea
+KP|40.3|127.5|North Korea
+TW|23.7|121.0|Taiwan
+HK|22.3|114.2|Hong Kong
+MO|22.2|113.5|Macao
+IN|21.0|78.0|India
+PK|30.4|69.4|Pakistan
+BD|23.7|90.4|Bangladesh
+LK|7.6|80.7|Sri Lanka
+NP|28.4|84.1|Nepal
+TH|15.9|101.0|Thailand
+VN|16.0|107.8|Vietnam
+MY|4.2|102.0|Malaysia
+SG|1.35|103.8|Singapore
+ID|-2.5|118.0|Indonesia
+PH|12.9|121.8|Philippines
+AU|-25.7|134.5|Australia
+NZ|-41.5|173.0|New Zealand
+ZA|-29.0|25.1|South Africa
+NG|9.1|8.7|Nigeria
+EG|26.8|30.8|Egypt
+KE|0.5|37.9|Kenya
+ET|9.1|40.5|Ethiopia
+GH|7.9|-1.0|Ghana
+MA|31.9|-6.9|Morocco
+DZ|28.2|2.6|Algeria
+TN|34.0|9.6|Tunisia
+LY|27.0|17.2|Libya
+SD|15.6|30.2|Sudan
+SA|24.1|45.1|Saudi Arabia
+AE|24.0|54.0|United Arab Emirates
+QA|25.3|51.2|Qatar
+KW|29.3|47.6|Kuwait
+IL|31.4|34.9|Israel
+JO|31.3|36.5|Jordan
+LB|33.9|35.9|Lebanon
+IQ|33.2|43.7|Iraq
+IR|32.4|53.7|Iran
+AF|33.9|67.7|Afghanistan
+SY|35.0|38.5|Syria
+YE|15.6|47.9|Yemen
+OM|21.5|56.1|Oman
+KZ|48.2|67.3|Kazakhstan
+UZ|41.4|64.6|Uzbekistan
+TM|39.0|59.6|Turkmenistan
+KG|41.3|74.6|Kyrgyzstan
+TJ|38.9|71.3|Tajikistan
+CY|35.1|33.4|Cyprus
+AM|40.1|45.0|Armenia
+GE|42.3|43.4|Georgia
+AZ|40.3|47.6|Azerbaijan
+MN|46.9|103.8|Mongolia
+MM|19.8|96.1|Myanmar
+KH|12.6|104.9|Cambodia
+LA|18.5|103.8|Laos

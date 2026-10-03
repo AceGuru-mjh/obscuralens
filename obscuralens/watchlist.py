@@ -16,11 +16,15 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .config import config
 from .utils.validators import (
+    normalize_iban,
+    normalize_imei,
+    validate_coords,
     validate_cve,
     validate_domain,
     validate_email,
     validate_hash,
     validate_ip,
+    validate_mac,
     validate_phone,
     validate_url,
     validate_username,
@@ -79,25 +83,51 @@ class WatchDiff:
 
 
 def _detect_kind(target: str) -> Optional[str]:
-    """Best-effort kind detection for a bare target string."""
-    if validate_ip(target)[0]:
+    """Best-effort kind detection for a bare target string.
+
+    Mirrors ``investigate.detect_kind``'s ordering so a target added to the
+    watchlist classifies exactly the way an investigation would classify it:
+    identifier shapes (MAC, IBAN, IMEI, coordinates) must run before the
+    looser phone/domain/username validators that would otherwise swallow
+    them.
+    """
+    value = (target or '').strip()
+    if not value:
+        return None
+    if validate_ip(value)[0]:
         return 'ip'
-    if validate_email(target)[0]:
+    if validate_email(value)[0]:
         return 'email'
-    if validate_phone(target)[0]:
-        return 'phone'
-    # v4.0 kinds: URLs, CVEs, hashes and AS numbers are unambiguous shapes.
-    if '://' in target and validate_url(target)[0]:
+    # v4.0 kinds: URLs, CVEs and hashes are unambiguous shapes.
+    if '://' in value and validate_url(value)[0]:
         return 'url'
-    if validate_cve(target)[0]:
+    if validate_cve(value)[0]:
         return 'cve'
-    if validate_hash(target)[0]:
+    if validate_hash(value)[0]:
         return 'hash'
+    # v5.0 kinds, in investigate.detect_kind order: a Cisco dotted MAC is
+    # also a valid domain, a digits-only MAC passes the phone validator once
+    # its separators are stripped, and IBANs are alphanumeric (username
+    # shapes) - so MAC and IBAN run before the domain check.
+    if validate_mac(value)[0]:
+        return 'mac'
+    if normalize_iban(value):
+        return 'iban'
     # The validators are intentionally loose, so a single label can look like
     # both a username and a domain; a dot tips the balance towards domain.
-    if '.' in target and validate_domain(target)[0]:
+    if '.' in value and validate_domain(value)[0]:
         return 'domain'
-    if validate_username(target)[0]:
+    # Bare 15-16 digit IMEIs are valid phone numbers, and space-separated
+    # decimal-degree pairs survive the phone validator's separator
+    # stripping - both identifier shapes must be tried first. Shape only:
+    # checksum verdicts belong to the trackers.
+    if normalize_imei(value):
+        return 'imei'
+    if validate_coords(value)[0]:
+        return 'coords'
+    if validate_phone(value)[0]:
+        return 'phone'
+    if validate_username(value)[0]:
         return 'username'
     return None
 
@@ -106,12 +136,16 @@ def _default_checker(kind: str, target: str) -> Dict[str, Any]:
     """Run the tracker matching kind (imported lazily to avoid cycles)."""
     from .trackers import (
         ASNTracker,
+        CoordsTracker,
         CryptoTracker,
         CVETracker,
         DomainTracker,
         EmailTracker,
         HashTracker,
+        IBANTracker,
+        IMEITracker,
         IPTracker,
+        MACTracker,
         PhoneTracker,
         URLTracker,
         UsernameTracker,
@@ -127,6 +161,10 @@ def _default_checker(kind: str, target: str) -> Dict[str, Any]:
         'hash': HashTracker,
         'cve': CVETracker,
         'asn': ASNTracker,
+        'mac': MACTracker,
+        'iban': IBANTracker,
+        'imei': IMEITracker,
+        'coords': CoordsTracker,
     }
     tracker_class = trackers.get(kind)
     if tracker_class is None:
@@ -254,7 +292,11 @@ class WatchlistManager:
         detected = kind.strip().lower() if kind else _detect_kind(value)
         if not detected:
             raise ValueError('unrecognised target')
-        if detected in ('ip', 'email', 'domain', 'url', 'cve', 'hash'):
+        # Case-insensitive kinds are stored lower-cased so the UNIQUE
+        # constraint cannot be bypassed with caps; the v5.0 additions (mac,
+        # iban, coords) all re-validate case-insensitively (IMEI is digits).
+        if detected in ('ip', 'email', 'domain', 'url', 'cve', 'hash',
+                        'mac', 'iban', 'coords'):
             value = value.lower()
 
         with self._get_connection() as conn:

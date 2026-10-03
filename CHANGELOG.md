@@ -2,6 +2,122 @@
 
 ## Changelog
 
+## 5.0.0 — 2026-10-03
+
+ObscuraLens grows from 10 to **14 target kinds**, gains a local-first analyst
+toolbox, an advanced-analysis package (batch, alerts, pattern-of-life,
+geospatial profiling, HTML report builder), a complete single-page web
+application and a one-command launcher that installs and opens the UI in a
+single step.
+
+### Added
+
+- **Four new trackers** (kind count 10 → 14):
+  - `obscuralens mac <addr>` — EUI-48 MAC addresses: offline curated IEEE OUI
+    pack (766 vendors), keyless macvendors.com full-registry lookup, keyless
+    maclookup.app record (company, country, address, assignment type) and an
+    offline bit decomposition (multicast/local flags, 01:00:5E / 33:33
+    reserved blocks, Docker 02:42 vNIC decode with embedded container IPv4,
+    EUI-64 expansion, modified-EUI-64 IPv6 interface id, privacy-randomization
+    hint). Colon, dash and Cisco dot notations accepted.
+  - `obscuralens iban <iban>` — ISO 13616 IBANs: offline mod-97 checksum,
+    per-country structure pack (124 countries → bank code + account slices),
+    pretty/masked forms and keyless openiban.com validation with BIC
+    resolution. Printed IBANs with spaces and a leading `iban:` are accepted;
+    failed checksums are rejected before any source is contacted.
+  - `obscuralens imei <num>` — IMEI/IMEISV: offline 3GPP TS 23.003
+    decomposition (TAC, reporting-body identifier, SNR, Luhn check digit)
+    plus an offline TAC pack (139 entries → manufacturer + model). Separators
+    tolerated; 16-digit IMEISV recognised.
+  - `obscuralens coords <lat, lon>` — geographic coordinates in decimal
+    degrees, DMS, UTM or MGRS: reverse geocoding via keyless OpenStreetMap
+    Nominatim and BigDataCloud, Open-Elevation terrain height, and a fully
+    offline maths source (geohash, Maidenhead, DMS/DDM, UTM, MGRS, timezone
+    hint, NOAA solar position) backed by a 115-country centroid pack.
+- **New sources for existing trackers**:
+  - Username: 4 new HTML platforms — Patreon, Etsy, Substack and Replit
+    (45 platforms total: 38 HTML + 7 JSON API), with honest three-state
+    verdict rules (bot-walled Patreon/Etsy answer `unknown`, never "hit").
+  - IP: keyless ipapi.is (geo, ASN, company, datacenter/VPN/proxy flags,
+    risk score) and keyless ipinfo.io (country, org, hostname, lat/lon);
+    the `threat_feeds` source now also reports `urlhaus_listed` /
+    `threatfox_listed`.
+  - Domain: `doh.google` — DNS-over-HTTPS resolver (dns.google) cross-checking
+    A/AAAA/MX/NS answers against the classic DoH source.
+  - CVE: CIRCL cveproxy records (CVE-5.1 and legacy schemas), merged onto the
+    NVD field names plus CIRCL-specific extras.
+  - Crypto: keyless mempool.space (BTC balance, received/sent, tx count,
+    pending-tx counter) reusing blockchain.info's field names so provenance
+    stacks.
+  - Threat-intel feeds: abuse.ch URLhaus (malicious-URL host network list)
+    and ThreatFox (recent IOC CSV export — the keyed JSON API now requires
+    an Auth-Key, so the keyless export is used); feed tokenizer registry
+    added, 20 000-network cap per feed.
+- **Experimental analyst toolbox** (`obscuralens/experimental/`, exposed as
+  `obscuralens tools …`): `encoders` (13 encode schemes + auto-decode ranking
+  + all-checksums), `jwt_tools` (decode + inspect, never verify), `hash_identify`
+  (structural digest identification with same-length alternatives and the
+  Keccak-256 trap), `entity_extract` (validator-driven extraction of 16
+  entity kinds from free text + reversible redaction), `squatting` (15
+  typosquat families with deception-risk scoring), `exif_reader` (zero-
+  dependency JPEG/PNG/GIF/BMP/WebP metadata triage, fully local) and
+  `steganography` (PNG/BMP/GIF LSB plane statistics, entropy profiling and
+  embedded-file carving, fully local).
+- **Advanced analysis package** (`obscuralens/advanced/`): `batch`
+  (`run_batch(kind, targets, risk, max_workers)` fan-out engine), `alerts`
+  (webhook notifications for `lookup_failed` / `watch_diff` / `risk_high` /
+  `source_tripped`), `patterns` (`pattern_report(kind, value)` pattern-of-life
+  over stored history), `geospatial` (country breakdown, targets-by-country,
+  geohash clusters, top regions, GeoJSON export, one-call profile summary)
+  and `report_builder` (`build_report(kind, target)` self-contained HTML
+  investigation report).
+- **Complete web SPA rewrite** (`obscuralens/web/static/`, no build step, no
+  CDN, fully offline ES modules): 10 views (dashboard, lookup workbench,
+  investigate graph, timeline, cases, watchlist, sources, tools, history,
+  settings), ⌘K command palette with fuzzy matching, dark/light themes,
+  zero-dependency canvas chart library (line/donut/bars/sparkline/heatmap/
+  scatter) and a force-directed entity-graph engine (pan/zoom/drag, PNG
+  export). See the new [docs/web-ui.md](docs/web-ui.md).
+- **One-command launcher**: `./start.sh` (Linux/macOS) and `start.ps1`
+  (Windows) create `.venv`, install dependencies plus web extras and run
+  `obscuralens serve --open` at http://127.0.0.1:8000; also `make start` /
+  `just start`. Flags: `--no-open`, `--port`.
+- **New CLI commands**: `mac`, `iban`, `imei`, `coords`; `tools
+  encode|decode|jwt|hash-id|coords|extract|squat|exif|stego`; `report`;
+  `patterns`; `geo profile|clusters|regions`; `alerts show|set|test`; and
+  `serve --open`.
+- **MCP server: 34 tools** — 16 new (`mac_lookup`, `iban_lookup`,
+  `imei_lookup`, `coords_lookup`, `tools_encode`, `tools_decode`, `tools_jwt`,
+  `tools_hash_id`, `tools_extract`, `tools_squat`, `tools_exif`, `tools_stego`,
+  `tools_coords_convert`, `tools_geo_profile`, `tools_patterns`,
+  `tools_batch`) alongside the existing 18.
+- **REST API v5**: `/api/kinds`, `/api/history`, `/api/keys` (GET/POST/DELETE),
+  `/api/settings` (GET/POST), `/api/tools/encodings|decode|jwt|hash-id|coords|
+  extract|squat|batch`, `/api/tools/file/exif|stego` (multipart),
+  `/api/report/{kind}/{target}`, `/api/patterns`, `/api/alerts`
+  (GET/POST + `/test`), `/api/diff/{kind}/{target}`, and case item/note/tag
+  sub-resources (`POST /api/cases/{id}/items|notes|tags`, `PATCH
+  /api/cases/{id}`). All v4 endpoints keep working unchanged.
+- **Offline data packs** (`obscuralens/data/`): `oui.txt` (766 curated IEEE
+  OUI assignments), `tac.txt` (139 TAC→manufacturer/model entries),
+  `iban_structures.txt` (124 country structures) and `country_centroids.txt`
+  (115 country centroids).
+
+### Changed
+
+- Version bump to 5.0.0 across package metadata, banner and user agent.
+- Every kind-aware surface now handles 14 kinds: `investigate`, `batch`,
+  `history`, `case add` auto-detection, watchlist, risk, timeline,
+  correlation, graph exports, MCP and the web API.
+- `obscuralens serve` serves the new SPA from `web/static/` at `/` (OpenAPI
+  docs stay at `/docs`); `serve --open` launches a browser at the dashboard.
+- The interactive console and non-interactive CLI gained a Tools menu and
+  v5 commands (agent integration wave).
+- The username tracker sweeps 45 platforms (was 41); the platform registry is
+  shared with the permutation sweeper.
+- `intel feeds` lists six feeds (Tor exit list, Spamhaus DROP, Feodo,
+  FireHOL level-1, URLhaus, ThreatFox).
+
 ## 4.0.0 — 2026-10-01
 
 ObscuraLens grows from a lookup console into an investigation platform: 10

@@ -15,6 +15,13 @@ from .cve_tracker import CVETracker
 from .hash_tracker import HashTracker
 from .url_tracker import URLTracker
 
+# v5.0 trackers ------------------------------------------------------------
+from .coords_tracker import CoordsTracker
+from .iban_tracker import IBANTracker
+from .imei_tracker import IMEITracker
+from .mac_tracker import MACTracker
+
 __all__ = ['IPTracker', 'PhoneTracker', 'UsernameTracker', 'EmailTracker',
            'DomainTracker', 'URLTracker', 'CryptoTracker', 'HashTracker',
-           'CVETracker', 'ASNTracker']
+           'CVETracker', 'ASNTracker', 'MACTracker', 'IBANTracker',
+           'IMEITracker', 'CoordsTracker']

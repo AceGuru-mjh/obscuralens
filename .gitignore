@@ -59,3 +59,12 @@ Thumbs.db
 /_*.txt
 /_*.ps1
 /_token.txt
+
+# Runtime state produced by the advanced alerts module (webhook config + log)
+data/alerts.json
+
+/.venv/
+.venv/
+
+# Launcher virtualenv
+/.venv-start/
