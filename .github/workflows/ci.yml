@@ -148,21 +148,36 @@ jobs:
       - name: Boot-test the frozen web UI
         # A frozen app cannot pip-install extras at runtime, so the bundled
         # web stack must actually start: boot `serve`, poll /api/health,
-        # then stop the server again.
+        # then stop the server again. Exe output is captured so even a
+        # silent early exit leaves evidence in the log.
         shell: pwsh
         run: |
+          $log = 'frozen-serve.log'
           $proc = Start-Process -FilePath dist/obscuralens.exe `
-            -ArgumentList 'serve', '--port', '18080' -PassThru
+            -ArgumentList 'serve', '--port', '18080' `
+            -RedirectStandardOutput $log `
+            -RedirectStandardError "$log.err" -PassThru
           try {
             $ok = $false
-            for ($i = 0; $i -lt 30; $i++) {
+            for ($i = 0; $i -lt 75 -and -not $proc.HasExited; $i++) {
               try {
                 $r = Invoke-RestMethod http://127.0.0.1:18080/api/health `
                   -TimeoutSec 5
                 if ($r.status -eq 'ok') { $ok = $true; break }
-              } catch { Start-Sleep 2 }
+              } catch { Start-Sleep 4 }
             }
-            if (-not $ok) { throw 'frozen web UI did not answer /api/health' }
+            if (-not $ok) {
+              if ($proc.HasExited) {
+                Write-Output ("frozen exe exited early with code {0}" `
+                  -f $proc.ExitCode)
+              } else {
+                Write-Output 'frozen exe still alive but never answered'
+              }
+              Write-Output '--- frozen-serve.log tail ---'
+              Get-Content $log -Tail 60 -ErrorAction SilentlyContinue
+              Get-Content "$log.err" -Tail 60 -ErrorAction SilentlyContinue
+              throw 'frozen web UI did not answer /api/health'
+            }
           } finally {
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
           }

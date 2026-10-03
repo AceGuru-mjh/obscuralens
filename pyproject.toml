@@ -61,6 +61,7 @@ exe = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "textual>=0.60",
+    "python-multipart>=0.0.9",
 ]
 desktop = [
     "fastapi>=0.110",
