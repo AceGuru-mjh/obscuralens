@@ -32,7 +32,7 @@ from ..config import config
 # via ``investigate.detect_kind`` and falls back to 'other'; plain 'other'
 # stores any free-form indicator that no tracker understands.
 KNOWN_KINDS = ('ip', 'phone', 'username', 'email', 'domain', 'crypto', 'hash',
-               'url', 'cve', 'asn', 'other')
+               'url', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords', 'other')
 
 # Values allowed for cases.status (enforced by the table CHECK too).
 CASE_STATUSES = ('open', 'closed', 'archived')
