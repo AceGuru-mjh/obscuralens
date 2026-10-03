@@ -15,6 +15,7 @@ Desktop beta notes:
     spec itself keeps a stable output name.
 """
 
+import contextlib
 import os
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
@@ -24,7 +25,32 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 # when it is not importable through the active interpreter's editable install.
 repo_root = os.path.dirname(SPECPATH)
 entry_script = os.path.join(SPECPATH, 'pyinstaller_entry.py')
+
+# Our own modules (some are only imported lazily, e.g. web/tui/plugins).
 hiddenimports = collect_submodules('obscuralens')
+
+# Third-party packages that are only ever imported lazily (inside functions),
+# so they must be collected explicitly: a frozen executable cannot pip-install
+# the "[web]"/"[tui]" extras at runtime, and modulegraph cannot always see
+# through their own lazy/optional imports (uvicorn drivers, pydantic
+# plugins, textual's rich/pygments/markdown stack).
+for _package in (
+    'fastapi',
+    'starlette',
+    'uvicorn',
+    'pydantic',
+    'annotated_types',
+    'anyio',
+    'textual',
+    'rich',
+    'pygments',
+    'markdown_it',
+    'platformdirs',
+):
+    # Package absent from the build environment: the corresponding
+    # feature (serve/tui) will report its install hint at runtime.
+    with contextlib.suppress(Exception):
+        hiddenimports += collect_submodules(_package)
 
 # Non-Python resources shipped inside the package:
 #   obscuralens/data/*.txt          offline data packs

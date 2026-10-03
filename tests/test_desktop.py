@@ -794,6 +794,11 @@ class TestSingleInstance:
     def test_stale_lock_taken_over_dead_pid(self, tmp_path):
         path = tmp_path / "desktop.lock"
         path.write_text("999999999\n0\n", encoding="utf-8")
+        if os.name == "nt":
+            # Windows has no PID probe (_pid_alive is conservatively True),
+            # so staleness there comes from file age: backdate the lock.
+            old = time.time() - (singleinstance.STALE_AFTER_SECONDS + 3600)
+            os.utime(str(path), (old, old))
         lock = singleinstance.InstanceLock(path=path)
         assert lock.acquire() is True  # PID cannot exist -> stale
         lock.release()

@@ -453,10 +453,8 @@ def list_languages() -> List[LanguageInfo]:
         if meta is None:
             continue
         english_name, native_name, direction = meta
-        if english_count:
-            completion = min(1.0, len(LOCALES.get(code, {})) / english_count)
-        else:  # pragma: no cover - the English catalogue always exists
-            completion = 1.0
+        completion = (min(1.0, len(LOCALES.get(code, {})) / english_count)
+                      if english_count else 1.0)  # pragma: no cover - English catalogue always exists
         infos.append(
             LanguageInfo(
                 code=code,

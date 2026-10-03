@@ -31,9 +31,9 @@ from .. import __desktop_channel__, __version__
 from .branding import (
     BETA_ASCII_ART,
     BETA_DISCLAIMER,
-    ChannelBadge,
     DESKTOP_CHANNEL,
     DESKTOP_NAME,
+    ChannelBadge,
     about_text,
     desktop_version,
     is_beta,

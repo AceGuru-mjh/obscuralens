@@ -128,7 +128,7 @@ Optional extras: `pip install -e ".[web]"` (web UI/API), `".[tui]"` (terminal UI
 | **MCP server (AI agents)** | `obscuralens mcp` | JSON-RPC over stdio; 34 tools |
 | **Docker** | `docker run --rm ghcr.io/aceguru-mjh/obscuralens ip 8.8.8.8` | published to GHCR on `main` |
 | **Docker Compose (web)** | `docker compose up` | serves the web UI on :8000 |
-| **Standalone executable** | `pyinstaller scripts/obscuralens.spec --noconfirm` | CI uploads `obscuralens-windows-exe` |
+| **Standalone executable** | `pyinstaller scripts/obscuralens.spec --noconfirm` | self-contained `.exe` (console + web UI + TUI inside); CI uploads `obscuralens-windows-exe` |
 | **Scheduled monitoring** | see [docs/scheduling.md](docs/scheduling.md) | cron / Task Scheduler / GitHub Actions |
 | **Dev container** | open the folder in VS Code → *Reopen in Container* | `.devcontainer/` ships with the repo |
 | **Task runner** | `make help` / `just` | install, test, lint, run, serve, build… |
@@ -143,6 +143,10 @@ obscuralens serve --host 127.0.0.1 --port 8000 --open
 # dashboard:      http://127.0.0.1:8000
 # OpenAPI docs:   http://127.0.0.1:8000/docs
 ```
+
+Want a page instead of this terminal menu? That is what `serve` is for
+(`--open` launches the browser automatically; `--no-open` never does).
+The standalone `.exe` behaves the same: `obscuralens.exe serve --open`.
 
 The dashboard is the v5.0 single-page application (see [docs/web-ui.md](docs/web-ui.md)):
 10 views, a ⌘K command palette, dark/light themes, canvas charts and a

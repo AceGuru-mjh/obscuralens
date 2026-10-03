@@ -1531,6 +1531,7 @@ def _cmd_serve(args: argparse.Namespace) -> int:
         _schedule_browser_open(args.host, args.port)
     serve(host=args.host, port=args.port, reload=args.reload)
     return 0
+    return 0
 
 
 def _schedule_browser_open(host: str, port: int, delay: float = 1.2) -> None:
