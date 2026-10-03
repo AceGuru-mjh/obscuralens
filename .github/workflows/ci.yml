@@ -121,6 +121,27 @@ jobs:
         run: pyinstaller scripts/obscuralens.spec --noconfirm
       - name: Smoke-test the executable
         run: dist/obscuralens.exe --version
+      - name: Boot-test the frozen web UI
+        # A frozen app cannot pip-install extras at runtime, so the bundled
+        # web stack must actually start: boot `serve`, poll /api/health,
+        # then stop the server again.
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath dist/obscuralens.exe `
+            -ArgumentList 'serve', '--port', '18080' -PassThru
+          try {
+            $ok = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              try {
+                $r = Invoke-RestMethod http://127.0.0.1:18080/api/health `
+                  -TimeoutSec 5
+                if ($r.status -eq 'ok') { $ok = $true; break }
+              } catch { Start-Sleep 2 }
+            }
+            if (-not $ok) { throw 'frozen web UI did not answer /api/health' }
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          }
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

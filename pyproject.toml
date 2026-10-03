@@ -53,7 +53,13 @@ tui = [
     "textual>=0.60",
 ]
 exe = [
+    # The standalone executable must be fully self-contained: a frozen app
+    # cannot pip-install extras at runtime, so the web UI and TUI stacks
+    # ship inside the bundle (see scripts/obscuralens.spec).
     "pyinstaller>=6.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "textual>=0.60",
 ]
 
 [project.scripts]
@@ -76,7 +82,7 @@ markers = [
 [tool.ruff]
 line-length = 110
 target-version = "py39"
-extend-exclude = ["_*.py"]
+extend-exclude = ["/_*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "C4", "SIM"]

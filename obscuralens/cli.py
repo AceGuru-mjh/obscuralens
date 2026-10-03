@@ -151,6 +151,9 @@ class ObscuraLensCLI:
         for num, text in items:
             print(f"{Colors.CYAN}{BOX_V}{Colors.RESET}  [{num}] {text:<52}{Colors.CYAN}{BOX_V}{Colors.RESET}")
         print(f"{Colors.CYAN}{BOX_BL}{line}{BOX_BR}{Colors.RESET}")
+        print(f"  {Colors.YELLOW}Tip:{Colors.RESET} prefer a web page? Run "
+              f"`obscuralens serve --open` (or `obscuralens tui` / `mcp`) "
+              f"instead of this menu.")
 
     # ------------------------------------------------------------------
     # IP

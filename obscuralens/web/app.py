@@ -474,7 +474,7 @@ def create_app():
 
 
 def serve(host: str = '127.0.0.1', port: int = 8000,
-          reload: bool = False) -> None:
+          reload: bool = False, open_browser: bool = False) -> None:
     """
     Run the web UI with uvicorn.
 
@@ -482,6 +482,8 @@ def serve(host: str = '127.0.0.1', port: int = 8000,
         host: interface to bind (default loopback only)
         port: TCP port to listen on
         reload: enable uvicorn's auto-reloader for development
+        open_browser: open the dashboard in the default browser once the
+            server is up (handy for the standalone executable)
 
     Raises:
         ImportError: if uvicorn is not installed, with an install hint.
@@ -495,5 +497,25 @@ def serve(host: str = '127.0.0.1', port: int = 8000,
         ) from exc
 
     app = create_app()
-    print(f'ObscuraLens web UI: http://{host}:{port}')
+    url = f'http://{host}:{port}'
+    print(f'ObscuraLens web UI: {url}')
+    if open_browser:
+        import threading
+        import time
+        import urllib.request
+        import webbrowser
+
+        def _open_when_ready() -> None:
+            for _ in range(100):
+                try:
+                    with urllib.request.urlopen(url + '/api/health',
+                                                timeout=2):
+                        break
+                except OSError:
+                    time.sleep(0.2)
+            else:
+                return
+            webbrowser.open(url)
+
+        threading.Thread(target=_open_when_ready, daemon=True).start()
     uvicorn.run(app, host=host, port=port, reload=reload)

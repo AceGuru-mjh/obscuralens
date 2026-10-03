@@ -219,6 +219,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument('--port', type=int, default=8000)
     p_serve.add_argument('--reload', action='store_true',
                          help='auto-reload on code changes (development)')
+    p_serve.add_argument('--open', action='store_true',
+                         help='open the dashboard in the browser once ready')
     add_common(p_serve)
 
     p_tui = sub.add_parser('tui', help='terminal UI (needs [tui] extra)')
@@ -1153,7 +1155,8 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     except ImportError as e:
         _err(str(e))
         return 2
-    serve(host=args.host, port=args.port, reload=args.reload)
+    serve(host=args.host, port=args.port, reload=args.reload,
+          open_browser=args.open)
     return 0
 
 
