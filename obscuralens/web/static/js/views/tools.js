@@ -1,9 +1,10 @@
 /**
  * ObscuraLens web UI — Tools view (the analyst toolbox).
  *
- * Eight tabs of local-first analysis utilities:
+ * Nine tabs of local-first analysis utilities:
  *   Encode/Decode · JWT · Hash ID · Coordinates · Extract · Typosquats ·
- *   File analysis (EXIF / steganography with drag & drop) · Batch lookup.
+ *   Search dorks · File analysis (EXIF / steganography with drag & drop) ·
+ *   Batch lookup.
  *
  * Every call is defensive: fetches are wrapped, failures render inline
  * callouts with retry actions, and unknown payload keys degrade to a raw
@@ -211,6 +212,7 @@ export const view = {
       { key: 'coords', label: 'Coordinates', icon: 'map', render: tabCoords },
       { key: 'extract', label: 'Extract', icon: 'search', render: tabExtract },
       { key: 'squat', label: 'Typosquats', icon: 'globe', render: tabSquat },
+      { key: 'dorks', label: 'Search dorks', icon: 'search', render: tabDorks },
       { key: 'file', label: 'File analysis', icon: 'file', render: tabFile },
       { key: 'batch', label: 'Batch', icon: 'layers', render: tabBatch },
     ]);
@@ -877,6 +879,99 @@ function tabSquat() {
     sectionCard('Typosquat generator', 'globe', [
       fieldEl('Domain to defend', input, 'Fifteen variant families: omission, insertion, homoglyph, bitsquat, combo…'),
       el('div', { class: 'flex end' }, [btn]),
+    ]),
+    out,
+  ]);
+}
+
+/* ====================================================================== */
+/* Tab 6b — Search dorks (v6.1)                                            */
+/* ====================================================================== */
+
+function tabDorks() {
+  const input = el('input', {
+    class: 'input input-mono', spellcheck: 'false', autocomplete: 'off',
+    placeholder: 'example.com · user@host · 8.8.8.8 · CVE-2021-44228 · handle…',
+    'aria-label': 'Target to build dorks for',
+  });
+  const kindSel = el('select', { class: 'select', 'aria-label': 'Kind override' }, [
+    el('option', { value: '' }, ['Auto-detect kind']),
+  ]);
+  const btn = el('button', { class: 'btn btn-primary', type: 'button' }, [
+    icon('search', { size: 14 }), 'Build dorks',
+  ]);
+  const out = el('div', { class: 'stack' });
+
+  const state = { links: [], detected: '' };
+
+  async function run() {
+    const target = input.value.trim();
+    if (!target) { toastWarn('Enter a target first'); return; }
+    const kind = kindSel.value || null;
+    btn.disabled = true;
+    out.replaceChildren(skeleton(3));
+    try {
+      const res = await api.dorks(target, kind);
+      if (!out.isConnected) return;
+      const dict = asDict(res) || {};
+      state.links = asArray(dict.dorks) ?? [];
+      state.detected = str(dict.detected_kind || '');
+      render();
+    } catch (err) {
+      if (!out.isConnected) return;
+      out.replaceChildren(errorCallout(errText(err), run, 'Dork generation failed'));
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  btn.addEventListener('click', run);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); run(); }
+  });
+
+  // Populate the kind selector from the shared registry.
+  for (const k of KINDS) {
+    kindSel.append(el('option', { value: k }, [k]));
+  }
+
+  function render() {
+    if (!state.links.length) {
+      out.replaceChildren(emptyState({
+        title: 'No dork templates for this target',
+        hint: 'The kind could not be recognised or carries no templates yet — try the selector.',
+        icon: 'search',
+      }));
+      return;
+    }
+    const head = kvGrid([
+      ['Detected kind', state.detected || '—'],
+      ['Links', `${state.links.length}`],
+    ]);
+    const rows = state.links.map((link) => ({
+      engine: str(link.engine),
+      label: str(link.label),
+      url: str(link.url),
+    }));
+    out.replaceChildren(head, dataTable({
+      columns: [
+        { key: 'engine', label: 'Engine', render: (row) => badge(row.engine, 'muted') },
+        { key: 'label', label: 'Purpose' },
+        {
+          key: 'url', label: 'Search URL',
+          render: (row) => el('a', {
+            class: 'mono sm', href: row.url, target: '_blank', rel: 'noopener noreferrer',
+          }, [row.url.length > 72 ? `${row.url.slice(0, 72)}…` : row.url]),
+        },
+      ],
+      rows,
+      empty: 'No dorks generated',
+    }));
+  }
+
+  return el('div', { class: 'stack-lg' }, [
+    sectionCard('Search dork builder', 'search', [
+      fieldEl('Target', input, 'Links are generated locally — you stay in control of every active query.'),
+      el('div', { class: 'flex end gap' }, [kindSel, btn]),
     ]),
     out,
   ]);

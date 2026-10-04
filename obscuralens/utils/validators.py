@@ -235,20 +235,38 @@ _LTC_RE = re.compile(r'^(?:[LM][a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1[a-z0-9]{11,71})$
 _XRP_RE = re.compile(r'^r[1-9A-HJ-NP-Za-km-z]{24,34}$')
 # Cardano: addr1... (bech32, 40-120 chars)
 _ADA_RE = re.compile(r'^addr1[a-z0-9]{40,120}$')
-# Solana: 32-44 base58 chars, no version prefix (checked last so the
-# longer-established base58 families win any length overlap).
+# Solana: 32-44 base58 chars, no version prefix (checked after the
+# prefixed families and after TRON so their overlapping lengths win).
 _SOL_RE = re.compile(r'^[1-9A-HJ-NP-Za-km-z]{32,44}$')
+# TRON: T + 33 base58 chars (base58check). 34 chars total, which also
+# sits inside Solana's 32-44 char space, so TRON is checked first (v6.1).
+_TRON_RE = re.compile(r'^T[1-9A-HJ-NP-Za-km-z]{33}$')
+# Cosmos (ATOM): bech32 with the ``cosmos`` human-readable part. Account
+# addresses carry a 20-byte (45 chars total) or 32-byte (65 chars total)
+# data part (v6.1).
+_ATOM_RE = re.compile(r'^cosmos1[a-z0-9]{38}$|^cosmos1[a-z0-9]{58}$')
+# NEAR: named accounts such as ``alice.near`` / ``app.alice.near`` - 64
+# chars max per label, total 64, lower-case letters/digits/underscore/
+# hyphen/dot. The ``.near`` suffix is not an ICANN TLD, so claiming it for
+# the crypto family before the domain validator never hijacks a real
+# domain (implicit 64-hex accounts are indistinguishable from SHA-256
+# digests and stay with the hash kind by design; v6.1).
+_NEAR_RE = re.compile(
+    r'^[a-z0-9_-]{1,59}(?:\.[a-z0-9_-]{1,59})*\.near$')
 
 
 def detect_crypto_chain(address: str) -> Optional[str]:
     """
     Identify the likely blockchain of an address string.
 
-    Returns one of ``btc / eth / xmr / doge / ltc / xrp / ada / sol`` or
-    ``None``. Ethereum-style addresses also cover EVM forks (BSC, Polygon, …)
-    but are reported as ``eth`` since the primary lookup path is identical.
-    Solana is checked last: its 32-44 char base58 space overlaps the shorter
-    Bitcoin families, so the prefixed formats win first.
+    Returns one of ``btc / eth / xmr / doge / ltc / xrp / ada / tron /
+    atom / near / sol`` or ``None``. Ethereum-style addresses also cover
+    EVM forks (BSC, Polygon, Avalanche C-chain …) but are reported as
+    ``eth`` since the primary lookup path is identical; the Avalanche
+    C-chain balance is layered on as a dedicated ETH-address source.
+    Solana is checked last: its 32-44 char base58 space overlaps the
+    shorter Bitcoin families (and TRON's 34-char T prefix), so the
+    prefixed formats win first.
     """
     value = (address or '').strip()
     if not value:
@@ -267,6 +285,12 @@ def detect_crypto_chain(address: str) -> Optional[str]:
         return 'xrp'
     if _ADA_RE.match(value):
         return 'ada'
+    if _TRON_RE.match(value):
+        return 'tron'
+    if _ATOM_RE.match(value):
+        return 'atom'
+    if _NEAR_RE.match(value):
+        return 'near'
     if _SOL_RE.match(value):
         return 'sol'
     return None
@@ -280,7 +304,7 @@ def validate_crypto_address(address: str) -> Tuple[bool, str]:
     if chain:
         return True, ""
     return False, ("Unrecognised crypto address (supported: btc, eth, xmr, "
-                   "doge, ltc, xrp, ada, sol)")
+                   "doge, ltc, xrp, ada, tron, atom, near, sol)")
 
 
 # --- file hashes -------------------------------------------------------------

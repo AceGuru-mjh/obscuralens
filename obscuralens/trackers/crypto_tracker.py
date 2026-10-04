@@ -35,10 +35,11 @@ from .crypto_sources import gather_all
 __all__ = ['AGGREGATED_CHAINS', 'CryptoTracker']
 
 #: Chains the aggregated keyless/keyed sources can currently enrich.
-#: As of v5.2 that is every validated chain except xmr (Monero balances are
-#: unobservable by design) - xrp/ada/sol joined via XRPScan, Koios and the
-#: public Solana JSON-RPC.
-AGGREGATED_CHAINS = ('btc', 'eth', 'doge', 'ltc', 'xrp', 'ada', 'sol')
+#: As of v6.1 that is every validated chain except xmr (Monero balances are
+#: unobservable by design) - tron/atom/near joined via TronGrid, the
+#: cosmos.directory REST proxy and the NEAR public RPC.
+AGGREGATED_CHAINS = ('btc', 'eth', 'doge', 'ltc', 'xrp', 'ada', 'tron',
+                     'atom', 'near', 'sol')
 
 
 class CryptoTracker:

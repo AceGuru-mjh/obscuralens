@@ -12,10 +12,12 @@ each value, so a report can show exactly where a fact came from.
 """
 
 import concurrent.futures as futures
+import contextlib
 from typing import Any, Dict, List, Optional
 
 from ..config import config
 from ..health import health
+from ..utils.helpers import fanout_workers
 from ..utils.http_client import http
 
 # ---------------------------------------------------------------------------
@@ -712,6 +714,58 @@ def _ipinfo_io(ip: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v6.1 addition: proxycheck.io - the one keyless source whose VPN/proxy
+# verdict is its primary product. Probed live (positive 8.8.8.8) before
+# shipping; the free tier allows 100 queries/day without a key and 1000/day
+# with a free key.
+# ---------------------------------------------------------------------------
+
+def _proxycheck(ip: str) -> Dict[str, Any]:
+    """
+    proxycheck.io (keyless free tier): VPN/proxy/relay verdict + risk score.
+
+    Endpoint: ``https://proxycheck.io/v2/{ip}?vpn=1&asn=1&risk=1`` - the
+    anonymous tier answers about 100 queries per day. The verdict dimension
+    is orthogonal to the geo sources: ipapi.is may say "datacenter" while
+    proxycheck says "no proxy", and the field provenance shows both.
+
+    Response shape: ``{"status": "ok", "<ip>": {...fields...}}``. A quota
+    exhaustion answers ``status: "error"`` and maps to ``{}`` (honest
+    no-data, never a crash). Fields carry the ``proxycheck_`` prefix so
+    they merge alongside the ipapi.is risk fields without collisions.
+    """
+    ok, d, _ = http.get_json(
+        f"https://proxycheck.io/v2/{ip}?vpn=1&asn=1&risk=1", cache_ttl=1800)
+    if not ok or not isinstance(d, dict) or d.get('status') != 'ok':
+        return {}
+
+    info = d.get(ip)
+    if not isinstance(info, dict):
+        return {}
+
+    out: Dict[str, Any] = {}
+    proxy = info.get('proxy')
+    if isinstance(proxy, str) and proxy:
+        out['proxycheck_proxy'] = proxy.lower() == 'yes'
+    vpn = info.get('vpn') if isinstance(info.get('vpn'), str) else None
+    if vpn is not None:
+        out['proxycheck_vpn'] = vpn.lower() == 'yes'
+    risk = info.get('risk')
+    if risk is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['proxycheck_risk'] = int(risk)
+    if info.get('type'):
+        out['proxycheck_type'] = str(info.get('type')).lower()
+    if info.get('provider'):
+        out['proxycheck_provider'] = info.get('provider')
+    asn = info.get('asn')
+    if asn is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['proxycheck_asn'] = int(str(asn).removeprefix('AS'))
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -733,6 +787,7 @@ FREE_SOURCES: Dict[str, Any] = {
     'greynoise': _greynoise,
     'ipapi.is': _ipapi_is,
     'ipinfo.io': _ipinfo_io,
+    'proxycheck': _proxycheck,
 }
 
 KEYED_SOURCES: Dict[str, Any] = {
@@ -760,6 +815,7 @@ SOURCE_CATALOG = {
     'threat_feeds': 'Tor exit list, Spamhaus DROP, Feodo and FireHOL level-1 (keyless)',
     'ipapi.is': 'Geolocation, ASN, company, datacenter/VPN/proxy flags and risk score (keyless)',
     'ipinfo.io': 'Geolocation, hostname, timezone and ASN via ipinfo.io free tier (keyless)',
+    'proxycheck': 'VPN/proxy/relay verdict and risk score via proxycheck.io free tier (keyless; v6.1)',
     'shodan': 'Full Shodan host data (keyed)',
     'virustotal': 'Reputation and detections (keyed)',
     'ipinfo': 'Hostname, org, privacy hints (keyed)',
@@ -826,7 +882,7 @@ def gather_all(ip: str, keys: Optional[Dict[str, str]] = None) -> Dict[str, Any]
     status: Dict[str, Dict[str, Any]] = {}
 
     if tasks:
-        with futures.ThreadPoolExecutor(max_workers=min(len(tasks), 12)) as ex:
+        with futures.ThreadPoolExecutor(max_workers=fanout_workers(len(tasks))) as ex:
             future_map = {ex.submit(fn): name for name, fn in tasks.items()}
             for future in futures.as_completed(future_map):
                 name = future_map[future]

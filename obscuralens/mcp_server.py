@@ -616,6 +616,30 @@ TOOLS: List[Dict[str, Any]] = [
         },
     },
     {
+        'name': 'tools_dorks',
+        'description': 'Build ready-to-open search-engine dorks for a '
+                       'target across Google, Bing, DuckDuckGo, Yandex and '
+                       'GitHub code search (13 kinds: domain exposure '
+                       'files, email leak context, CVE exploits, platform-'
+                       'scoped username searches, ...). Offline link '
+                       'generation - the operator stays in control of '
+                       'every active query.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'target': {'type': 'string',
+                           'description': 'Any supported target, e.g. '
+                                          'example.com, user@host.com or '
+                                          'CVE-2021-44228.'},
+                'kind': {'type': 'string',
+                         'description': 'Optional kind override '
+                                        '(auto-detected when omitted).'},
+            },
+            'required': ['target'],
+            'additionalProperties': False,
+        },
+    },
+    {
         'name': 'tools_exif',
         'description': 'Analyze the metadata of a local image file: EXIF, '
                        'GPS (decimal, DMS and a tracker-ready coords '
@@ -1646,6 +1670,35 @@ def _tool_batch(arguments: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _tool_dorks(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ready-to-open search-engine dorks for a target (v6.1).
+
+    Input: ``target`` - any supported target (the kind is auto-detected
+    unless the optional ``kind`` argument overrides it).
+
+    Output: ``{'target', 'detected_kind', 'count', 'dorks': [...]}`` where
+    each dork is ``{'engine', 'label', 'query', 'url'}``.
+
+    Purely offline: link generation only - the analyst (or agent operator)
+    stays in control of every active query. Engines cover Google, Bing,
+    DuckDuckGo, Yandex and GitHub code search across 13 kinds.
+    """
+    from .utils.dorks import dorks_for_target
+    target = _required_str(arguments, 'target')
+    kind = arguments.get('kind')
+    if kind is not None and not isinstance(kind, str):
+        raise ValueError('kind must be a string when provided')
+    links = dorks_for_target(target, kind)
+    from .investigate import detect_kind
+    return {
+        'target': target,
+        'detected_kind': detect_kind(target),
+        'count': len(links),
+        'dorks': links,
+    }
+
+
 #: v5.0 tool registry: tool name -> handler, kept in the same order as the
 #: ``TOOLS`` schema entries so the advertised surface and the dispatch
 #: table can be reviewed side by side.
@@ -1667,6 +1720,7 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     'tools_hash_id': _tool_hash_id,
     'tools_extract': _tool_extract,
     'tools_squat': _tool_squat,
+    'tools_dorks': _tool_dorks,
     'tools_exif': _tool_exif,
     'tools_stego': _tool_stego,
     'tools_coords_convert': _tool_coords_convert,

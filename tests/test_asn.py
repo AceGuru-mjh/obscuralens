@@ -66,9 +66,40 @@ BGPVIEW_PEERS = {
     }
 }
 
+# v6.1: CAIDA AS-Rank and PeeringDB fixtures.
+ASRANK_ASN = {
+    'data': {
+        'asn': {
+            'rank': 1556,
+            'asn': '15169',
+            'asnName': 'GOOGLE',
+            'source': 'ARIN',
+            'cliqueMember': True,
+            'ixp': False,
+            'seen': True,
+            'cone': {'number': 4231},
+        }
+    }
+}
+
+PEERINGDB_NET = {
+    'data': [{
+        'id': 433,
+        'org_id': 574,
+        'name': 'Google LLC',
+        'name_long': '',
+        'website': 'https://about.google/intl/en/',
+        'info_type': 'NSP',
+        'info_traffic': '1-5 Tbps',
+        'policy_general': 'Selective',
+        'ix_count': 145,
+        'netixlan_updated': '2025-01-01T00:00:00Z',
+    }]
+}
+
 
 def _all_sources(url, **kwargs):
-    """Dispatch any of the five ASN source URLs to a fixture payload."""
+    """Dispatch any of the ASN source URLs to a fixture payload."""
     if 'as-overview' in url:
         return True, RIPE_OVERVIEW, ''
     if 'announced-prefixes' in url:
@@ -77,6 +108,10 @@ def _all_sources(url, **kwargs):
         return True, BGPVIEW_PEERS, ''
     if '/prefixes' in url:
         return True, BGPVIEW_PREFIXES, ''
+    if 'api.asrank.caida.org' in url:
+        return True, ASRANK_ASN, ''
+    if 'peeringdb.com/api/net' in url:
+        return True, PEERINGDB_NET, ''
     if 'api.bgpview.io/asn/' in url:
         return True, BGPVIEW_ASN, ''
     return False, None, f'unexpected url {url}'
@@ -346,7 +381,8 @@ def test_gather_all_respects_disabled_sources(monkeypatch):
 
 
 def test_registries_are_consistent():
-    assert set(asn_sources.FREE_SOURCES) == {'ripestat', 'bgpview'}
+    assert set(asn_sources.FREE_SOURCES) == {'ripestat', 'bgpview',
+                                             'asrank', 'peeringdb'}
     assert asn_sources.KEYED_SOURCES == {}
     assert set(asn_sources.SOURCE_CATALOG) == set(asn_sources.FREE_SOURCES)
 
@@ -361,7 +397,7 @@ def test_tracker_success_shape(fake_http, recording_db):
 
     assert result['asn'] == 15169
     assert result['success'] is True
-    assert result['sources_ok'] == ['bgpview', 'ripestat']
+    assert result['sources_ok'] == ['asrank', 'bgpview', 'peeringdb', 'ripestat']
     assert result['sources_failed'] == {}
     assert result['errors'] == []
     assert result['field_count'] > 5
@@ -436,6 +472,7 @@ def test_batch_track_preserves_order(fake_http, recording_db):
 
 def test_tracker_helpers():
     tracker = ASNTracker()
-    assert tracker.source_names() == ['bgpview', 'ripestat']
+    assert tracker.source_names() == ['asrank', 'bgpview', 'peeringdb',
+                                     'ripestat']
     assert set(tracker.source_catalog()) == set(asn_sources.SOURCE_CATALOG)
     assert 'keyless' in tracker.source_catalog()['ripestat']

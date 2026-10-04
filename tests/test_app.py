@@ -763,7 +763,7 @@ class TestAppRegistration:
             {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list'}
         )['result']['tools']
         assert 'app_lookup' in {tool['name'] for tool in tools}
-        assert len(tools) == 40
+        assert len(tools) == 41
 
     def test_batch_and_sdk_kinds_include_app(self):
         from obscuralens.advanced.batch import SUPPORTED_KINDS

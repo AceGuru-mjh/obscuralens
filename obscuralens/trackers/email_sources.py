@@ -7,6 +7,7 @@ Keyed sources (HIBP, Hunter) are layered on by EmailTracker when configured.
 """
 
 import concurrent.futures as futures
+import contextlib
 import hashlib
 import re
 from datetime import datetime, timezone
@@ -495,6 +496,77 @@ def _hunter_verify(email: str, api_key: str) -> Dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# v6.1 addition: XposedOrNot breach analytics - the keyless counterpart to
+# the keyed HIBP breach source. Probed live before shipping (positive
+# john@gmail.com answers a full risk profile, a random address answers
+# null metrics).
+# ---------------------------------------------------------------------------
+
+def _xposedornot(email: str) -> Dict[str, Any]:
+    """
+    XposedOrNot breach analytics (keyless, v6.1).
+
+    Endpoint: ``https://api.xposedornot.com/v1/breach-analytics?email=…``.
+    Aggregates public breach corpora into a risk profile: a 0-100 risk
+    score, an industry breakdown, password-strength mix and the list of
+    exposing breaches with dates and victim counts. An address with no
+    exposure answers null metrics - reported honestly as
+    ``xposedornot_breached: False`` rather than a source failure, which
+    also cross-confirms the keyed HIBP verdict when both run.
+
+    Fields: ``xposedornot_breached``, ``xposedornot_risk_score``,
+    ``xposedornot_risk_label``, ``xposedornot_breaches`` (count),
+    ``xposedornot_breach_sites`` (top ten), ``xposedornot_pastes``,
+    ``xposedornot_passwords_weak``.
+    """
+    ok, d, _ = http.get_json(
+        f"https://api.xposedornot.com/v1/breach-analytics?email={email}",
+        cache_ttl=3600)
+    if not isinstance(d, dict):
+        return {}
+
+    # The API answers HTTP 200 with null metrics for addresses that have no
+    # exposure - a real negative. Only a payload without the metric keys at
+    # all (proxies, error pages) counts as no data.
+    if 'BreachMetrics' not in d and 'ExposedBreaches' not in d:
+        return {}
+
+    breaches = d.get('ExposedBreaches')
+    metrics = d.get('BreachMetrics')
+
+    out: Dict[str, Any] = {'xposedornot_breached': bool(breaches)}
+    if isinstance(metrics, dict):
+        risk = metrics.get('risk')
+        if isinstance(risk, list) and risk and isinstance(risk[0], dict):
+            if risk[0].get('risk_score') is not None:
+                with contextlib.suppress(TypeError, ValueError):
+                    out['xposedornot_risk_score'] = int(risk[0].get('risk_score'))
+            if risk[0].get('risk_label'):
+                out['xposedornot_risk_label'] = risk[0].get('risk_label')
+        strength = metrics.get('passwords_strength')
+        if isinstance(strength, list) and strength and isinstance(strength[0], dict):
+            easy = strength[0].get('EasyToCrack')
+            if easy is not None:
+                with contextlib.suppress(TypeError, ValueError):
+                    out['xposedornot_passwords_weak'] = int(easy)
+
+    if isinstance(breaches, list) and breaches:
+        out['xposedornot_breaches'] = len(breaches)
+        sites = []
+        for breach in breaches[:10]:
+            if isinstance(breach, dict) and breach.get('breach'):
+                sites.append(str(breach.get('breach')))
+        if sites:
+            out['xposedornot_breach_sites'] = sites
+
+    pastes = d.get('PastesSummary')
+    if isinstance(pastes, dict) and pastes.get('cnt') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['xposedornot_pastes'] = int(pastes.get('cnt'))
+    return out
+
+
 KEYED_SOURCES = {
     'haveibeenpwned': _hibp_breaches,
     'hibp_pastes': _hibp_pastes,
@@ -509,6 +581,7 @@ FREE_SOURCES = {
     'gravatar': _gravatar,
     'emailrep': _emailrep,
     'github_commits': _github_commits,
+    'xposedornot': _xposedornot,
 }
 
 SOURCE_CATALOG = {
@@ -519,6 +592,8 @@ SOURCE_CATALOG = {
     'gravatar': 'Gravatar avatar existence (keyless)',
     'emailrep': 'EmailRep.io reputation, linked profiles, leak flags (keyless)',
     'github_commits': 'GitHub commit authorship search (keyless, low rate)',
+    'xposedornot': 'Breach risk profile, exposing sites, paste count via '
+                   'XposedOrNot breach analytics (keyless; v6.1)',
     'patterns': 'Local-part heuristics (local)',
     'haveibeenpwned': 'Breach exposure (keyed)',
     'hibp_pastes': 'Paste exposure (keyed)',

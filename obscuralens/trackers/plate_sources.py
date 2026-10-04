@@ -42,6 +42,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..config import config
 from ..health import health
 from ..utils.data_packs import DATA_DIR
+from ..utils.helpers import fanout_workers
 from ..utils.validators import normalize_plate, split_plate
 
 #: How many matched-country candidates a single plate reports (some shapes,
@@ -434,7 +435,7 @@ def gather_all(plate_value: Any, keys: Optional[Dict[str, str]] = None) -> Dict[
     status: Dict[str, Dict[str, Any]] = {}
 
     if tasks:
-        with futures.ThreadPoolExecutor(max_workers=min(len(tasks), 12)) as ex:
+        with futures.ThreadPoolExecutor(max_workers=fanout_workers(len(tasks))) as ex:
             future_map = {ex.submit(fn): name for name, fn in tasks.items()}
             for future in futures.as_completed(future_map):
                 name = future_map[future]

@@ -1,12 +1,12 @@
 """
 ObscuraLens correlation package (v4.0).
 
-Cross-target entity resolution, timeline construction and heuristic risk
-scoring over stored lookups::
+Cross-target entity resolution, timeline construction, heuristic risk
+scoring and evidence confidence scoring over stored lookups::
 
     from obscuralens.correlation import (
-        attach_risk, build_graph, build_timeline, correlate,
-        correlation_sections, extract_entities, extract_events,
+        attach_confidence, attach_risk, build_graph, build_timeline,
+        correlate, correlation_sections, extract_entities, extract_events,
         history_records, risk_sections, score, timeline_sections,
     )
 
@@ -16,8 +16,10 @@ scoring over stored lookups::
     pair = correlate('a.example', 'b.example')
     timeline = build_timeline(records)       # oldest -> newest events
     risk = score('ip', payload)              # explainable heuristic score
+    confidence = attach_confidence(payload)  # evidence quality (v6.1)
 """
 
+from .confidence import attach_confidence, field_confidence, source_trust
 from .engine import (
     KINDS,
     EntityGraph,
@@ -39,6 +41,7 @@ __all__ = [
     'DATE_FIELD_REGISTRY',
     'KINDS',
     'EntityGraph',
+    'attach_confidence',
     'attach_risk',
     'build_graph',
     'build_timeline',
@@ -46,8 +49,10 @@ __all__ = [
     'correlation_sections',
     'extract_entities',
     'extract_events',
+    'field_confidence',
     'history_records',
     'risk_sections',
     'score',
+    'source_trust',
     'timeline_sections',
 ]

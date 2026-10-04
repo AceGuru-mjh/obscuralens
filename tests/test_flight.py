@@ -288,16 +288,24 @@ class TestFlightGather:
 class TestFlightTracker:
 
     def test_track_envelope_and_merged_fields(self, fake_http):
+        # v6.1: adsb.lol answers (nothing airborne) so its honest negative
+        # verdict flows into the merged report instead of a source failure.
+        fake_http.json = lambda url, **kw: (
+            (True, {'ac': [], 'msg': 'No error', 'total': 0}, '')
+            if 'api.adsb.lol' in url else (False, None, 'not configured'))
         result = FlightTracker().track('BA2490')
         assert set(result) == {'flight', 'info', 'field_sources', 'sources_ok',
                                'sources_failed', 'field_count', 'success',
                                'errors'}
         assert result['flight'] == 'BA2490'
         assert result['success'] is True
-        # Offline sources only: aviationstack needs a configured key.
-        assert result['sources_ok'] == ['airline_pack', 'flight_math']
+        # Offline sources plus the keyless live source (nothing airborne);
+        # aviationstack needs a configured key.
+        assert result['sources_ok'] == ['adsb_lol', 'airline_pack',
+                                        'flight_math']
         assert result['sources_failed'] == {}
         assert result['errors'] == []
+        assert result['info']['adsb_currently_airborne'] is False
         assert result['info']['flight'] == 'BA2490'
         assert result['info']['airline_name'] == 'British Airways'
         assert result['info']['callsign'] == 'SPEEDBIRD'
@@ -338,11 +346,11 @@ class TestFlightTracker:
 
     def test_source_names_and_source_catalog(self):
         tracker = FlightTracker()
-        assert tracker.source_names() == ['airline_pack', 'aviationstack',
-                                          'flight_math']
+        assert tracker.source_names() == ['adsb_lol', 'airline_pack',
+                                          'aviationstack', 'flight_math']
         catalog = tracker.source_catalog()
         assert set(catalog) == {'airline_pack', 'flight_math',
-                                'aviationstack'}
+                                'aviationstack', 'adsb_lol'}
         assert all(catalog.values())  # every source has a description
 
 

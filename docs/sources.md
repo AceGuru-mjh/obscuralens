@@ -2,9 +2,10 @@
 
 Every ObscuraLens lookup fans out to **all** sources for its kind in parallel,
 merges the fields and records which source supplied each fact
-(`field_sources` provenance). This page is the complete catalog, per kind —
-20 kinds as of v6.0 (the `vin`, `flight` and `mmsi` sections below are in;
-`app`, `bssid` and `plate` land with the rest of the v6.0 sensor kinds).
+(`field_sources` provenance) — and since v6.1 also scores how well each
+fact is corroborated (the `confidence` block). This page is the complete
+catalog, per kind — 20 kinds as of v6.0, with the v6.1 source additions
+marked per row.
 
 ## Keyless vs keyed
 
@@ -53,6 +54,7 @@ live under `obscuralens sources health` — see
 | ipapi.is | Geolocation, ASN, company, datacenter/VPN/proxy/tor flags, risk score | none |
 | ipinfo.io | Country, org (ASN + name), hostname, coordinates (keyless free tier; shares field names with the keyed `ipinfo`) | none |
 | threat_feeds | Tor exit list, Spamhaus DROP, Feodo, FireHOL level-1, URLhaus and ThreatFox | none |
+| proxycheck | proxycheck.io VPN/proxy/relay verdict and 0-100 risk score (keyless free tier; v6.1) | none |
 | shodan | Full Shodan host data | `shodan` |
 | virustotal | Reputation and detections | `virustotal` |
 | ipinfo | Hostname, org, privacy hints | `ipinfo` |
@@ -74,6 +76,8 @@ live under `obscuralens sources health` — see
 | security_txt | RFC 9116 security.txt disclosure contacts and policy | none |
 | doh.google | DNS-over-HTTPS resolver (dns.google): A/AAAA/MX/NS answers cross-checking the classic `dns` source, plus a `doh_responded` marker | none |
 | doh.cloudflare | DNS-over-HTTPS via the Cloudflare 1.1.1.1 resolver: the same A/AAAA/MX/NS record set as a third independent DNS vantage point, plus a `doh_cf_responded` marker (v5.2) | none |
+| hstspreload | Chromium HSTS preload list status via hstspreload.org: `preloaded`/`pending`/`rejected`/`unknown` plus the preloaded parent domain (v6.1) | none |
+| ransomware_live | ransomware.live recent-attack feed: which ransomware group listed the domain on a leak site and when (1 req/min, cached six hours; v6.1) | none |
 
 ## Email (`obscuralens email`)
 
@@ -86,6 +90,7 @@ live under `obscuralens sources health` — see
 | gravatar | Gravatar avatar existence | none |
 | emailrep | EmailRep.io reputation, linked profiles, leak flags | none |
 | github_commits | GitHub commit authorship search (low rate) | optional `github` |
+| xposedornot | XposedOrNot breach analytics: 0-100 risk score, exposing breach sites, paste count, weak-password count (v6.1) | none |
 | patterns | Local-part heuristics | none (local) |
 | haveibeenpwned | Breach exposure | `haveibeenpwned` |
 | hibp_pastes | Paste exposure | `haveibeenpwned` |
@@ -100,25 +105,26 @@ live under `obscuralens sources health` — see
 
 ## Username (`obscuralens username`)
 
-The username tracker sweeps **104 platforms** — 95 HTML platforms and 9
+The username tracker sweeps **112 platforms** — 101 HTML platforms and 11
 JSON API platforms — with honest three-state verdicts per platform
 (confirmed / ruled-out / inconclusive). JS-shell and bot-wall pages are never
 claimed as hits. Restrict a scan with `--platforms steam,kaggle`.
 
-HTML platforms (95): 9GAG, About.me, AtCoder, Behance, Bitbucket, Bitwarden
-Forum, Blender Artists, Blogger, Credly, Crowdin, DeviantArt, Disqus,
-Dribbble, Etsy, Exophase, Facebook, Flickr, Fosstodon, Freesound, Geocaching,
-GitBook, GitHub, GitLab, Gitee, GoodReads, HackMD, Hackaday.io, HackerOne,
-Hashnode, HubPages, Hugging Face, IFTTT, Instagram, Instructables, Ionic
-Forum, Issuu, Itch.io, Joplin Forum, Kaggle, Kongregate, Laracast, Last.fm,
-Launchpad, LinkedIn, Linktree, LinuxFR, Mastodon, Medium, Memrise,
-MyAnimeList, MyDramaList, MyMiniFactory, OK.ru, OpenGameArt, Patreon,
-Pinterest, Pixelfed, Pokemon Showdown, Quora, Rclone Forum, Redbubble,
-Reddit, Replit, RubyGems, Rust Users, Scratch, Sketchfab, SlideShare,
-Snapchat, SoundCloud, SourceForge, SpeakerDeck, Spotify, Steam, Strava,
-Substack, Telegram, Tenor, TheMovieDB, TikTok, TradingView, Tumblr, Twitch,
-Twitter, Ubuntu Discourse, VK, Vimeo, WakaTime, Wattpad, Windy, WordPress,
-YouPic, YouTube, n8n Community, write.as.
+HTML platforms (101): 9GAG, About.me, AtCoder, Bandcamp, Behance,
+Bitbucket, Bitwarden Forum, Blender Artists, Blogger, Calendly, Codeforces,
+Credly, Crowdin, DeviantArt, Disqus, Dribbble, Etsy, Exophase, Facebook,
+Flickr, Fosstodon, Freesound, Geocaching, GitBook, GitHub, GitLab, Gitee,
+GoodReads, Gumroad, HackMD, Hackaday.io, HackerOne, Hashnode, HubPages,
+Hugging Face, IFTTT, Instagram, Instructables, Ionic Forum, Issuu, Itch.io,
+Joplin Forum, Kaggle, Ko-fi, Kongregate, Laracast, Last.fm, Launchpad,
+LinkedIn, Linktree, LinuxFR, Mastodon, Medium, Memrise, MyAnimeList,
+MyDramaList, MyMiniFactory, OK.ru, OpenGameArt, OpenSea, Patreon, Pinterest,
+Pixelfed, Pokemon Showdown, Quora, Rclone Forum, Redbubble, Reddit, Replit,
+RubyGems, Rust Users, Scratch, Sketchfab, SlideShare, Snapchat, SoundCloud,
+SourceForge, SpeakerDeck, Spotify, Steam, Strava, Substack, Telegram, Tenor,
+TheMovieDB, TikTok, TradingView, Tumblr, Twitch, Twitter, Ubuntu Discourse,
+VK, Vimeo, WakaTime, Wattpad, Windy, WordPress, YouPic, YouTube, n8n
+Community, write.as.
 
 > Patreon and Etsy sit behind aggressive bot walls: both existing and
 > missing accounts answer HTTP 403, so their verdict rules report
@@ -126,17 +132,24 @@ YouPic, YouTube, n8n Community, write.as.
 > platform. Substack resolves via page title ("| Substack" marker) and
 > Replit via its login-redirect split, giving real found / not-found
 > verdicts. Hashnode decides from the page title ("User not found |
-> Hashnode" vs a real profile title).
+> Hashnode" vs a real profile title). Ko-fi decides from its homepage-
+> fallback title (missing usernames land on the generic "Ko-fi | …" page)
+> and Codeforces from its profile-title signature — both v6.1 additions,
+> live-verified before shipping.
 
 The v5.2 HTML additions all ride the `STATUS_RELIABLE` fast path: every one
 of them was probed live before shipping, and a plain 200 on the profile
 URL counts as a hit only because missing accounts verifiably answer 404.
+Calendly, Gumroad, OpenSea and Bandcamp joined that set in v6.1 (their
+200-vs-404 splits were re-verified live).
 Platforms that bot-wall every scripted client (Codepen, Codewars, LeetCode,
-npm, ArtStation, Trakt, osu!, Wikipedia, Fandom, Imgur, Speedrun.com, …)
+npm, ArtStation, Trakt, osu!, Wikipedia, Fandom, Imgur, Speedrun.com, and
+the v6.1 candidates unsplash/producthunt/researchgate/scribd/discogs/
+genius/chess.com/kickstarter/500px, …)
 were tested and deliberately **not** added — they could only ever report
 "unknown".
 
-JSON API platforms (9):
+JSON API platforms (11):
 
 | Platform | Coverage | Key |
 |---|---|---|
@@ -149,6 +162,8 @@ JSON API platforms (9):
 | Chess.com | Account existence and profile | none |
 | Bluesky | DID-confirmed profile via the public App View API (`app.bsky.actor.getProfile`); bare usernames resolve `<name>.bsky.social`, dotted handles are used verbatim (v5.2) | none |
 | Dailymotion | User via api.dailymotion.com with an explicit field list: screenname, creation date, follower/video/view totals (v5.2) | none |
+| Stack Exchange | Stack Overflow account via the users API (`inname` search with exact display-name matching; the verdict engine passes the queried username for the match) (v6.1) | none |
+| Duolingo | Learner profile via the 2017-06-30 users JSON API: `users: []` for missing accounts — a clean JSON split (v6.1) | none |
 
 ## URL (`obscuralens url`)
 
@@ -163,10 +178,11 @@ JSON API platforms (9):
 
 ## Crypto (`obscuralens crypto`)
 
-Supported chains: BTC, ETH, DOGE, LTC, XRP, ADA, SOL (validators also
-recognise XMR addresses — Monero balances are unobservable by design, so
-xmr is chain-labelled only). Chain routing means an ETH
-address never touches the BTC explorers.
+Supported chains: BTC, ETH, DOGE, LTC, XRP, ADA, TRON, ATOM, NEAR, SOL
+(validators also recognise XMR addresses — Monero balances are
+unobservable by design, so xmr is chain-labelled only; v6.1 adds TRON,
+NEAR named accounts like `alice.near`, and Cosmos `cosmos1…` addresses).
+Chain routing means an ETH address never touches the BTC explorers.
 
 | Source | Coverage | Key |
 |---|---|---|
@@ -176,8 +192,14 @@ address never touches the BTC explorers.
 | mempool.space | Bitcoin funded−spent balance, received/sent totals, tx count, pending-tx counter (BTC only; shares field names with blockchain.info so provenance stacks) | none |
 | blockcypher | Balance, received/sent totals and tx counters (BTC/ETH/LTC/DOGE, keyless, rate-limited; LTC and DOGE's second aggregated source; v5.2) | none |
 | xrpscan | XRP balance, sequence, owner count, latest affecting transaction and ledger index (XRP only; v5.2) | none |
+| xrpl_public | Independent `account_info` second opinion from the xrplcluster.com community RPC — same AccountRoot fields as xrpscan reported by a different server, provenance stacks (XRP only; v6.1) | none |
 | koios | Lovelace balance, stake address, script flag, UTXO count and UTXO-derived last activity via the Koios Cardano API pool (ADA only; v5.2) | none |
 | solana | Lamports balance, owner program, executable flag and data size via the public Solana mainnet JSON-RPC (SOL only; v5.2) | none |
+| tron | TRX balance, account type, decoded contract name and creation time via TronGrid `wallet/getaccount`; never-activated addresses are real zero-balance negatives (TRON only; v6.1) | none |
+| near | NEAR balance, locked stake, contract code hash and storage usage via the public NEAR RPC `query`/`view_account`; `UNKNOWN_ACCOUNT` is a real negative (NEAR named accounts; v6.1) | none |
+| cosmos | ATOM and IBC token balances plus account number/sequence via the cosmos.directory REST proxy (ATOM only; v6.1) | none |
+| ethplorer | ERC-20 token portfolio, token symbols, spot price and tx count via the freekey tier; cached an hour against its hard rate limit (ETH only; v6.1) | none |
+| avax_cchain | Cross-chain Avalanche C-chain balance and nonce for ETH-format addresses via the public AVAX EVM RPC — the same 0x address checked on a second chain (v6.1) | none |
 | etherscan | Ethereum balance and transaction timestamps | `etherscan` |
 
 ## Hash (`obscuralens hash`)
@@ -203,6 +225,7 @@ SHA-384/SHA-512 validate but have no sources today).
 | ghsa | GitHub Security Advisories: GHSA ids, highest severity, CVSS score and CWE list (v5.2) | optional `github` |
 | epss | FIRST.org EPSS exploitation probability | none |
 | circl | CIRCL cveproxy record (CVE-5.1 and legacy schemas): description/CVSS/references merged onto NVD's field names, plus `circl_state`/`circl_title`/`circl_assigner`/`circl_vulnerable_products` | none |
+| kev | CISA Known Exploited Vulnerabilities catalog via CISA's own cisagov/kev-data GitHub mirror: actively-exploited verdict, known-ransomware/actor flags, due date; a miss is a real negative (v6.1) | none |
 
 ## ASN (`obscuralens asn`)
 
@@ -210,6 +233,8 @@ SHA-384/SHA-512 validate but have no sources today).
 |---|---|---|
 | ripestat | RIPEstat AS overview and announced prefixes | none |
 | bgpview | BGPView AS record, prefixes and peers | none |
+| asrank | CAIDA AS-Rank: global customer-cone ranking, RIR source, cone size, IXP/seen flags (v6.1) | none |
+| peeringdb | PeeringDB operator-maintained record: network name, traffic volume, info type, peering policy, IX count (v6.1) | none |
 
 ## MAC (`obscuralens mac`) *(v5.0)*
 
@@ -266,6 +291,7 @@ Geographic coordinates in decimal degrees (`48.8584, 2.2945`), DMS
 | nominatim | OpenStreetMap Nominatim reverse geocoding (`/reverse`, zoom 18, address details): formatted address, road/house number, city, county, region, postcode, country + ISO code, OSM ids, place category/type | none (usage policy: identifying User-Agent, low request rate) |
 | bigdatacloud | BigDataCloud free `reverse-geocode-client`: locality, city, principal subdivision, country name/code | none |
 | open_elevation | Open-Elevation SRTM terrain lookup: elevation in metres | none |
+| open_meteo | Open-Meteo current weather (temperature, wind speed/direction, weather code) with the position's timezone, plus an independent second elevation opinion via the dedicated elevation endpoint (v6.1) | none |
 | geohash_local | Offline coordinate maths: geohash (9 chars, ~5 m cells), Maidenhead locator, DMS/DDM strings, hemisphere, UTM and MGRS grid references, solar timezone-offset hint, NOAA solar position (altitude/azimuth, sunrise/sunset, daylight) | none (local) |
 | country_centroids | Offline country centroid pack (`obscuralens/data/country_centroids.txt`, 115 countries): nearest country by great-circle distance, with the distance in km so you can judge coarseness | none (local) |
 
@@ -313,12 +339,14 @@ on it, so offline VIN batches stay alive.
 Flight designators: a 2-letter IATA or 3-letter ICAO carrier code plus a
 1-4 digit flight number and an optional suffix letter (`UA1`, `BA2490`,
 `DLH400A`). Spaces, hyphens and lower case are tolerated. Both offline
-sources answer with the network down; the live source layers on with a key.
+sources answer with the network down; the keyless live ADS-B source joins
+keyless with v6.1, and the aviationstack live source layers on with a key.
 
 | Source | Coverage | Key |
 |---|---|---|
 | airline_pack | Offline curated airline pack (`obscuralens/data/airlines_iata.txt`, 134 carriers): airline name, IATA/ICAO codes, country, radio callsign | none (local) |
 | flight_math | Offline designator anatomy: carrier code flavour (IATA vs ICAO), flight number digits + suffix, both flight-code renderings (`UA1`/`UAL1`), the `{ICAO}{number}` radio callsign, odd/even direction and number-band conventions (explicitly labelled as conventions, not evidence) | none (local) |
+| adsb_lol | adsb.lol community ADS-B API: the aircraft broadcasting the designator **right now** — live position, barometric altitude, ground speed, track heading, registration, type code, squawk and seconds since last contact. Both the raw designator and the ICAO callsign form are tried. Nothing airborne is an honest negative (`adsb_currently_airborne: false`); a transport failure is never misreported as "not airborne" (v6.1) | none |
 | aviationstack | aviationstack.com live flight API: today's status (scheduled/active/landed/cancelled/diverted), airline confirmation, departure/arrival airports + IATA codes + scheduled times, aircraft registration | optional `aviationstack` |
 
 ```bash

@@ -23,6 +23,8 @@ TOOL_NAMES = {
     # v6.0 tools
     'vin_lookup', 'flight_lookup', 'mmsi_lookup',
     'app_lookup', 'bssid_lookup', 'plate_lookup',
+    # v6.1 tools
+    'tools_dorks',
 }
 
 
@@ -183,4 +185,4 @@ def test_main_end_to_end(monkeypatch):
     assert len(out_lines) == 2
     first, second = json.loads(out_lines[0]), json.loads(out_lines[1])
     assert first['result']['serverInfo']['name'] == 'obscuralens'
-    assert len(second['result']['tools']) == 40  # 8 core + 10 v4.0 + 16 v5.0 + 6 v6.0 tools
+    assert len(second["result"]["tools"]) == 41  # 8 core + 10 v4.0 + 16 v5.0 + 6 v6.0 + 1 v6.1 tools

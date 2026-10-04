@@ -119,12 +119,47 @@ CIRCL = {
 }
 
 
+# v6.1: CISA KEV catalog fixture - Log4Shell IS in the catalog.
+KEV_CATALOG = {
+    'title': 'CISA Catalog of Known Exploited Vulnerabilities',
+    'catalogVersion': '2026-10-01',
+    'count': 2,
+    'vulnerabilities': [{
+        'cveID': 'CVE-2021-44228',
+        'vendorProject': 'Apache',
+        'product': 'Log4j2',
+        'vulnerabilityName': 'Apache Log4j2 Remote Code Execution Vulnerability',
+        'dateAdded': '2021-12-10',
+        'shortDescription': 'Apache Log4j2 <=2.14.1 JNDI features...',
+        'requiredAction': 'Apply updates per vendor instructions.',
+        'knownRansomwareCampaignUse': 'Known',
+        'knownVulnerabilityExploit': 'Known',
+        'notes': 'Also known as Log4Shell.',
+        'dueDate': '2021-12-24',
+        'cwes': [{'cweId': 'CWE-502'}],
+    }, {
+        'cveID': 'CVE-2020-1472',
+        'vendorProject': 'Microsoft',
+        'product': 'Windows',
+        'dateAdded': '2021-08-17',
+        'knownRansomwareCampaignUse': 'Known',
+        'knownVulnerabilityExploit': 'Known',
+        'notes': 'Zerologon.',
+        'dueDate': '2020-09-01',
+    }],
+}
+
+
 def _all_sources(url, **kwargs):
-    """Dispatch any of the seven CVE source URLs to a fixture payload."""
+    """Dispatch any of the CVE source URLs to a fixture payload."""
     if 'services.nvd.nist.gov' in url:
         return True, _nvd_payload(), ''
     if 'api.osv.dev' in url:
         return True, OSV, ''
+    # The KEV mirror must be matched before the generic raw.githubusercontent
+    # branch (cvelist shares that host).
+    if 'kev-data' in url:
+        return True, KEV_CATALOG, ''
     if 'raw.githubusercontent.com' in url:
         return True, CNA, ''
     if 'cveawg.mitre.org' in url:
@@ -430,7 +465,7 @@ def test_gather_all_nvd_key_override(fake_http):
 
 def test_registries_are_consistent():
     assert set(cve_sources.FREE_SOURCES) == {
-        'nvd', 'osv', 'cvelist', 'cveawg', 'ghsa', 'epss', 'circl'}
+        'nvd', 'osv', 'cvelist', 'cveawg', 'ghsa', 'epss', 'circl', 'kev'}
     assert cve_sources.KEYED_SOURCES == {}
     assert set(cve_sources.SOURCE_CATALOG) == set(cve_sources.FREE_SOURCES)
 
@@ -446,7 +481,7 @@ def test_tracker_success_shape(fake_http, recording_db):
     assert result['cve'] == 'CVE-2021-44228'
     assert result['success'] is True
     assert result['sources_ok'] == ['circl', 'cveawg', 'cvelist', 'epss',
-                                    'ghsa', 'nvd', 'osv']
+                                    'ghsa', 'kev', 'nvd', 'osv']
     assert result['sources_failed'] == {}
     assert result['errors'] == []
     assert result['field_count'] > 5
@@ -480,9 +515,12 @@ def test_tracker_partial_failure_still_succeeds(fake_http, recording_db):
     assert result['success'] is True
     assert result['sources_ok'] == ['circl', 'cveawg', 'ghsa', 'nvd', 'osv']
     # Readers swallow transport errors and return {} - the merged report then
-    # records the source as "no data" rather than crashing the scan.
-    assert result['sources_failed'] == {'cvelist': 'no data', 'epss': 'no data'}
-    assert result['errors'] == ['2 source(s) unavailable']
+    # records the source as "no data" rather than crashing the scan. The KEV
+    # mirror shares the raw.githubusercontent.com host with cvelist, so both
+    # drop together (v6.1).
+    assert result['sources_failed'] == {'cvelist': 'no data', 'epss': 'no data',
+                                        'kev': 'no data'}
+    assert result['errors'] == ['3 source(s) unavailable']
     assert 'epss_score' not in result['info']
     assert recording_db[0]['success'] is True
 
@@ -535,6 +573,6 @@ def test_batch_track_preserves_order(fake_http, recording_db):
 def test_tracker_helpers():
     tracker = CVETracker()
     assert tracker.source_names() == ['circl', 'cveawg', 'cvelist', 'epss',
-                                      'ghsa', 'nvd', 'osv']
+                                      'ghsa', 'kev', 'nvd', 'osv']
     assert set(tracker.source_catalog()) == set(cve_sources.SOURCE_CATALOG)
     assert 'keyless' in tracker.source_catalog()['nvd']

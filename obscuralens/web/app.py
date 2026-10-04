@@ -332,7 +332,8 @@ def create_app():
         title='ObscuraLens',
         version=__version__,
         description='Multi-source OSINT web UI and JSON REST API '
-                    '(17 target kinds, analyst toolbox, local file analysis).',
+                    '(20 target kinds, analyst toolbox, dork builder, '
+                    'evidence confidence, local file analysis).',
     )
 
     # ------------------------------------------------------------------
@@ -371,10 +372,17 @@ def create_app():
         if not ok:
             raise HTTPException(status_code=400, detail=error)
         try:
-            return _TRACKERS[kind]().track(target)
+            result = _TRACKERS[kind]().track(target)
         except Exception as exc:  # never leak a tracker traceback
             message = f"{type(exc).__name__}: {exc}"
             return _failure_payload(kind, target, message)
+        # v6.1: evidence confidence from the provenance map.
+        try:
+            from ..correlation import attach_confidence
+            attach_confidence(result)
+        except Exception:
+            pass
+        return result
 
     @app.get('/api/investigate')
     def api_investigate(target: str, pivot: bool = True) -> Dict[str, Any]:
@@ -944,6 +952,27 @@ def create_app():
         variants = score_variants(generate_variants(domain), domain)
         return {'domain': domain, 'count': len(variants),
                 'variants': variants}
+
+    @app.get('/api/tools/dorks')
+    def api_tools_dorks(target: str, kind: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Ready-to-open search-engine dorks for a target (v6.1): the kind is
+        auto-detected unless overridden, and the links are generated locally
+        - the analyst stays in control of every active query.
+        """
+        from ..utils.dorks import KINDS_WITH_DORKS, dorks_for_target
+        value = (target or '').strip()
+        if not value:
+            raise HTTPException(status_code=400, detail='target is required')
+        links = dorks_for_target(value, kind)
+        detected = investigate_module.detect_kind(value)
+        return {
+            'target': value,
+            'detected_kind': detected,
+            'count': len(links),
+            'dorks': links,
+            'dork_kinds': list(KINDS_WITH_DORKS),
+        }
 
     @app.post('/api/tools/file/exif')
     async def api_tools_file_exif(file: UploadFile) -> Dict[str, Any]:

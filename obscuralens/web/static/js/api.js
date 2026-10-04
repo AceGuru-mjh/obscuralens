@@ -313,6 +313,18 @@ export const api = {
   squat(body) { return request('/api/tools/squat', { method: 'POST', body }); },
 
   /**
+   * Ready-to-open search-engine dorks for a target (v6.1). The kind is
+   * auto-detected server-side unless overridden.
+   * @param {string} target
+   * @param {string|null} kind
+   */
+  dorks(target, kind = null) {
+    const params = new URLSearchParams({ target });
+    if (kind) params.set('kind', kind);
+    return request(`/api/tools/dorks?${params.toString()}`);
+  },
+
+  /**
    * EXIF / metadata analysis of an uploaded file (runs locally).
    * @param {File} file
    */

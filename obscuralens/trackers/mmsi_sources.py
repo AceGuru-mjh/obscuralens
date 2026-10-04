@@ -33,6 +33,7 @@ from typing import Any, Dict, List, Optional
 from ..config import config
 from ..health import health
 from ..utils.data_packs import DATA_DIR
+from ..utils.helpers import fanout_workers
 from ..utils.validators import normalize_mmsi
 
 #: Parsed MID pack cache: three-digit MID -> country name.
@@ -318,7 +319,7 @@ def gather_all(mmsi_value: Any, keys: Optional[Dict[str, str]] = None) -> Dict[s
     status: Dict[str, Dict[str, Any]] = {}
 
     if tasks:
-        with futures.ThreadPoolExecutor(max_workers=min(len(tasks), 12)) as ex:
+        with futures.ThreadPoolExecutor(max_workers=fanout_workers(len(tasks))) as ex:
             future_map = {ex.submit(fn): name for name, fn in tasks.items()}
             for future in futures.as_completed(future_map):
                 name = future_map[future]

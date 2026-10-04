@@ -66,6 +66,8 @@ class EmailTracker:
         if config.is_source_enabled('github_commits') \
                 and health.source_allowed('github_commits'):
             tasks['github_commits'] = lambda: FREE_SOURCES['github_commits'](email)
+        if config.is_source_enabled('xposedornot') and health.source_allowed('xposedornot'):
+            tasks['xposedornot'] = lambda: FREE_SOURCES['xposedornot'](email)
         if config.is_source_enabled('patterns'):
             tasks['patterns'] = lambda: _pattern_analysis(email, local_part, domain)
 

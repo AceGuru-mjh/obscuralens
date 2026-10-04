@@ -62,6 +62,8 @@ STATUS_RELIABLE = {
     'Joplin Forum', 'Ubuntu Discourse', 'Rust Users', 'Blender Artists',
     'Linktree', 'AtCoder', 'MyDramaList', '9GAG', 'VK', 'OK.ru',
     'HackerOne', 'LinuxFR', 'Fosstodon', 'Pixelfed',
+    # v6.1 additions - every split re-verified live before shipping:
+    'Calendly', 'Gumroad', 'OpenSea', 'Bandcamp',
 }
 
 # Generic "this account does not exist" markers, matched case-insensitively.
@@ -394,7 +396,13 @@ class UsernameTracker:
             )
 
         try:
-            verdict = spec['verdict'](data)
+            # v6.1: platforms whose API is a substring/nearest-match search
+            # (Stack Exchange) can request the queried username for an
+            # exact-match verdict via 'verdict_takes_username'.
+            if spec.get('verdict_takes_username'):
+                verdict = spec['verdict'](data, username)
+            else:
+                verdict = spec['verdict'](data)
         except Exception:
             verdict = None
 
