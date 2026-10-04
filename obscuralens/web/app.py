@@ -13,7 +13,7 @@ What the server exposes
 * the single-page application served from ``web/static`` at ``/`` (dark and
   light themes, ten views, command palette — no external assets, works
   offline),
-* every tracker (14 kinds), the investigation engine, risk scoring,
+* every tracker (20 kinds), the investigation engine, risk scoring,
   timelines, correlation, cases, the watchlist, exports and statistics as
   JSON under ``/api`` (see ``docs/api.md``),
 * the v5.0 analyst toolbox (encoders, JWT, hash identification, coordinate
@@ -37,41 +37,55 @@ from ..core.cache import cache
 from ..core.metrics import metrics
 from ..database import db
 from ..trackers import (
+    AppTracker,
     ASNTracker,
+    BSSIDTracker,
     CoordsTracker,
     CryptoTracker,
     CVETracker,
     DomainTracker,
     EmailTracker,
+    FlightTracker,
     HashTracker,
     IBANTracker,
     IMEITracker,
     IPTracker,
     MACTracker,
+    MMSITracker,
     PhoneTracker,
+    PlateTracker,
     URLTracker,
     UsernameTracker,
+    VINTracker,
 )
 from ..utils.validators import (
+    validate_app,
     validate_asn,
+    validate_bssid,
     validate_coords,
     validate_crypto_address,
     validate_cve,
     validate_domain,
     validate_email,
+    validate_flight,
     validate_hash,
     validate_iban,
     validate_imei,
     validate_ip,
     validate_mac,
+    validate_mmsi,
     validate_phone,
+    validate_plate,
     validate_url,
     validate_username,
+    validate_vin,
 )
 from ..watchlist import watchlist
 
 KINDS = ('ip', 'phone', 'username', 'email', 'domain', 'url', 'crypto',
-         'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords')
+         'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords',
+         # v6.0 kinds
+         'vin', 'flight', 'mmsi', 'app', 'bssid', 'plate')
 
 _VALIDATORS: Dict[str, Callable[[str], Any]] = {
     'ip': validate_ip,
@@ -88,6 +102,12 @@ _VALIDATORS: Dict[str, Callable[[str], Any]] = {
     'iban': validate_iban,
     'imei': validate_imei,
     'coords': validate_coords,
+    'vin': validate_vin,
+    'flight': validate_flight,
+    'mmsi': validate_mmsi,
+    'app': validate_app,
+    'bssid': validate_bssid,
+    'plate': validate_plate,
 }
 
 _TRACKERS: Dict[str, Any] = {
@@ -105,6 +125,12 @@ _TRACKERS: Dict[str, Any] = {
     'iban': IBANTracker,
     'imei': IMEITracker,
     'coords': CoordsTracker,
+    'vin': VINTracker,
+    'flight': FlightTracker,
+    'mmsi': MMSITracker,
+    'app': AppTracker,
+    'bssid': BSSIDTracker,
+    'plate': PlateTracker,
 }
 
 # Field each tracker uses to echo back the queried target.
@@ -123,6 +149,12 @@ _TARGET_KEY = {
     'iban': 'iban',
     'imei': 'imei',
     'coords': 'coords',
+    'vin': 'vin',
+    'flight': 'flight',
+    'mmsi': 'mmsi',
+    'app': 'app',
+    'bssid': 'bssid',
+    'plate': 'plate',
 }
 
 # Registry metadata for GET /api/kinds (label, example, one-line blurb).
@@ -155,6 +187,19 @@ _KIND_INFO: Dict[str, Dict[str, str]] = {
              'blurb': 'TAC decomposition, manufacturer, Luhn validity'},
     'coords': {'label': 'Coordinates', 'example': '48.8584, 2.2945',
                'blurb': 'Every format, reverse geocode, elevation, solar'},
+    # v6.0 kinds
+    'vin': {'label': 'VIN', 'example': '1M8GDM9AXKP042788',
+            'blurb': 'ISO 3779 decode, WMI registry, NHTSA vPIC vehicle data'},
+    'flight': {'label': 'Flight number', 'example': 'BA2490',
+               'blurb': 'Airline pack, IATA/ICAO codes, live status via API key'},
+    'mmsi': {'label': 'MMSI', 'example': '366910000',
+             'blurb': 'ITU station class, MID flag state, AIS identity anatomy'},
+    'app': {'label': 'Software package', 'example': 'pypi:requests',
+            'blurb': 'Registry records + OSV CVEs for pypi/npm/crate/docker/github'},
+    'bssid': {'label': 'WiFi BSSID', 'example': '00:1A:2B:3C:4D:5E',
+              'blurb': 'OUI vendor, EUI-48 anatomy, crowd-sourced geolocation'},
+    'plate': {'label': 'License plate', 'example': 'DE:B-AB 1234',
+              'blurb': 'Country format matching, German city codes, style heuristics'},
 }
 
 # Friendly descriptions of the keyed services (GET /api/keys).
@@ -209,17 +254,23 @@ def _failure_payload(kind: str, target: str, message: str) -> Dict[str, Any]:
 
 def _source_catalogs() -> Dict[str, Dict[str, str]]:
     """Source catalogs for every kind that publishes one."""
+    from ..trackers.app_sources import SOURCE_CATALOG as APP_CATALOG
     from ..trackers.asn_sources import SOURCE_CATALOG as ASN_CATALOG
+    from ..trackers.bssid_sources import SOURCE_CATALOG as BSSID_CATALOG
     from ..trackers.crypto_sources import SOURCE_CATALOG as CRYPTO_CATALOG
     from ..trackers.cve_sources import SOURCE_CATALOG as CVE_CATALOG
     from ..trackers.domain_sources import SOURCE_CATALOG as DOMAIN_CATALOG
     from ..trackers.email_sources import SOURCE_CATALOG as EMAIL_CATALOG
+    from ..trackers.flight_sources import SOURCE_CATALOG as FLIGHT_CATALOG
     from ..trackers.hash_sources import SOURCE_CATALOG as HASH_CATALOG
     from ..trackers.iban_sources import SOURCE_CATALOG as IBAN_CATALOG
     from ..trackers.imei_sources import SOURCE_CATALOG as IMEI_CATALOG
     from ..trackers.ip_sources import SOURCE_CATALOG as IP_CATALOG
     from ..trackers.mac_sources import SOURCE_CATALOG as MAC_CATALOG
+    from ..trackers.mmsi_sources import SOURCE_CATALOG as MMSI_CATALOG
+    from ..trackers.plate_sources import SOURCE_CATALOG as PLATE_CATALOG
     from ..trackers.url_sources import SOURCE_CATALOG as URL_CATALOG
+    from ..trackers.vin_sources import SOURCE_CATALOG as VIN_CATALOG
 
     catalogs: Dict[str, Dict[str, str]] = {
         'ip': IP_CATALOG,
@@ -233,6 +284,13 @@ def _source_catalogs() -> Dict[str, Dict[str, str]]:
         'mac': MAC_CATALOG,
         'iban': IBAN_CATALOG,
         'imei': IMEI_CATALOG,
+        # v6.0 kinds
+        'vin': VIN_CATALOG,
+        'flight': FLIGHT_CATALOG,
+        'mmsi': MMSI_CATALOG,
+        'app': APP_CATALOG,
+        'bssid': BSSID_CATALOG,
+        'plate': PLATE_CATALOG,
     }
     # username/phone keep their platform catalogs on the trackers.
     try:
@@ -274,7 +332,7 @@ def create_app():
         title='ObscuraLens',
         version=__version__,
         description='Multi-source OSINT web UI and JSON REST API '
-                    '(14 target kinds, analyst toolbox, local file analysis).',
+                    '(17 target kinds, analyst toolbox, local file analysis).',
     )
 
     # ------------------------------------------------------------------

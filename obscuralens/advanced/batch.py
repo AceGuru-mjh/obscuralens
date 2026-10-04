@@ -62,10 +62,13 @@ __all__ = [
     'to_markdown',
 ]
 
-#: Every kind the batch engine can fan out to (the full v5.0 set of 14).
+#: Every kind the batch engine can fan out to (the full v5.0 set of 14
+#: plus the six v6.0 sensor kinds).
 SUPPORTED_KINDS: Tuple[str, ...] = (
     'ip', 'phone', 'username', 'email', 'domain', 'url', 'crypto', 'hash',
     'cve', 'asn', 'mac', 'iban', 'imei', 'coords',
+    # v6.0 kinds
+    'vin', 'flight', 'mmsi', 'app', 'bssid', 'plate',
 )
 
 #: Upper bound on targets processed per run; the remainder is ignored and
@@ -93,6 +96,13 @@ _TRACKER_CLASSES: Dict[str, Tuple[str, str]] = {
     'iban': ('iban_tracker', 'IBANTracker'),
     'imei': ('imei_tracker', 'IMEITracker'),
     'coords': ('coords_tracker', 'CoordsTracker'),
+    # v6.0 kinds
+    'vin': ('vin_tracker', 'VINTracker'),
+    'flight': ('flight_tracker', 'FlightTracker'),
+    'mmsi': ('mmsi_tracker', 'MMSITracker'),
+    'app': ('app_tracker', 'AppTracker'),
+    'bssid': ('bssid_tracker', 'BSSIDTracker'),
+    'plate': ('plate_tracker', 'PlateTracker'),
 }
 
 

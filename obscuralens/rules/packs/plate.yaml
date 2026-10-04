@@ -1,0 +1,145 @@
+# ObscuraLens explainable rule pack -- plate
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the plate tracker output: normalized, matched_countries,
+# matched_count, country_prefix, country_known, match_note, length,
+# letters_count, digits_count, separators, composition_note,
+# german_city_code, german_city, style_hint... Plate rules are format-
+# attribution signals about the issuing jurisdiction, never statements
+# about the vehicle's owner (which offline data cannot know).
+# ---------------------------------------------------------------------------
+
+name: plate-rules
+description: >-
+  Explainable format-attribution heuristics for license plate lookups
+  built on the curated national format pack and the composition analysis.
+version: 1
+rules:
+  - id: PLATE-001
+    title: No curated format matched
+    description: >-
+      The plate body matched none of the 79 curated national patterns.
+      Either the value is mistyped, belongs to a jurisdiction the curated
+      subset does not cover, or uses a series too new or too old for the
+      pack - the report cannot attribute a country.
+    severity: low
+    weight: 10
+    tags: [registry]
+    conditions:
+      - field: matched_count
+        operator: eq
+        value: 0
+
+  - id: PLATE-002
+    title: Country prefix not in the curated pack
+    description: >-
+      The value carries an explicit country prefix that the curated pack
+      does not know. A real prefix with an unknown jurisdiction is rare
+      (most ISO alpha-2 codes are covered), so a typo in the prefix is
+      the likelier explanation.
+    severity: low
+    weight: 10
+    tags: [registry, validity]
+    conditions:
+      - field: country_known
+        operator: is_false
+
+  - id: PLATE-003
+    title: Ambiguous shape matched by several curated patterns
+    description: >-
+      Four or more curated patterns match the plate body. Common shapes
+      fit several series of the same jurisdiction at once (multiple
+      German city codes share the letter-dash-letter-digits skeleton) and
+      multiple US states share three-letters-plus-digits, so the
+      matched-country list is a candidate set, never a verdict - do not
+      cite one country without the prefix or regional detail.
+    severity: info
+    weight: 5
+    tags: [ambiguity]
+    conditions:
+      - field: matched_count
+        operator: gte
+        value: 4
+
+  - id: PLATE-004
+    title: No country prefix on the value
+    description: >-
+      The plate was matched by loose pattern only, without an explicit
+      country prefix in the value. Unprefixed attribution rests on shape
+      heuristics scored at reduced confidence; treat the country column
+      as a lead to verify rather than an answer.
+    severity: info
+    weight: 5
+    tags: [validity, ambiguity]
+    conditions:
+      - field: country_prefix
+        operator: not_exists
+
+  - id: PLATE-005
+    title: Country prefix recognised with a pattern hit
+    description: >-
+      The explicit country prefix resolves in the curated pack and the
+      body matches at least one of that jurisdiction's patterns - the
+      strong form of attribution this kind can produce (0.9 confidence).
+      Positive context that documents a fully attributed plate.
+    severity: info
+    weight: 0
+    tags: [registry, positive]
+    conditions:
+      - field: country_known
+        operator: is_true
+      - field: matched_count
+        operator: gte
+        value: 1
+      - field: match_note
+        operator: regex
+        value: 'recognised and the body matches'
+
+  - id: PLATE-006
+    title: German city code resolved
+    description: >-
+      A DE-prefixed plate whose leading token resolved in the
+      distinguishing-sign table (B Berlin, M Munich, HH Hamburg, ...).
+      The city code narrows the issuing registration district, which is
+      format context only - German plates carry no owner data.
+    severity: info
+    weight: 0
+    tags: [context, positive]
+    conditions:
+      - field: german_city
+        operator: not_empty
+        value: true
+
+  - id: PLATE-007
+    title: EU-style plate composition
+    description: >-
+      The composition heuristic reads the value as an EU-style plate: a
+      leading regional letter block followed by a separator. Supports the
+      European candidates in the matched-country list; not evidence on
+      its own.
+    severity: info
+    weight: 0
+    tags: [context]
+    conditions:
+      - field: style_hint
+        operator: contains
+        value: EU-style
+
+  - id: PLATE-008
+    title: North-American-style plate composition
+    description: >-
+      The composition heuristic reads the value as a North-American-style
+      plate: compact alphanumeric with no leading regional block.
+      Supports the US/Canadian candidates in the matched-country list; a
+      heuristic only.
+    severity: info
+    weight: 0
+    tags: [context]
+    conditions:
+      - field: style_hint
+        operator: contains
+        value: North-American-style

@@ -1,0 +1,170 @@
+# ObscuraLens explainable rule pack -- mmsi
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the MMSI tracker output: station_type, station_type_code,
+# itu_series, mid, serial_digits, trailing_zero_notes, country... MMSI
+# rules are identifier-integrity signals about the ITU-R M.1085 structure
+# and the curated MID flag-state registry - never statements about a
+# vessel's crew or owner.
+# ---------------------------------------------------------------------------
+
+name: mmsi-rules
+description: >-
+  Explainable identifier-integrity heuristics for Maritime Mobile Service
+  Identity lookups built on the ITU-R M.1085 station classes and the
+  curated MID flag-state registry.
+version: 1
+rules:
+  - id: MMSI-001
+    title: Leading digits in no ITU series
+    description: >-
+      The first three digits fall outside every ITU-R M.1085 station
+      series (they are not a 201-775 ship MID, nor a 00/0/8/99 special
+      form). No legal MMSI starts this way, so the identifier was
+      mistyped, truncated or fabricated - the classic signature of a
+      spoofed AIS identity.
+    severity: medium
+    weight: 15
+    tags: [validity]
+    references: ["ITU-R M.1085"]
+    conditions:
+      - field: station_type_code
+        operator: eq
+        value: unassigned
+
+  - id: MMSI-002
+    title: Reserved leading digit 9
+    description: >-
+      The identity starts with 9, a block ITU has not assigned to any
+      station class. Some AIS transceivers emit 9-prefixed identities when
+      misconfigured, and spoofing tools emit them freely; neither maps to
+      a real station.
+    severity: low
+    weight: 10
+    tags: [validity]
+    references: ["ITU-R M.1085"]
+    conditions:
+      - field: station_type_code
+        operator: eq
+        value: reserved
+
+  - id: MMSI-003
+    title: MID not in the flag-state pack
+    description: >-
+      The Maritime Identification Digit is absent from the shipped MID
+      pack. The pack is a curated subset (97 of several hundred ITU
+      assignments) biased toward flag states investigations actually meet,
+      so a miss usually means a smaller registry rather than an invalid
+      identity; the station class decode still stands.
+    severity: info
+    weight: 5
+    tags: [registry]
+    references: ["ITU-R M.1085"]
+    conditions:
+      - field: country
+        operator: empty
+        value: true
+
+  - id: MMSI-004
+    title: Well-formed ship identity with known flag
+    description: >-
+      The station class decodes as an individual ship station AND the MID
+      resolves to a flag state. Positive context that documents what a
+      clean, fully attributed MMSI looks like in this pack.
+    severity: info
+    weight: 0
+    tags: [validity, positive]
+    references: ["ITU-R M.1085"]
+    conditions:
+      - field: station_type_code
+        operator: eq
+        value: ship
+      - field: country
+        operator: not_empty
+        value: true
+
+  - id: MMSI-005
+    title: Non-ship station class
+    description: >-
+      The identity belongs to a coast station, group call, handheld VHF or
+      aid-to-navigation series rather than an individual ship. These
+      classes are legitimate infrastructure identities, but a target
+      presenting one where a ship MMSI is expected (or vice versa) is the
+      standard AIS mislabel worth checking.
+    severity: info
+    weight: 0
+    tags: [context]
+    references: ["ITU-R M.1085"]
+    conditions:
+      - field: station_type_code
+        operator: in
+        value: [coast, group, handheld, aton]
+
+  - id: MMSI-006
+    title: Zero-ending ship serial
+    description: >-
+      The ship serial ends in zero. ITU-related documentation repeatedly
+      associates zero-ending serials with data-selective-call and
+      associated-station usage, but the rule is not cleanly normative -
+      reported here as an unconfirmed convention, not evidence.
+    severity: info
+    weight: 5
+    tags: [context]
+    references: ["ITU-R M.1085"]
+    conditions:
+      - field: trailing_zero_notes
+        operator: not_empty
+        value: true
+
+  - id: MMSI-007
+    title: Station class carries no MID
+    description: >-
+      The decoded class is reserved or unassigned, shapes that carry no
+      Maritime Identification Digit at all. Without a MID there is no flag
+      state to attribute, so the identity is opaque by construction.
+    severity: low
+    weight: 10
+    tags: [validity]
+    references: ["ITU-R M.1085"]
+    conditions:
+      - field: mid
+        operator: empty
+        value: true
+
+  - id: MMSI-008
+    title: All-zero station serial
+    description: >-
+      The serial digits after the MID are all zeros. Real allocations use
+      the serial range densely and gap-filler/zeros-only serials show up
+      in fabricated AIS identities far more often than in issued ones -
+      weak evidence on its own, stronger in combination.
+    severity: low
+    weight: 10
+    tags: [validity]
+    references: ["ITU-R M.1085"]
+    conditions:
+      - field: serial_digits
+        operator: regex
+        value: '^0+$'
+
+  - id: MMSI-009
+    title: Class decoded without serial digits
+    description: >-
+      The station class decoded but no serial digits survived the parse -
+      the reserved and unassigned shapes carry neither MID nor serial.
+      The report is structurally informative about the identifier's
+      leading digits while saying nothing about any specific station.
+    severity: info
+    weight: 5
+    tags: [validity]
+    conditions:
+      - field: station_type
+        operator: not_empty
+        value: true
+      - field: serial_digits
+        operator: empty
+        value: true

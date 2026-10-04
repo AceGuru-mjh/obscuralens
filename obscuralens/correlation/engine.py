@@ -35,8 +35,12 @@ __all__ = [
     'correlation_sections', 'extract_entities', 'history_records',
 ]
 
-#: Lookup kinds the engine can extract entities from.
-KINDS = ('ip', 'domain', 'email', 'username', 'crypto', 'hash', 'url', 'cve', 'asn')
+#: Lookup kinds the engine can extract entities from (the nine v2/v4
+#: kinds with rich sub-entity payloads, the v5.0 mac/iban/imei/coords
+#: reference-data kinds and the six v6.0 sensor kinds).
+KINDS = ('ip', 'domain', 'email', 'username', 'crypto', 'hash', 'url', 'cve',
+         'asn', 'mac', 'iban', 'imei', 'coords', 'vin', 'flight', 'mmsi',
+         'app', 'bssid', 'plate')
 
 #: Entity types whose values keep their case (URLs and profile links).
 _CASE_SENSITIVE_TYPES = frozenset({'url', 'profile'})
@@ -306,6 +310,177 @@ def _asn_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     return _dedupe(items)
 
 
+# ---------------------------------------------------------------------------
+# v5.0 / v6.0 reference-data kinds: one entity per attribute
+# ---------------------------------------------------------------------------
+
+def _mac_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = _info_of(payload)
+    items: List[Dict[str, Any]] = []
+
+    vendor = _text(info.get('vendor'))
+    if vendor:
+        items.append(_entity('organisation', vendor, 'made_by'))
+
+    return _dedupe(items)
+
+
+def _iban_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = _info_of(payload)
+    items: List[Dict[str, Any]] = []
+
+    country = _text(info.get('country_name'))
+    if country:
+        items.append(_entity('country', country, 'issued_in'))
+
+    bank = _text(info.get('bank_name'))
+    if bank:
+        items.append(_entity('bank', bank, 'held_at'))
+
+    return _dedupe(items)
+
+
+def _imei_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = _info_of(payload)
+    items: List[Dict[str, Any]] = []
+
+    manufacturer = _text(info.get('manufacturer'))
+    if manufacturer:
+        items.append(_entity('organisation', manufacturer, 'made_by'))
+
+    model = _text(info.get('model'))
+    if model:
+        items.append(_entity('device', model, 'model_family'))
+
+    return _dedupe(items)
+
+
+def _coords_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = _info_of(payload)
+    items: List[Dict[str, Any]] = []
+
+    country = _text(info.get('country')) or _text(info.get('nearest_country'))
+    if country:
+        items.append(_entity('country', country, 'located_in'))
+
+    place = (_text(info.get('formatted_address'))
+             or _text(info.get('place_name'))
+             or _text(info.get('city')) or _text(info.get('locality')))
+    if place:
+        items.append(_entity('place', place, 'near'))
+
+    return _dedupe(items)
+
+
+def _vin_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = _info_of(payload)
+    items: List[Dict[str, Any]] = []
+
+    manufacturer = _text(info.get('manufacturer')) or _text(info.get('vpic_make'))
+    if manufacturer:
+        items.append(_entity('organisation', manufacturer, 'made_by'))
+
+    country = _text(info.get('country')) or _text(info.get('vpic_plant_country'))
+    if country:
+        items.append(_entity('country', country, 'assembled_in'))
+
+    model = _text(info.get('vpic_model'))
+    if model:
+        items.append(_entity('vehicle', model, 'model_family'))
+
+    return _dedupe(items)
+
+
+def _flight_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = _info_of(payload)
+    items: List[Dict[str, Any]] = []
+
+    airline = _text(info.get('airline_name')) or _text(info.get('avstack_airline'))
+    if airline:
+        items.append(_entity('organisation', airline, 'operated_by'))
+
+    country = _text(info.get('country'))
+    if country:
+        items.append(_entity('country', country, 'registered_in'))
+
+    departure = (_text(info.get('avstack_departure_airport'))
+                 or _text(info.get('avstack_departure_iata')))
+    if departure:
+        items.append(_entity('airport', departure, 'departs_from'))
+
+    arrival = (_text(info.get('avstack_arrival_airport'))
+               or _text(info.get('avstack_arrival_iata')))
+    if arrival:
+        items.append(_entity('airport', arrival, 'arrives_at'))
+
+    registration = _text(info.get('avstack_aircraft_registration'))
+    if registration:
+        items.append(_entity('aircraft', registration, 'flown_by'))
+
+    return _dedupe(items)
+
+
+def _mmsi_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = _info_of(payload)
+    items: List[Dict[str, Any]] = []
+
+    country = _text(info.get('country'))
+    if country:
+        items.append(_entity('country', country, 'flagged_in'))
+
+    return _dedupe(items)
+
+
+def _app_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = _info_of(payload)
+    items: List[Dict[str, Any]] = []
+
+    author = (_text(info.get('author')) or _text(info.get('maintainer'))
+              or _text(info.get('namespace')))
+    if author:
+        items.append(_entity('organisation', author, 'maintained_by'))
+
+    for field in ('homepage', 'repository', 'documentation'):
+        host = _url_host(info.get(field))
+        if host and not _looks_like_ip(host):
+            items.append(_entity('hostname', host, 'project_site'))
+
+    return _dedupe(items)
+
+
+def _bssid_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = _info_of(payload)
+    items: List[Dict[str, Any]] = []
+
+    vendor = _text(info.get('vendor'))
+    if vendor:
+        items.append(_entity('organisation', vendor, 'made_by'))
+
+    ssid = _text(info.get('ssid'))
+    if ssid:
+        items.append(_entity('network', ssid, 'broadcasts'))
+
+    return _dedupe(items)
+
+
+def _plate_entities(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = _info_of(payload)
+    items: List[Dict[str, Any]] = []
+
+    for candidate in _list(info.get('matched_countries')):
+        if not isinstance(candidate, dict):
+            continue
+        country = _text(candidate.get('country'))
+        if country:
+            items.append(_entity('country', country, 'issued_in'))
+
+    city = _text(info.get('german_city'))
+    if city:
+        items.append(_entity('place', city, 'registered_in'))
+
+    return _dedupe(items)
+
+
 _EXTRACTORS = {
     'ip': _ip_entities,
     'domain': _domain_entities,
@@ -316,6 +491,16 @@ _EXTRACTORS = {
     'url': _url_entities,
     'cve': _cve_entities,
     'asn': _asn_entities,
+    'mac': _mac_entities,
+    'iban': _iban_entities,
+    'imei': _imei_entities,
+    'coords': _coords_entities,
+    'vin': _vin_entities,
+    'flight': _flight_entities,
+    'mmsi': _mmsi_entities,
+    'app': _app_entities,
+    'bssid': _bssid_entities,
+    'plate': _plate_entities,
 }
 
 
@@ -325,7 +510,10 @@ def extract_entities(kind: str, payload: Any) -> List[Dict[str, Any]]:
 
     Args:
         kind: tracker kind ('ip', 'domain', 'email', 'username', 'crypto',
-            'hash', 'url', 'cve', 'asn'); unknown kinds yield []
+            'hash', 'url', 'cve', 'asn', plus the reference-data kinds
+            'mac', 'iban', 'imei', 'coords', 'vin', 'flight', 'mmsi',
+            'app', 'bssid', 'plate');
+            unknown kinds yield []
         payload: tracker result payload in any shape (dict with 'info',
             username-style flat dict, or garbage)
 

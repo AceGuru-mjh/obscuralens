@@ -24,7 +24,7 @@ import pytest
 
 from obscuralens.utils import data_catalog
 
-#: The ten catalog pack names (files under obscuralens/data).
+#: The fourteen catalog pack names (files under obscuralens/data).
 PACK_NAMES = {
     'ports_services',
     'countries_iso3166',
@@ -36,6 +36,11 @@ PACK_NAMES = {
     'file_extensions',
     'mime_types',
     'user_agents',
+    # v6.0 identifier-registry packs
+    'vin_wmi',
+    'airlines_iata',
+    'mid_codes',
+    'plate_formats',
 }
 
 #: Every TLD must look like this after normalisation (punycode included).
@@ -251,13 +256,17 @@ class TestModuleSurface:
     """The module's public surface and stdlib-only import contract."""
 
     def test_all_exports_resolve(self):
-        assert len(data_catalog.__all__) == 45
+        assert len(data_catalog.__all__) == 61
         for name in data_catalog.__all__:
             attribute = getattr(data_catalog, name)
             assert callable(attribute), name
         for name in ('country', 'port_service', 'random_user_agent', 'catalog_summary',
-                     'Country', 'CatalogStats'):
+                     'wmi', 'airline', 'mid', 'Country', 'CatalogStats'):
             assert name in data_catalog.__all__
+        # PACK_DESCRIPTIONS stays public without joining the callable surface.
+        assert isinstance(data_catalog.PACK_DESCRIPTIONS, dict)
+        assert set(data_catalog.PACK_DESCRIPTIONS) >= {
+            'vin_wmi', 'airlines_iata', 'mid_codes'}
 
     def test_module_imports_stdlib_only(self):
         allowed = {'random', 're', 'dataclasses', 'pathlib', 'typing'}
@@ -914,11 +923,11 @@ class TestUserAgents:
 
 
 class TestCatalogStats:
-    """catalog_stats()/catalog_summary() over the ten packs."""
+    """catalog_stats()/catalog_summary() over the fourteen packs."""
 
     def test_catalog_stats_shape(self):
         stats = data_catalog.catalog_stats()
-        assert len(stats) == 10
+        assert len(stats) == 14
         assert {stat.name for stat in stats} == PACK_NAMES
         for stat in stats:
             assert isinstance(stat.entries, int) and stat.entries >= 0
@@ -1131,7 +1140,7 @@ class TestEmptyCatalog:
 
     def test_missing_packs_stats_summary_and_fallback(self, empty_packs_dir):
         stats = data_catalog.catalog_stats()
-        assert len(stats) == 10
+        assert len(stats) == 14
         assert {stat.name for stat in stats} == PACK_NAMES
         assert all(stat.entries == 0 for stat in stats)
         assert all(stat.loaded is False for stat in stats)

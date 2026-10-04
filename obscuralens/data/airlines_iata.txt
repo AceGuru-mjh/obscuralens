@@ -1,0 +1,154 @@
+# ObscuraLens offline data pack -- IATA / ICAO airline designators
+# ---------------------------------------------------------------------------
+# Format:      IATA|ICAO|name|country|callsign
+# One entry per line, pipe-delimited, '#' comment lines and blank lines
+# ignored by the loader (obscuralens/trackers/flight_sources.py and
+# obscuralens/utils/data_catalog.py both parse this file).
+#
+# IATA codes are the two-letter designators printed on tickets and boarding
+# passes (UA, BA, LH); ICAO codes are the three-letter designators used in
+# flight plans and on the radio, and the callsign is the spoken radio name
+# ("SPEEDBIRD" for British Airways). The authoritative registries are the
+# IATA airline coding directory and ICAO Doc 8585; this pack carries a
+# curated subset of the carriers an OSINT operator actually meets, including
+# several historically important airlines (Pan Am, Swissair, Continental)
+# because old booking records and leaks still reference them.
+#
+# A miss means "not in this curated subset", NOT "airline does not exist":
+# several thousand active designators exist and only well-documented ones
+# are shipped here.
+# ---------------------------------------------------------------------------
+UA|UAL|United Airlines|United States|UNITED
+AA|AAL|American Airlines|United States|AMERICAN
+DL|DAL|Delta Air Lines|United States|DELTA
+WN|SWA|Southwest Airlines|United States|SOUTHWEST
+AS|ASA|Alaska Airlines|United States|ALASKA
+B6|JBU|JetBlue Airways|United States|JETBLUE
+F9|FFT|Frontier Airlines|United States|FRONTIER
+G4|AAY|Allegiant Air|United States|ALLEGIANT
+HA|HAL|Hawaiian Airlines|United States|HAWAIIAN
+SY|SCX|Sun Country Airlines|United States|SUN COUNTRY
+MQ|ENY|Envoy Air|United States|ENVOY
+OO|SKW|SkyWest Airlines|United States|SKYWEST
+9E|EDV|Endeavor Air|United States|ENDEAVOR
+QX|QXE|Horizon Air|United States|HORIZON
+FX|FDX|FedEx Express|United States|FEDEX
+5X|UPS|UPS Airlines|United States|UPS
+5Y|GTI|Atlas Air|United States|GIANT
+PA|PAA|Pan Am|United States|CLIPPER
+TW|TWA|Trans World Airlines|United States|TWA
+CO|COA|Continental Airlines|United States|CONTINENTAL
+NW|NWA|Northwest Airlines|United States|NORTHWEST
+US|USA|US Airways|United States|USAIR
+AC|ACA|Air Canada|Canada|AIR CANADA
+WS|WJA|WestJet|Canada|WESTJET
+PD|POE|Porter Airlines|Canada|PORTER
+TS|TSC|Air Transat|Canada|TRANSAIR
+AM|AMX|Aeromexico|Mexico|AEROMEXICO
+Y4|VOI|Volaris|Mexico|VOLARIS
+VB|VIV|Viva Aerobus|Mexico|VIVA
+MX|MXA|Mexicana|Mexico|MEXICANA
+CM|CMP|Copa Airlines|Panama|COPA
+AV|AVA|Avianca|Colombia|AVIANCA
+LA|LAN|LATAM Airlines|Chile|LAN
+AR|ARG|Aerolineas Argentinas|Argentina|ARGENTINA
+G3|GLO|GOL Linhas Aereas|Brazil|GOL
+AD|AZU|Azul|Brazil|AZUL
+RG|VAR|Varig|Brazil|VARIG
+JJ|TAM|TAM Linhas Aereas|Brazil|TAM
+BW|BWA|Caribbean Airlines|Trinidad and Tobago|CARIBBEAN
+BA|BAW|British Airways|United Kingdom|SPEEDBIRD
+VS|VIR|Virgin Atlantic|United Kingdom|VIRGIN
+U2|EZY|easyJet|United Kingdom|EASY
+LS|EXS|Jet2|United Kingdom|CHANNEX
+TOM|TOM|TUI Airways|United Kingdom|TOMSON
+BD|BMA|bmi British Midland|United Kingdom|MIDLAND
+FR|RYR|Ryanair|Ireland|RYANAIR
+EI|EIN|Aer Lingus|Ireland|SHAMROCK
+AF|AFR|Air France|France|AIRFRANS
+KL|KLM|KLM Royal Dutch Airlines|Netherlands|KLM
+HV|TRA|Transavia|Netherlands|TRANSAVIA
+LH|DLH|Lufthansa|Germany|LUFTHANSA
+DE|CFG|Condor|Germany|CONDOR
+EW|EWG|Eurowings|Germany|EUROWINGS
+AB|BER|Air Berlin|Germany|AIR BERLIN
+4U|GWI|Germanwings|Germany|GERMANWINGS
+LX|SWR|SWISS|Switzerland|SWISS
+LG|DLU|Luxair|Luxembourg|LUXAIR
+SK|SAS|Scandinavian Airlines|Sweden|SCANDINAVIAN
+DY|NOZ|Norwegian Air Shuttle|Norway|NORSHUTTLE
+FI|ICE|Icelandair|Iceland|ICELANDAIR
+AY|FIN|Finnair|Finland|FINNAIR
+TP|TAP|TAP Air Portugal|Portugal|AIR PORTUGAL
+IB|IBE|Iberia|Spain|IBERIA
+VY|VLG|Vueling|Spain|VELING
+UX|AEA|Air Europa|Spain|EUROPA
+JK|JKK|Spanair|Spain|SPANAIR
+A3|AEE|Aegean Airlines|Greece|AEGEAN
+OA|OAL|Olympic Airlines|Greece|OLYMPIC
+OS|AUA|Austrian Airlines|Austria|AUSTRIAN
+LO|LOT|LOT Polish Airlines|Poland|LOT
+OK|CSA|Czech Airlines|Czech Republic|CSA
+OU|CTN|Croatia Airlines|Croatia|CROATIA
+W6|WZZ|Wizz Air|Hungary|WIZZAIR
+SU|AFL|Aeroflot|Russia|AEROFLOT
+S7|SBI|S7 Airlines|Russia|SIBERIAN
+EK|UAE|Emirates|United Arab Emirates|EMIRATES
+EY|ETD|Etihad Airways|United Arab Emirates|ETIHAD
+FZ|FDB|flydubai|United Arab Emirates|FLYDUBAI
+G9|FAB|Air Arabia|United Arab Emirates|ARABIA
+QR|QTR|Qatar Airways|Qatar|QATARI
+SV|SVA|Saudia|Saudi Arabia|SAUDIA
+GF|GFA|Gulf Air|Bahrain|GULFAIR
+KU|KAC|Kuwait Airways|Kuwait|KUWAITI
+WY|OMA|Oman Air|Oman|OMAN
+RJ|RJA|Royal Jordanian|Jordan|JORDANIAN
+LY|ELY|El Al|Israel|ELAL
+IR|IRA|Iran Air|Iran|IRANAIR
+TK|THY|Turkish Airlines|Turkey|TURKISH
+MS|MSR|EgyptAir|Egypt|EGYPTAIR
+AT|RAM|Royal Air Maroc|Morocco|RAM
+TU|TAR|Tunisair|Tunisia|TUNAIR
+AH|DAH|Air Algerie|Algeria|AIR ALGERIE
+ET|ETH|Ethiopian Airlines|Ethiopia|ETHIOPIAN
+SA|SAA|South African Airways|South Africa|SPRINGBOK
+KQ|KQA|Kenya Airways|Kenya|KENYA
+WB|RWD|Rwandair|Rwanda|RWANDAIR
+AI|AIC|Air India|India|AIRINDIA
+6E|IGO|IndiGo|India|IFLY
+SG|SEI|SpiceJet|India|SPEEJAY
+9W|JAI|Jet Airways|India|JET AIRWAYS
+IC|ICA|Indian Airlines|India|INDAIR
+PK|PIA|Pakistan International Airlines|Pakistan|PAKISTAN
+BG|BBC|Biman Bangladesh|Bangladesh|BIMAN
+UL|ALK|SriLankan Airlines|Sri Lanka|SRILANKAN
+SQ|SIA|Singapore Airlines|Singapore|SINGAPORE
+TR|TGW|Scoot|Singapore|SCOOT
+MH|MAS|Malaysia Airlines|Malaysia|MALAYSIAN
+FY|FYW|Firefly|Malaysia|FIREFLY
+GA|GIA|Garuda Indonesia|Indonesia|GARUDA
+JT|LNI|Lion Air|Indonesia|LION INTER
+TG|THA|Thai Airways International|Thailand|THAI
+DD|NOK|Nok Air|Thailand|NOKAIR
+VN|HVN|Vietnam Airlines|Vietnam|VIETNAM
+5J|CEB|Cebu Pacific|Philippines|CEBU
+PR|PAL|Philippine Airlines|Philippines|PHILIPPINE
+CA|CCA|Air China|China|AIR CHINA
+MU|CES|China Eastern|China|CHINA EASTERN
+CZ|CSN|China Southern|China|CHINA SOUTHERN
+HU|CHH|Hainan Airlines|China|HAINAN
+MF|CXA|XiamenAir|China|XIAMEN
+CI|CAL|China Airlines|Taiwan|DYNASTY
+BR|EVA|EVA Air|Taiwan|EVA
+CX|CPA|Cathay Pacific|Hong Kong|CATHAY
+KA|HDA|Cathay Dragon|Hong Kong|DRAGON
+JL|JAL|Japan Airlines|Japan|JAPANAIR
+NH|ANA|All Nippon Airways|Japan|ALL NIPPON
+KE|KAL|Korean Air|South Korea|KOREANAIR
+OZ|AAR|Asiana Airlines|South Korea|ASIANA
+7C|JJA|Jeju Air|South Korea|JEJU AIR
+QF|QFA|Qantas|Australia|QANTAS
+VA|VOZ|Virgin Australia|Australia|VELOCITY
+JQ|JST|Jetstar|Australia|JETSTAR
+NZ|ANZ|Air New Zealand|New Zealand|NEW ZEALAND
+FJ|FJI|Fiji Airways|Fiji|FIJI

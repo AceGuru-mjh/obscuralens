@@ -60,10 +60,13 @@ __all__ = [
     'KINDS',
 ]
 
-#: The 14 target kinds supported by the v5.x API (mirrors web/app.py KINDS).
+#: The 20 target kinds supported by the v6.x API (mirrors web/app.py KINDS:
+#: the original five, nine v4.0/v5.0 additions and the six v6.0 sensor
+#: kinds).
 KINDS: Sequence[str] = ('ip', 'phone', 'username', 'email', 'domain', 'url',
                         'crypto', 'hash', 'cve', 'asn', 'mac', 'iban',
-                        'imei', 'coords')
+                        'imei', 'coords', 'vin', 'flight', 'mmsi',
+                        'app', 'bssid', 'plate')
 
 #: Field each tracker uses to echo back the queried target (mirrors
 #: ``_TARGET_KEY`` in ``obscuralens/web/app.py``).
@@ -82,6 +85,12 @@ TARGET_KEYS: Dict[str, str] = {
     'iban': 'iban',
     'imei': 'imei',
     'coords': 'coords',
+    'vin': 'vin',
+    'flight': 'flight',
+    'mmsi': 'mmsi',
+    'app': 'app',
+    'bssid': 'bssid',
+    'plate': 'plate',
 }
 
 #: Verdict band edges used when a payload lacks an explicit verdict

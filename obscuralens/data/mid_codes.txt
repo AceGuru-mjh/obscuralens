@@ -1,0 +1,116 @@
+# ObscuraLens offline data pack -- ITU Maritime Identification Digits (MID)
+# ---------------------------------------------------------------------------
+# Format:      MID|country
+# One entry per line, pipe-delimited, '#' comment lines and blank lines
+# ignored by the loader (obscuralens/trackers/mmsi_sources.py and
+# obscuralens/utils/data_catalog.py both parse this file).
+#
+# The MID is the first three digits of a nine-digit Maritime Mobile Service
+# Identity (ITU-R M.1085): MID 201-775 are assigned to administrations
+# (large flag states such as Panama and Japan hold several blocks). This
+# pack carries a curated subset of well-documented assignments covering the
+# major flag states plus the countries an OSINT investigation most often
+# meets; the full ITU table runs to several hundred entries and is revised
+# between World Radiocommunication Conferences.
+#
+# A miss means "not in this curated subset", NOT "invalid MMSI" -- the
+# identity structure decode (ship / coast / group / handheld) comes from
+# the leading digits alone and always works.
+# ---------------------------------------------------------------------------
+201|Albania
+205|Belgium
+209|Cyprus
+210|Cyprus
+211|Germany
+212|Germany
+219|Denmark
+224|Spain
+225|Spain
+227|France
+228|France
+230|Finland
+232|United Kingdom
+233|United Kingdom
+234|United Kingdom
+235|United Kingdom
+236|United Kingdom
+238|Croatia
+239|Greece
+240|Greece
+241|Greece
+244|Netherlands
+245|Netherlands
+246|Netherlands
+247|Italy
+249|Malta
+250|Ireland
+251|Iceland
+261|Poland
+263|Portugal
+264|Romania
+265|Sweden
+266|Sweden
+267|Bulgaria
+271|Turkey
+272|Turkey
+273|Russia
+274|Russia
+304|Antigua and Barbuda
+310|Bermuda
+311|Bahamas
+314|Barbados
+316|Canada
+338|United States
+345|Mexico
+351|Panama
+352|Panama
+353|Panama
+354|Panama
+355|Panama
+356|Panama
+357|Panama
+366|United States
+367|United States
+368|United States
+369|United States
+370|Panama
+371|Panama
+372|Panama
+373|Panama
+374|Panama
+375|Panama
+405|Bangladesh
+412|China
+413|China
+414|China
+415|China
+416|Taiwan
+419|India
+422|Iran
+431|Japan
+432|Japan
+433|Japan
+434|Japan
+441|South Korea
+442|South Korea
+443|South Korea
+444|South Korea
+445|South Korea
+447|Kuwait
+470|United Arab Emirates
+477|Hong Kong
+503|Australia
+512|New Zealand
+533|Malaysia
+538|Marshall Islands
+563|Singapore
+564|Singapore
+565|Singapore
+574|Vietnam
+577|Vanuatu
+601|South Africa
+636|Liberia
+637|Liberia
+701|Argentina
+710|Brazil
+725|Chile

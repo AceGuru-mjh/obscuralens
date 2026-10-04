@@ -43,6 +43,9 @@ SERVICES = (
     'malwarebazaar',    # abuse.ch Auth-Key for hash lookups
     'securitytrails',   # Historical DNS / subdomain intelligence
     'llm',              # OpenAI-compatible endpoint key (experimental)
+    # v6.0 additions -------------------------------------------------------
+    'aviationstack',    # aviationstack.com live flight status (flight kind)
+    'wigle',            # wigle.net WiFi network search (bssid kind)
 )
 
 ENV_PREFIX = 'OBSCURALENS_'
@@ -69,6 +72,9 @@ class APIConfig:
     malwarebazaar_api_key: str = ""
     securitytrails_api_key: str = ""
     llm_api_key: str = ""
+    # v6.0 additions
+    aviationstack_api_key: str = ""
+    wigle_api_key: str = ""
 
 
 @dataclass

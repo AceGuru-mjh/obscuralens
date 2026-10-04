@@ -20,6 +20,9 @@ TOOL_NAMES = {
     'tools_extract', 'tools_squat', 'tools_exif', 'tools_stego',
     'tools_coords_convert', 'tools_geo_profile', 'tools_patterns',
     'tools_batch',
+    # v6.0 tools
+    'vin_lookup', 'flight_lookup', 'mmsi_lookup',
+    'app_lookup', 'bssid_lookup', 'plate_lookup',
 }
 
 
@@ -61,7 +64,11 @@ def test_tools_list_contains_all_tools_with_valid_schemas():
                           'tools_jwt', 'tools_hash_id', 'tools_extract',
                           'tools_squat', 'tools_exif', 'tools_stego',
                           'tools_coords_convert', 'tools_geo_profile',
-                          'tools_patterns', 'tools_batch')
+                          'tools_patterns', 'tools_batch',
+                          # v6.0 tools take vin/flight/mmsi/app/bssid/plate
+                          # instead of target
+                          'vin_lookup', 'flight_lookup', 'mmsi_lookup',
+                          'app_lookup', 'bssid_lookup', 'plate_lookup')
     for tool in tools:
         assert isinstance(tool['description'], str) and tool['description']
         schema = tool['inputSchema']
@@ -176,4 +183,4 @@ def test_main_end_to_end(monkeypatch):
     assert len(out_lines) == 2
     first, second = json.loads(out_lines[0]), json.loads(out_lines[1])
     assert first['result']['serverInfo']['name'] == 'obscuralens'
-    assert len(second['result']['tools']) == 34  # 8 core + 10 v4.0 + 16 v5.0 tools
+    assert len(second['result']['tools']) == 40  # 8 core + 10 v4.0 + 16 v5.0 + 6 v6.0 tools

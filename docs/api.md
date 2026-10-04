@@ -14,7 +14,8 @@ obscuralens serve --host 127.0.0.1 --port 8000 --open
 Conventions used by every endpoint:
 
 - **kinds** — `ip`, `phone`, `username`, `email`, `domain`, `url`, `crypto`,
-  `hash`, `cve`, `asn`, `mac`, `iban`, `imei`, `coords` (14 as of v5.0).
+  `hash`, `cve`, `asn`, `mac`, `iban`, `imei`, `coords`, and the v6.0
+  additions `vin`, `flight`, `mmsi`, `app`, `bssid` and `plate`.
 - **errors** — `400` with `{"detail": "..."}` for unknown kinds / invalid
   targets / bad payloads, `404` for missing resources. Tracker failures are
   *not* HTTP errors: they return the standard result envelope with
@@ -61,12 +62,20 @@ curl http://127.0.0.1:8000/api/lookup/mac/b8%3A27%3Aeb%3Aaa%3Abb%3Acc
 curl http://127.0.0.1:8000/api/lookup/iban/DE89370400440532013000
 curl http://127.0.0.1:8000/api/lookup/imei/356938035643809
 curl http://127.0.0.1:8000/api/lookup/coords/48.8584%2C%202.2945
+curl http://127.0.0.1:8000/api/lookup/vin/1HGCM82633A004352
+curl http://127.0.0.1:8000/api/lookup/flight/BA2490
+curl http://127.0.0.1:8000/api/lookup/mmsi/366910000
+curl http://127.0.0.1:8000/api/lookup/app/pypi%3Arequests
+curl http://127.0.0.1:8000/api/lookup/bssid/00%3A1A%3A2B%3A3C%3A4D%3A5E
+curl http://127.0.0.1:8000/api/lookup/plate/DE%3AB-AB%201234
 ```
 
 Response shape: the tracker envelope (above). For `username`, `info`
 carries the per-platform `results` list instead of scalar fields. For
 `iban`/`imei`, a failed mod-97/Luhn validation is a `400` *before* any
-source is contacted — typos never reach the network.
+source is contacted — typos never reach the network; the v6.0 kinds do
+the same (`vin` fails its ISO 3779 check digit, `mmsi` its nine-digit
+shape, `flight` its designator grammar).
 
 ### `GET /api/investigate?target=…&pivot=true`
 
@@ -102,7 +111,9 @@ curl http://127.0.0.1:8000/api/kinds
 
 Response shape: `[{"kind": "ip", "label": "IP address",
 "description": "…", "example": "8.8.8.8",
-"sources": ["ipwhois.app", "ipwho.is", …]}, …]` — one entry per kind, all 14.
+"sources": ["ipwhois.app", "ipwho.is", …]}, …]` — one entry per kind
+(17 live in this build: the v6.0 `vin`, `flight` and `mmsi` kinds
+included; 20 once part 1 completes).
 
 ### `GET /api/history?kind=&q=&limit=`
 
@@ -432,7 +443,8 @@ matching file extension (Gephi, yEd, Cytoscape, Graphviz; see
 
 Source catalogs for the kinds that publish one:
 `{"ip": {name: description}, "email": {...}, "domain": {...}, "url": {...},
-"crypto": {...}, "hash": {...}, "cve": {...}, "asn": {...}}`.
+"crypto": {...}, "hash": {...}, "cve": {...}, "asn": {...},
+"vin": {...}, "flight": {...}, "mmsi": {...}}`.
 
 ```bash
 curl http://127.0.0.1:8000/api/sources

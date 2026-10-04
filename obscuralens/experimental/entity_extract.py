@@ -5,22 +5,27 @@ Paste an email body, a forum post, a paste-dump entry or a threat-report
 paragraph and pull every OSINT pivot target out of it: email addresses,
 URLs, bare domains, IPv4/IPv6 literals, AS-number mentions, MAC addresses,
 IBANs, IMEIs, file hashes, CVE identifiers, cryptocurrency addresses,
-geographic coordinates, phone-number candidates, @-handles and parcel
-tracking numbers.
+geographic coordinates, VINs, flight designators, MMSIs, country-prefixed
+license plates, phone-number candidates, @-handles and parcel tracking
+numbers.
 
 The pipeline is validator-driven: a regex proposes, the shared
 ``utils.validators`` module disposes. That keeps the same three-state
 verdict logic the production trackers use (mod-97 for IBANs, Luhn for
-IMEIs, charset/shape rules for crypto addresses, coordinate range checks)
-instead of a second, drifting copy of those rules.
+IMEIs, ISO 3779 check digits for VINs, charset/shape rules for crypto
+addresses, coordinate range checks) instead of a second, drifting copy
+of those rules. Flight designators go one step further and only survive
+when their carrier code resolves in the shipped IATA/ICAO airline pack,
+which keeps ordinary words like "THE123" out of the results.
 
 Two-phase design, because weak entities live off leftovers:
 
 1. **Strong entities** are extracted first, in confidence order
    (emails, URLs, IPs, MACs, IBANs, IMEIs, crypto, hashes, CVEs,
-   coordinates, ASNs); every confirmed hit is masked out of a working
-   copy of the text so a 15-digit IMEI can never double-report as a
-   FedEx tracking number or a phone.
+   coordinates, ASNs, VINs, flights, MMSIs, plates); every confirmed hit is
+   masked out of a working copy of the text so a 15-digit IMEI can
+   never double-report as a FedEx tracking number or a phone, and a
+   17-character VIN is never re-read as a flight designator tail.
 2. **Weak candidates** (handles, phones, tracking IDs) run against the
    fully masked text and are labelled ``*_candidates`` in the result -
    they are leads to verify, not confirmed entities. Domains are scanned
@@ -54,6 +59,7 @@ _MAX_PER_KIND = 50
 ENTITY_KINDS: Tuple[str, ...] = (
     'emails', 'urls', 'domains', 'ipv4', 'ipv6', 'asn', 'macs', 'ibans',
     'imeis', 'hashes', 'cves', 'crypto_addresses', 'coords',
+    'vins', 'flights', 'mmsis', 'plates',
     'phone_candidates', 'user_handles', 'tracking_ids',
 )
 
@@ -64,6 +70,8 @@ _REDACT_LABELS: Dict[str, str] = {
     'imeis': 'IMEI', 'hashes': 'HASH', 'cves': 'CVE',
     'crypto_addresses': 'CRYPTO', 'coords': 'COORDS', 'phone_candidates': 'PHONE',
     'user_handles': 'HANDLE', 'tracking_ids': 'TRACKING',
+    'vins': 'VIN', 'flights': 'FLIGHT', 'mmsis': 'MMSI',
+    'plates': 'PLATE',
 }
 
 # ---------------------------------------------------------------------------
@@ -132,6 +140,34 @@ _COORD_DMS_RE = re.compile(
 # AS-number mentions ("AS1234" / "as 1234") - validators.validate_asn.
 _ASN_RE = re.compile(r'\bAS\s?\d{1,10}\b', re.IGNORECASE)
 
+# VINs: 17 uppercase characters from the ISO 3779 alphabet (no I, O or Q).
+# All-digit and all-letter runs are rejected before the check-digit test -
+# a purely numeric 17-run is almost always a serial, and a purely alphabetic
+# one is a word - then validators.validate_vin applies the full ISO 3779
+# check digit so random alphanumeric noise (1-in-11 survival) is dropped.
+_VIN_RE = re.compile(r'\b[A-HJ-NPR-Z0-9]{17}\b')
+
+# Flight designators: 2-3 uppercase letters, 1-4 digits, optional suffix
+# letter. Deliberately uppercase-only and pack-gated (see _extract_flights):
+# a designator survives only when its carrier code resolves in the shipped
+# IATA/ICAO airline pack, which keeps prose like "THE123" out.
+_FLIGHT_RE = re.compile(r'\b[A-Z]{2,3}\d{1,4}[A-Z]?\b')
+
+# MMSIs: nine digits whose first digit is 2-8 (201-775 ship MID blocks
+# plus the 8-prefix handheld series). Leading-0 coast/group forms and
+# leading-9 reserved/AtoN forms are intentionally NOT extracted - they are
+# rarely the subject of pasted prose and would collide with other digit
+# runs. validators.validate_mmsi does the final shape check.
+_MMSI_RE = re.compile(r'\b[2-8]\d{8}\b')
+
+# Country-prefixed license plates: an uppercase two-letter (optionally
+# -state) prefix, a colon, then 3-20 plate-body characters. The prefix
+# anchor is what makes the loose plate gate safe in prose - "DE:B-AB 1234"
+# style tokens never occur as ordinary words. Trailing separators are
+# trimmed before validators.validate_plate has the final say.
+_PLATE_RE = re.compile(
+    r'\b[A-Z]{2}(?:-[A-Z]{2,4})?:[A-Z0-9][A-Z0-9 -]{2,19}')
+
 # Bare domains - validated by validators.validate_domain. Scanned against
 # the ORIGINAL text (URLs and emails contribute their hosts too).
 _DOMAIN_RE = re.compile(r'\b(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,24}\b')
@@ -164,9 +200,17 @@ _DIGEST_LENGTHS = frozenset((32, 40, 56, 64, 96, 128))
 _URL_TRAILING = '.,;:!?)]}>\'"'
 
 # Extraction order for strong entities (masking happens after each kind).
+# plates runs before vins/flights/mmsis because a plate body routinely
+# contains designator-shaped tails ("GB:AB12 CDE" -> "AB12") and digit runs
+# that the later, narrower extractors would otherwise claim; the explicit
+# country prefix is the stronger reading. vins runs before flights because
+# a VIN whose last six characters happen to look like a designator tail
+# ("...PR1234") must be consumed by the VIN extractor first; mmsis before
+# the weak phone/tracking phases for the same reason.
 _STRONG_ORDER: Tuple[str, ...] = (
     'emails', 'urls', 'ipv6', 'ipv4', 'macs', 'ibans', 'imeis',
     'crypto_addresses', 'hashes', 'cves', 'coords', 'asn',
+    'plates', 'vins', 'flights', 'mmsis',
 )
 
 # Weak candidates run against the fully masked text, in this order.
@@ -382,6 +426,84 @@ def _extract_asn(text: str) -> List[_Hit]:
     return _dedup(hits)
 
 
+def _extract_vins(text: str) -> List[_Hit]:
+    """
+    VINs confirmed by the ISO 3779 check digit (validators.validate_vin).
+
+    All-digit and all-letter 17-character runs are rejected before the
+    check-digit test: the digit-only shape belongs to serial numbers and
+    the letter-only shape to dictionary words, and neither can be a real
+    VIN (position 9 is always significant and positions 1/10 mix classes).
+    """
+    hits: List[_Hit] = []
+    for match in _VIN_RE.finditer(text):
+        value = match.group(0)
+        if value.isdigit() or value.isalpha():
+            continue
+        ok, _ = validators.validate_vin(value)
+        if ok:
+            hits.append((value, match.start(), match.end()))
+    return _dedup(hits)
+
+
+def _extract_flights(text: str) -> List[_Hit]:
+    """
+    Flight designators whose carrier resolves in the shipped airline pack.
+
+    The regex alone matches far too much prose ("THE123", "IN2024"), so the
+    2-3 letter prefix must be a real IATA or ICAO carrier code in the
+    offline ``airlines_iata`` data pack before the hit is reported. The
+    pack lookup is imported lazily so this module stays cheap to import.
+    """
+    from ..utils import data_catalog
+
+    hits: List[_Hit] = []
+    for match in _FLIGHT_RE.finditer(text):
+        value = match.group(0)
+        parts = validators.split_flight(value)
+        if not parts:
+            continue
+        carrier = parts[0]
+        if data_catalog.airline(carrier) is None:
+            continue
+        hits.append((value, match.start(), match.end()))
+    return _dedup(hits)
+
+
+def _extract_mmsis(text: str) -> List[_Hit]:
+    """Nine-digit MMSIs (201-775 / 8-prefix series) via validate_mmsi."""
+    hits: List[_Hit] = []
+    for match in _MMSI_RE.finditer(text):
+        value = match.group(0)
+        ok, _ = validators.validate_mmsi(value)
+        if ok:
+            hits.append((value, match.start(), match.end()))
+    return _dedup(hits)
+
+
+def _extract_plates(text: str) -> List[_Hit]:
+    """
+    Country-prefixed license plates confirmed by validate_plate.
+
+    Only prefixed forms are extracted (``DE:B-AB 1234``, ``GB:AB12 CDE``,
+    ``US-CA:8ABC123``): unprefixed plate bodies are indistinguishable from
+    ordinary words, part numbers and phone fragments, so they stay out of
+    entity extraction entirely. The regex is uppercase-only, so lower-case
+    prose never re-reads as a plate.
+    """
+    hits: List[_Hit] = []
+    for match in _PLATE_RE.finditer(text):
+        value = match.group(0).rstrip(' -')
+        if not value:
+            continue
+        ok, _ = validators.validate_plate(value)
+        if not ok:
+            continue
+        trimmed = len(match.group(0)) - len(value)
+        hits.append((value, match.start(), match.end() - trimmed))
+    return _dedup(hits, key_lower=False)
+
+
 def _extract_domains(text: str) -> List[_Hit]:
     """Bare domains (from the ORIGINAL text, so URL hosts count too)."""
     hits: List[_Hit] = []
@@ -435,6 +557,10 @@ _STRONG_EXTRACTORS = {
     'cves': _extract_cves,
     'coords': _extract_coords,
     'asn': _extract_asn,
+    'vins': _extract_vins,
+    'flights': _extract_flights,
+    'mmsis': _extract_mmsis,
+    'plates': _extract_plates,
 }
 
 #: Weak-candidate extractors, keyed by result kind.
@@ -482,11 +608,11 @@ def extract_entities(text: str) -> Dict[str, List[str]]:
     Returns:
         ``{kind: [values...]}`` for every kind in :data:`ENTITY_KINDS`
         (emails, urls, domains, ipv4, ipv6, asn, macs, ibans, imeis,
-        hashes, cves, crypto_addresses, coords, phone_candidates,
-        user_handles, tracking_ids). Values are de-duplicated, in
-        first-appearance order, capped at 50 per kind. Strong kinds are
-        validator-confirmed; weak kinds (phones, handles, tracking ids)
-        are candidates to verify. Never raises.
+        hashes, cves, crypto_addresses, coords, vins, flights, mmsis,
+        plates, phone_candidates, user_handles, tracking_ids). Values are
+        de-duplicated, in first-appearance order, capped at 50 per kind.
+        Strong kinds are validator-confirmed; weak kinds (phones, handles,
+        tracking ids) are candidates to verify. Never raises.
     """
     result: Dict[str, List[str]] = {kind: [] for kind in ENTITY_KINDS}
     if not isinstance(text, str) or not text.strip():

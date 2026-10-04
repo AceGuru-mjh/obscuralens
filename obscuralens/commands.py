@@ -5,6 +5,9 @@ Examples:
     obscuralens ip 8.8.8.8 --format json
     obscuralens username github --fast
     obscuralens mac b8:27:eb:11:22:33
+    obscuralens vin 1M8GDM9AXKP042788
+    obscuralens flight BA2490
+    obscuralens mmsi 366910000
     obscuralens tools jwt <token>
     obscuralens batch ip targets.txt --format csv --output results.csv
     obscuralens history --search 8.8.8.8
@@ -43,30 +46,39 @@ from .utils import render_table, set_colors
 from .utils.formatting import fmt_value, rows_from_fields
 from .utils.formatting import label as _label
 from .utils.validators import (
+    validate_app,
     validate_asn,
+    validate_bssid,
     validate_coords,
     validate_crypto_address,
     validate_cve,
     validate_domain,
     validate_email,
+    validate_flight,
     validate_hash,
     validate_iban,
     validate_imei,
     validate_ip,
     validate_mac,
+    validate_mmsi,
     validate_phone,
+    validate_plate,
     validate_url,
     validate_username,
+    validate_vin,
 )
 from .watchlist import watchlist
 
 KINDS = ('ip', 'phone', 'username', 'email', 'domain', 'url', 'crypto',
-         'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords')
+         'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords',
+         # v6.0 kinds
+         'vin', 'flight', 'mmsi', 'app', 'bssid', 'plate')
 FORMATS = ('table', 'json', 'markdown', 'html', 'csv', 'mermaid')
 
 _TRACKERS: Dict[str, Any] = {}
 
-#: Input validators for every supported target kind (v5.0 added the last four).
+#: Input validators for every supported target kind (v5.0 added the middle
+#: four, v6.0 the last six).
 _VALIDATORS: Dict[str, Any] = {
     'ip': validate_ip, 'phone': validate_phone,
     'username': validate_username, 'email': validate_email,
@@ -75,6 +87,10 @@ _VALIDATORS: Dict[str, Any] = {
     'cve': validate_cve, 'asn': validate_asn,
     'mac': validate_mac, 'iban': validate_iban,
     'imei': validate_imei, 'coords': validate_coords,
+    'vin': validate_vin, 'flight': validate_flight,
+    'mmsi': validate_mmsi,
+    'app': validate_app, 'bssid': validate_bssid,
+    'plate': validate_plate,
 }
 
 
@@ -86,20 +102,26 @@ def _validator(kind: str) -> Optional[Any]:
 def _tracker(kind: str):
     if kind not in _TRACKERS:
         from .trackers import (
+            AppTracker,
             ASNTracker,
+            BSSIDTracker,
             CoordsTracker,
             CryptoTracker,
             CVETracker,
             DomainTracker,
             EmailTracker,
+            FlightTracker,
             HashTracker,
             IBANTracker,
             IMEITracker,
             IPTracker,
             MACTracker,
+            MMSITracker,
             PhoneTracker,
+            PlateTracker,
             URLTracker,
             UsernameTracker,
+            VINTracker,
         )
         _TRACKERS[kind] = {
             'ip': IPTracker,
@@ -116,6 +138,13 @@ def _tracker(kind: str):
             'iban': IBANTracker,
             'imei': IMEITracker,
             'coords': CoordsTracker,
+            # v6.0 kinds
+            'vin': VINTracker,
+            'flight': FlightTracker,
+            'mmsi': MMSITracker,
+            'app': AppTracker,
+            'bssid': BSSIDTracker,
+            'plate': PlateTracker,
         }[kind]()
     return _TRACKERS[kind]
 
@@ -227,10 +256,54 @@ def build_parser() -> argparse.ArgumentParser:
                           help='DD/DMS/UTM/MGRS coordinates, e.g. "48.8584, 2.2945"')
     add_common(p_coords)
 
+    # -- v6.0 target kinds ----------------------------------------------------
+
+    p_vin = sub.add_parser(
+        'vin', help='decode a vehicle identification number (WMI, year, plant)')
+    p_vin.add_argument(
+        'target',
+        help='17-character VIN, e.g. 1M8GDM9AXKP042788 (I/O/Q are not used)')
+    add_common(p_vin)
+
+    p_flight = sub.add_parser(
+        'flight', help='decode a flight designator (airline, codes, live status)')
+    p_flight.add_argument(
+        'target', help='flight designator, e.g. BA2490, UA1 or DLH400A')
+    add_common(p_flight)
+
+    p_mmsi = sub.add_parser(
+        'mmsi', help='decode a maritime identity (station class, flag state)')
+    p_mmsi.add_argument(
+        'target', help='9-digit MMSI, e.g. 366910000 or MMSI: 366-910-000')
+    add_common(p_mmsi)
+
+    p_app = sub.add_parser(
+        'app', help='look up a software package (registry, versions, CVEs)')
+    p_app.add_argument(
+        'target',
+        help='package coordinate, e.g. pypi:requests, npm:@babel/core, '
+             'crate:serde, docker:library/nginx, github:owner/repo')
+    add_common(p_app)
+
+    p_bssid = sub.add_parser(
+        'bssid', help='look up a WiFi access point (vendor, geolocation)')
+    p_bssid.add_argument(
+        'target',
+        help='BSSID (48-bit MAC-style address), e.g. 00:1A:2B:3C:4D:5E')
+    add_common(p_bssid)
+
+    p_plate = sub.add_parser(
+        'plate', help='analyze a license plate (country format match)')
+    p_plate.add_argument(
+        'target',
+        help='plate text, optionally prefixed with the country: '
+             'DE:B-AB 1234, GB:AB12 CDE, US-CA:8ABC123')
+    add_common(p_plate)
+
     p_inv = sub.add_parser(
         'investigate',
         help='auto-detect a target and follow related pivots')
-    p_inv.add_argument('target', help='IP / domain / email / phone / username / URL / CVE / hash / ASN / crypto')
+    p_inv.add_argument('target', help='IP / domain / email / phone / username / URL / CVE / hash / ASN / crypto / VIN / flight / MMSI / app / plate')
     p_inv.add_argument('--no-pivot', action='store_false', dest='pivot',
                        help='do not follow related targets')
     p_inv.add_argument('--max-pivots', type=int, default=3,
@@ -347,6 +420,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help='deterministic draw')
     data_mime = data_sub.add_parser('mime', help='MIME type lookup by extension')
     data_mime.add_argument('ext', help='extension with or without the dot')
+    data_plate = data_sub.add_parser(
+        'plate', help='license-plate format lookup by country')
+    data_plate.add_argument(
+        'country', help='country code such as DE, GB, US-CA (or search term)')
     data_sub.add_parser('stats', help='catalog pack statistics')
     add_common(p_data)
 
@@ -1022,6 +1099,62 @@ def _cmd_coords(args: argparse.Namespace) -> int:
                        f"Coordinates Report - {args.target}")
 
 
+# ---------------------------------------------------------------------------
+# v6.0 additions: vin / flight / mmsi kind handlers
+# ---------------------------------------------------------------------------
+
+def _cmd_vin(args: argparse.Namespace) -> int:
+    ok, error = validate_vin(args.target)
+    if not ok:
+        _err(error)
+        return 2
+    return _run_lookup(args, 'vin', args.target, f"VIN Report - {args.target}")
+
+
+def _cmd_flight(args: argparse.Namespace) -> int:
+    ok, error = validate_flight(args.target)
+    if not ok:
+        _err(error)
+        return 2
+    return _run_lookup(args, 'flight', args.target,
+                       f"Flight Report - {args.target}")
+
+
+def _cmd_mmsi(args: argparse.Namespace) -> int:
+    ok, error = validate_mmsi(args.target)
+    if not ok:
+        _err(error)
+        return 2
+    return _run_lookup(args, 'mmsi', args.target, f"MMSI Report - {args.target}")
+
+
+def _cmd_app(args: argparse.Namespace) -> int:
+    ok, error = validate_app(args.target)
+    if not ok:
+        _err(error)
+        return 2
+    return _run_lookup(args, 'app', args.target,
+                       f"Package Report - {args.target}")
+
+
+def _cmd_bssid(args: argparse.Namespace) -> int:
+    ok, error = validate_bssid(args.target)
+    if not ok:
+        _err(error)
+        return 2
+    return _run_lookup(args, 'bssid', args.target,
+                       f"BSSID Report - {args.target}")
+
+
+def _cmd_plate(args: argparse.Namespace) -> int:
+    ok, error = validate_plate(args.target)
+    if not ok:
+        _err(error)
+        return 2
+    return _run_lookup(args, 'plate', args.target,
+                       f"Plate Report - {args.target}")
+
+
 def _cmd_batch(args: argparse.Namespace) -> int:
     path = Path(args.file)
     if not path.exists():
@@ -1202,18 +1335,24 @@ def _cmd_sources(args: argparse.Namespace) -> int:
             getattr(args, 'health', False):
         return _cmd_sources_health(args)
 
+    from .trackers.app_sources import SOURCE_CATALOG as APP_CATALOG
     from .trackers.asn_sources import SOURCE_CATALOG as ASN_CATALOG
+    from .trackers.bssid_sources import SOURCE_CATALOG as BSSID_CATALOG
     from .trackers.coords_sources import SOURCE_CATALOG as COORDS_CATALOG
     from .trackers.crypto_sources import SOURCE_CATALOG as CRYPTO_CATALOG
     from .trackers.cve_sources import SOURCE_CATALOG as CVE_CATALOG
     from .trackers.domain_sources import SOURCE_CATALOG as DOMAIN_CATALOG
     from .trackers.email_sources import SOURCE_CATALOG as EMAIL_CATALOG
+    from .trackers.flight_sources import SOURCE_CATALOG as FLIGHT_CATALOG
     from .trackers.hash_sources import SOURCE_CATALOG as HASH_CATALOG
     from .trackers.iban_sources import SOURCE_CATALOG as IBAN_CATALOG
     from .trackers.imei_sources import SOURCE_CATALOG as IMEI_CATALOG
     from .trackers.ip_sources import SOURCE_CATALOG as IP_CATALOG
     from .trackers.mac_sources import SOURCE_CATALOG as MAC_CATALOG
+    from .trackers.mmsi_sources import SOURCE_CATALOG as MMSI_CATALOG
+    from .trackers.plate_sources import SOURCE_CATALOG as PLATE_CATALOG
     from .trackers.url_sources import SOURCE_CATALOG as URL_CATALOG
+    from .trackers.vin_sources import SOURCE_CATALOG as VIN_CATALOG
 
     catalogs: Dict[str, Dict[str, str]] = {
         'ip': IP_CATALOG,
@@ -1229,6 +1368,13 @@ def _cmd_sources(args: argparse.Namespace) -> int:
         'iban': IBAN_CATALOG,
         'imei': IMEI_CATALOG,
         'coords': COORDS_CATALOG,
+        # v6.0 kinds
+        'vin': VIN_CATALOG,
+        'flight': FLIGHT_CATALOG,
+        'mmsi': MMSI_CATALOG,
+        'app': APP_CATALOG,
+        'bssid': BSSID_CATALOG,
+        'plate': PLATE_CATALOG,
     }
     if args.kind and args.kind in catalogs:
         catalogs = {args.kind: catalogs[args.kind]}
@@ -3251,6 +3397,20 @@ def _cmd_data(args: argparse.Namespace) -> int:
             headers=['field', 'value']))
         return 0
 
+    if action == 'plate':
+        entries = data_catalog.plates_for_country(getattr(args, 'country', ''))
+        if not entries:
+            entries = data_catalog.search_plates(getattr(args, 'country', ''))
+        if not entries:
+            _err(f"no plate format matches {getattr(args, 'country', '')!r}")
+            return 1
+        print(render_table(
+            [[e.country, e.region, e.series, e.example, e.notes]
+             for e in entries[:25]],
+            headers=['country', 'region', 'series', 'example', 'notes']))
+        _info(f"{len(entries)} format(s)")
+        return 0
+
     if action == 'stats':
         print(data_catalog.catalog_summary())
         return 0
@@ -3275,6 +3435,13 @@ _HANDLERS = {
     'iban': _cmd_iban,
     'imei': _cmd_imei,
     'coords': _cmd_coords,
+    # v6.0 kinds
+    'vin': _cmd_vin,
+    'flight': _cmd_flight,
+    'mmsi': _cmd_mmsi,
+    'app': _cmd_app,
+    'bssid': _cmd_bssid,
+    'plate': _cmd_plate,
     'batch': _cmd_batch,
     'history': _cmd_history,
     'stats': _cmd_stats,

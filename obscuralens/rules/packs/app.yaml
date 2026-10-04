@@ -1,0 +1,203 @@
+# ObscuraLens explainable rule pack -- app
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the app tracker output: ecosystem, ecosystem_label,
+# registry_url, namespace, package_name, name_conventions, mirror_notes,
+# name, version, latest_version, summary, description, author, license,
+# homepage, downloads, recent_downloads, stars, forks, open_issues, topics_count,
+# maintainers_count, versions_count, updated, created, pushed, archived,
+# vulnerabilities_count, vulnerability_ids... App rules are supply-chain
+# posture signals about the package artefact, never statements about its
+# author or users.
+# ---------------------------------------------------------------------------
+
+name: app-rules
+description: >-
+  Explainable supply-chain posture heuristics for software package lookups
+  built on registry records, maintenance timestamps and OSV vulnerability
+  counts.
+version: 1
+rules:
+  - id: APP-001
+    title: Known vulnerabilities reported by OSV
+    description: >-
+      The OSV.dev query returned at least one advisory affecting this
+      package. Every affected version shares the exposure until the
+      dependency is bumped or pinned past the fixed range, so this is the
+      single highest-value signal a package report can carry.
+    severity: critical
+    weight: 30
+    tags: [security, vulnerability]
+    references: ["OSV.dev schema v1"]
+    conditions:
+      - field: vulnerabilities_count
+        operator: gt
+        value: 0
+
+  - id: APP-002
+    title: Repository is archived
+    description: >-
+      The upstream repository is flagged archived: no releases, issues or
+      security fixes are coming. An archived dependency is a maintenance
+      liability even without a known CVE, because future disclosures will
+      never be patched.
+    severity: medium
+    weight: 15
+    tags: [maintenance]
+    conditions:
+      - field: archived
+        operator: is_true
+
+  - id: APP-003
+    title: No license declared
+    description: >-
+      The registry record carries no license. Unlicensed code is "all
+      rights reserved" by default, which blocks redistribution inside
+      larger works and is also a mild typosquat hallmark (copycats rarely
+      bother filling metadata in).
+    severity: low
+    weight: 10
+    tags: [compliance, metadata]
+    conditions:
+      - field: license
+        operator: empty
+        value: true
+
+  - id: APP-004
+    title: Registry record stale for over two years
+    description: >-
+      The last update timestamp on the registry record is older than 730
+      days. A long-unupdated package may simply be stable, but combined
+      with any vulnerability it means the fix is not coming.
+    severity: medium
+    weight: 15
+    tags: [maintenance]
+    conditions:
+      - field: updated
+        operator: age_gt_days
+        value: 730
+
+  - id: APP-005
+    title: Very low recent download volume
+    description: >-
+      The registry reports fewer than 1,000 recent downloads (crates.io
+      reports a 90-day window). Almost nobody pulls this artefact, so any
+      appearance in a dependency tree deserves a second look - low-volume
+      names are the classic typosquat habitat.
+    severity: low
+    weight: 10
+    tags: [popularity, supply-chain]
+    conditions:
+      - field: recent_downloads
+        operator: lt
+        value: 1000
+
+  - id: APP-006
+    title: Repository has almost no stars
+    description: >-
+      The repository record shows fewer than 10 stars. Low community
+      traction is not wrongdoing, but it means no eyeballs on the code -
+      weigh it together with the license and vulnerability columns before
+      trusting the artefact.
+    severity: low
+    weight: 10
+    tags: [popularity]
+    conditions:
+      - field: stars
+        operator: lt
+        value: 10
+
+  - id: APP-007
+    title: Registry record carries no description
+    description: >-
+      The package has no description in its registry record. Legitimate
+      publishers almost always write one; empty metadata is a common
+      trait of throwaway and impersonation packages.
+    severity: low
+    weight: 10
+    tags: [metadata, supply-chain]
+    conditions:
+      - field: description
+        operator: empty
+        value: true
+      - field: summary
+        operator: empty
+        value: true
+
+  - id: APP-008
+    title: Single maintainer on the package
+    description: >-
+      The registry lists exactly one maintainer. A bus factor of one
+      means one account compromise or one lost credential transfers the
+      package outright - the mechanism behind the worst npm takeover
+      incidents.
+    severity: low
+    weight: 10
+    tags: [maintenance, supply-chain]
+    conditions:
+      - field: maintainers_count
+        operator: lte
+        value: 1
+
+  - id: APP-009
+    title: Large open-issue backlog
+    description: >-
+      The repository carries more than 500 open issues. A backlog that
+      size signals a maintainer team that is underwater, which delays
+      security fixes even when the project is alive.
+    severity: low
+    weight: 10
+    tags: [maintenance]
+    conditions:
+      - field: open_issues
+        operator: gt
+        value: 500
+
+  - id: APP-010
+    title: Very few published versions
+    description: >-
+      The registry record lists fewer than three published versions. New
+      legitimate packages start there too, but so do one-shot upload
+      attempts - read it together with the description and download rules.
+    severity: low
+    weight: 10
+    tags: [metadata]
+    conditions:
+      - field: versions_count
+        operator: lt
+        value: 3
+
+  - id: APP-011
+    title: No known vulnerabilities with a declared license
+    description: >-
+      The OSV query reports zero advisories and the registry record
+      declares a license. Positive context that documents what a
+      well-formed, currently clean package looks like in this pack.
+    severity: info
+    weight: 0
+    tags: [security, positive, compliance]
+    conditions:
+      - field: vulnerabilities_count
+        operator: eq
+        value: 0
+      - field: license
+        operator: not_empty
+        value: true
+
+  - id: APP-012
+    title: Repository pushed within the last month
+    description: >-
+      The upstream repository recorded a push inside the last 30 days.
+      Active development is the best single predictor that future
+      security reports will actually get patched.
+    severity: info
+    weight: 0
+    tags: [maintenance, positive]
+    conditions:
+      - field: pushed
+        operator: age_lt_days
+        value: 30

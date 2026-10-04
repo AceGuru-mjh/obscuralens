@@ -5,10 +5,16 @@ This module turns the plain-text reference packs shipped under
 ``obscuralens/data`` into typed, queryable Python objects: TCP/UDP port and
 service registrations, ISO 3166 countries, ISO 639 languages, ISO 4217
 currencies, HTTP status codes, the MITRE CWE catalogue, IANA top-level
-domains, file extensions, MIME types and a pool of realistic user-agent
-strings.  It exists so the CLI, the web UI and the SDK can answer "what is
-port 3389?", "which currency does Vietnam use?" or "is ``.dev`` a real
-TLD?" completely offline, without shipping a database.
+domains, file extensions, MIME types, a pool of realistic user-agent
+strings, and (since v6.0) the vehicle / air / sea / plate identifier
+registries: ISO 3780 World Manufacturer Identifiers, IATA / ICAO airline
+designators, ITU-R M.1085 Maritime Identification Digits and the curated
+license-plate format catalogue.  It exists so the CLI, the web UI and the
+SDK can answer "what is port 3389?", "which currency
+does Vietnam use?", "is ``.dev`` a real TLD?", "who builds VINs starting
+with WBA?", "which flag state owns MID 366?" or "which countries issue
+plates shaped ``AB12 CDE``?" completely offline, without
+shipping a database.
 
 Design rules (mirroring :mod:`obscuralens.utils.data_packs`):
 
@@ -51,6 +57,18 @@ comment lines and blank lines ignored in every pack:
   ``application/json|json|JSON data``.
 * ``user_agents.txt``       -- ``family|platform|user-agent string``.
 
+v6.0 data packs (vehicle / air / sea / plate identifier registries):
+
+* ``vin_wmi.txt``      -- ``WMI|manufacturer|country``, e.g.
+  ``WBA|BMW|Germany`` (ISO 3780 World Manufacturer Identifiers).
+* ``airlines_iata.txt`` -- ``IATA|ICAO|name|country|callsign``, e.g.
+  ``BA|BAW|British Airways|United Kingdom|SPEEDBIRD``.
+* ``mid_codes.txt``    -- ``MID|country``, e.g. ``366|United States``
+  (ITU-R M.1085 Maritime Identification Digits).
+* ``plate_formats.txt`` -- ``country|region|series|example|notes``, e.g.
+  ``DE|B|M|B-AB 1234|Berlin: 1-3 letter city code + ...`` (curated
+  license-plate formats).
+
 Usage examples::
 
     from obscuralens.utils import data_catalog
@@ -66,6 +84,13 @@ Usage examples::
     data_catalog.is_iana_tld('.dev')                # -> True
     data_catalog.mime_for_extension('json').mime    # -> 'application/json'
     data_catalog.random_user_agent(family='Chrome', seed=42)
+
+    # v6.0 identifier registries
+    data_catalog.wmi('WBA').manufacturer            # -> 'BMW'
+    data_catalog.airline('BA').callsign             # -> 'SPEEDBIRD'
+    data_catalog.mid(366).country                   # -> 'United States'
+    data_catalog.plates_for_country('DE')           # -> [PlateEntry, ...]
+
     print(data_catalog.catalog_summary())           # stats table
 
 See :func:`catalog_stats` and :func:`catalog_summary` for a quick overview
@@ -101,6 +126,13 @@ _TLDS_PACK = 'iana_tlds'
 _EXTENSIONS_PACK = 'file_extensions'
 _MIMES_PACK = 'mime_types'
 _USER_AGENTS_PACK = 'user_agents'
+
+# v6.0 identifier-registry packs (VIN manufacturers, airlines, MMSI flags,
+# license-plate formats).
+_VIN_WMI_PACK = 'vin_wmi'
+_AIRLINES_PACK = 'airlines_iata'
+_MID_PACK = 'mid_codes'
+_PLATE_FORMATS_PACK = 'plate_formats'
 
 #: User-agent string returned when the pack is missing or empty -- a plain,
 #: widely accepted Chrome-on-Windows value so callers always get something
@@ -467,6 +499,130 @@ class UserAgent:
 
 
 @dataclass
+class WmiEntry:
+    """
+    One ISO 3780 World Manufacturer Identifier entry (v6.0).
+
+    Fields:
+        wmi: 2-3 character VIN prefix, uppercase (``"WBA"``).
+        manufacturer: manufacturer name in registry casing (``"BMW"``).
+        country: assembly country (``"Germany"``).
+
+    Example:
+        WmiEntry('1FA', 'Ford', 'United States')
+    """
+
+    wmi: str
+    manufacturer: str
+    country: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the entry as a plain (JSON-friendly) dict."""
+        return {
+            'wmi': self.wmi,
+            'manufacturer': self.manufacturer,
+            'country': self.country,
+        }
+
+
+@dataclass
+class Airline:
+    """
+    One IATA / ICAO airline designator entry (v6.0).
+
+    Fields:
+        iata: two-letter IATA designator, uppercase (``"BA"``; a few
+            leisure carriers carry three-letter designators such as ``TOM``).
+        icao: three-letter ICAO designator, uppercase (``"BAW"``); may be
+            empty for entries whose ICAO code is not documented.
+        name: airline name (``"British Airways"``).
+        country: airline country (``"United Kingdom"``).
+        callsign: spoken radio callsign (``"SPEEDBIRD"``); may be empty.
+
+    Example:
+        Airline('BA', 'BAW', 'British Airways', 'United Kingdom', 'SPEEDBIRD')
+    """
+
+    iata: str
+    icao: str
+    name: str
+    country: str
+    callsign: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the entry as a plain (JSON-friendly) dict."""
+        return {
+            'iata': self.iata,
+            'icao': self.icao,
+            'name': self.name,
+            'country': self.country,
+            'callsign': self.callsign,
+        }
+
+
+@dataclass
+class MidEntry:
+    """
+    One ITU-R M.1085 Maritime Identification Digit entry (v6.0).
+
+    Fields:
+        mid: three-digit MID, kept as a string to preserve any future
+            leading-zero allocations (``"366"``).
+        country: the flag state the MID is assigned to (``"United States"``).
+
+    Example:
+        MidEntry('232', 'United Kingdom')
+    """
+
+    mid: str
+    country: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the entry as a plain (JSON-friendly) dict."""
+        return {'mid': self.mid, 'country': self.country}
+
+
+@dataclass
+class PlateEntry:
+    """
+    One curated license-plate format entry (v6.0).
+
+    Fields:
+        country: issuing jurisdiction - ISO 3166-1 alpha-2 (``"DE"``) or a
+            two-letter + state-suffix form (``"US-CA"``, ``"AU-NSW"`` with
+            three-letter state codes).
+        region: sub-national code inside the country (German city code,
+            Indian state letters, US state); empty when the national format
+            carries no regional discriminator.
+        series: the entry's pattern/series flag - ``"M"`` current main
+            series, ``"O"`` obsolete/historical, ``"S"`` special.
+        example: a real-shape example of the series (``"B-AB 1234"``) that
+            the plate tracker derives its loose match regex from.
+        notes: what the format means; ``"general"`` for confidence-level
+            descriptions.
+
+    Example:
+        PlateEntry('DE', 'B', 'M', 'B-AB 1234', 'Berlin: city code + ...')
+    """
+
+    country: str
+    region: str
+    series: str
+    example: str
+    notes: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the entry as a plain (JSON-friendly) dict."""
+        return {
+            'country': self.country,
+            'region': self.region,
+            'series': self.series,
+            'example': self.example,
+            'notes': self.notes,
+        }
+
+
+@dataclass
 class CatalogStats:
     """
     Loading statistics for a single data pack.
@@ -522,6 +678,20 @@ _ExtensionsRecord = Tuple[List[FileExtension], Dict[str, FileExtension]]
 
 #: Cached record for the MIME pack: (entries, ext index, mime index).
 _MimesRecord = Tuple[List[MimeType], Dict[str, MimeType], Dict[str, MimeType]]
+
+#: Cached record for the WMI pack (v6.0): (entries, wmi index).
+_WmisRecord = Tuple[List[WmiEntry], Dict[str, WmiEntry]]
+
+#: Cached record for the airline pack (v6.0):
+#: (entries, IATA index, ICAO index).
+_AirlinesRecord = Tuple[List[Airline], Dict[str, Airline], Dict[str, Airline]]
+
+#: Cached record for the MID pack (v6.0): (entries, mid index).
+_MidsRecord = Tuple[List[MidEntry], Dict[str, MidEntry]]
+
+#: Cached record for the plate format pack (v6.0):
+#: (entries, country index).
+_PlatesRecord = Tuple[List[PlateEntry], Dict[str, List[PlateEntry]]]
 
 
 # ---------------------------------------------------------------------------
@@ -995,6 +1165,131 @@ def _build_user_agents(lines: Iterable[str]) -> List[UserAgent]:
     return entries
 
 
+def _build_wmis(lines: Iterable[str]) -> _WmisRecord:
+    """
+    Build the WMI record: ``(entries, by_wmi)`` (v6.0).
+
+    Lines are ``WMI|manufacturer|country``.  Entries with a wrong field
+    count, a WMI that is not 2-3 alphanumeric characters, or an empty
+    manufacturer are skipped; duplicate WMIs are skipped with the first
+    occurrence winning.  WMIs are normalised to uppercase; manufacturer
+    and country names keep their registry casing.
+    """
+    entries: List[WmiEntry] = []
+    by_wmi: Dict[str, WmiEntry] = {}
+    for line in lines:
+        fields = _parse_pipe_line(line, 3)
+        if fields is None:
+            continue
+        wmi, manufacturer, country = fields
+        if len(wmi) not in (2, 3) or not wmi.isalnum() or not manufacturer:
+            continue
+        wmi = wmi.upper()
+        if wmi in by_wmi:
+            continue
+        entry = WmiEntry(wmi=wmi, manufacturer=manufacturer, country=country)
+        by_wmi[wmi] = entry
+        entries.append(entry)
+    return entries, by_wmi
+
+
+def _build_airlines(lines: Iterable[str]) -> _AirlinesRecord:
+    """
+    Build the airlines record: ``(entries, by_iata, by_icao)`` (v6.0).
+
+    Lines are ``IATA|ICAO|name|country|callsign``.  Entries with a wrong
+    field count, an IATA designator that is not 2-3 uppercase-able
+    alphanumeric characters or an empty name are skipped.  ICAO codes and
+    callsigns may legitimately be empty; duplicate designators are skipped
+    with the first occurrence winning.  Codes are normalised to uppercase.
+    """
+    entries: List[Airline] = []
+    by_iata: Dict[str, Airline] = {}
+    by_icao: Dict[str, Airline] = {}
+    for line in lines:
+        fields = _parse_pipe_line(line, 5)
+        if fields is None:
+            continue
+        iata, icao, name, country, callsign = fields
+        if len(iata) not in (2, 3) or not iata.isalnum() or not name:
+            continue
+        iata = iata.upper()
+        icao = icao.upper()
+        if iata in by_iata:
+            continue
+        entry = Airline(iata=iata, icao=icao, name=name,
+                        country=country, callsign=callsign)
+        by_iata[iata] = entry
+        if icao and icao not in by_icao:
+            by_icao[icao] = entry
+        entries.append(entry)
+    return entries, by_iata, by_icao
+
+
+def _build_mids(lines: Iterable[str]) -> _MidsRecord:
+    """
+    Build the MID record: ``(entries, by_mid)`` (v6.0).
+
+    Lines are ``MID|country``.  Entries with a wrong field count, a MID
+    that is not exactly three digits or an empty country are skipped;
+    duplicate MIDs are skipped with the first occurrence winning.  MIDs
+    are kept as three-digit strings so future leading-zero allocations
+    survive.
+    """
+    entries: List[MidEntry] = []
+    by_mid: Dict[str, MidEntry] = {}
+    for line in lines:
+        fields = _parse_pipe_line(line, 2)
+        if fields is None:
+            continue
+        mid, country = fields
+        if len(mid) != 3 or not mid.isdigit() or not country:
+            continue
+        if mid in by_mid:
+            continue
+        entry = MidEntry(mid=mid, country=country)
+        by_mid[mid] = entry
+        entries.append(entry)
+    return entries, by_mid
+
+
+_PLATE_COUNTRY_RE = re.compile(r'^[A-Z]{2}(?:-[A-Z]{2,4})?$')
+_PLATE_SERIES = frozenset(('M', 'O', 'S'))
+
+
+def _build_plates(lines: Iterable[str]) -> _PlatesRecord:
+    """
+    Build the plate format record: ``(entries, by_country)`` (v6.0).
+
+    Lines are ``country|region|series|example|notes``.  Entries with a
+    wrong field count, a country that is not a two-letter or two-letter
+    + state-suffix code (``US-CA``, ``AU-NSW``), or an empty example are
+    skipped; unknown series flags
+    fall back to ``'M'`` (current series) rather than skipping, because
+    the flag is informational.  Countries are normalised to uppercase and
+    the index keeps every entry of a country (Germany alone ships fifteen
+    per-city rows).
+    """
+    entries: List[PlateEntry] = []
+    by_country: Dict[str, List[PlateEntry]] = {}
+    for line in lines:
+        fields = _parse_pipe_line(line, 5)
+        if fields is None:
+            continue
+        country, region, series, example, notes = fields
+        country = country.upper()
+        if not _PLATE_COUNTRY_RE.match(country) or not example:
+            continue
+        series = series.upper()
+        if series not in _PLATE_SERIES:
+            series = 'M'
+        entry = PlateEntry(country=country, region=region, series=series,
+                           example=example, notes=notes)
+        by_country.setdefault(country, []).append(entry)
+        entries.append(entry)
+    return entries, by_country
+
+
 # ---------------------------------------------------------------------------
 # Per-pack loaders (memoized through _load)
 # ---------------------------------------------------------------------------
@@ -1119,6 +1414,56 @@ def _load_user_agents() -> List[UserAgent]:
         into this list.
     """
     return _load(_USER_AGENTS_PACK, _build_user_agents, [])
+
+
+def _load_wmis() -> _WmisRecord:
+    """
+    Load (and memoize) the ``vin_wmi`` pack (v6.0).
+
+    Returns:
+        ``(entries, by_wmi)`` -- every parsed :class:`WmiEntry` in file
+        order plus an uppercase WMI lookup index.  A missing pack yields
+        empty structures.
+    """
+    return _load(_VIN_WMI_PACK, _build_wmis, ([], {}))
+
+
+def _load_airlines() -> _AirlinesRecord:
+    """
+    Load (and memoize) the ``airlines_iata`` pack (v6.0).
+
+    Returns:
+        ``(entries, by_iata, by_icao)`` -- every parsed :class:`Airline`
+        in file order plus IATA and ICAO designator lookup indexes that
+        share the same entry objects.  A missing pack yields empty
+        structures.
+    """
+    return _load(_AIRLINES_PACK, _build_airlines, ([], {}, {}))
+
+
+def _load_mids() -> _MidsRecord:
+    """
+    Load (and memoize) the ``mid_codes`` pack (v6.0).
+
+    Returns:
+        ``(entries, by_mid)`` -- every parsed :class:`MidEntry` in file
+        order plus a three-digit MID lookup index.  A missing pack yields
+        empty structures.
+    """
+    return _load(_MID_PACK, _build_mids, ([], {}))
+
+
+def _load_plates() -> _PlatesRecord:
+    """
+    Load (and memoize) the ``plate_formats`` pack (v6.0).
+
+    Returns:
+        ``(entries, by_country)`` -- every parsed :class:`PlateEntry` in
+        file order plus a country lookup index that shares the same entry
+        objects (each country maps to its full list of format rows).  A
+        missing pack yields empty structures.
+    """
+    return _load(_PLATE_FORMATS_PACK, _build_plates, ([], {}))
 
 
 # ---------------------------------------------------------------------------
@@ -1912,11 +2257,290 @@ def random_user_agent(family: Optional[str] = None, platform: Optional[str] = No
 
 
 # ---------------------------------------------------------------------------
+# Public API -- v6.0 identifier registries (WMI / airlines / MID)
+# ---------------------------------------------------------------------------
+
+
+def wmi(prefix: Any) -> Optional[WmiEntry]:
+    """
+    Look up a World Manufacturer Identifier entry, case-insensitively (v6.0).
+
+    Args:
+        prefix: 2-3 character WMI (``"WBA"``, ``"1fa"``, the first three
+            VIN characters).  Non-string input, wrong lengths, non-
+            alphanumeric prefixes and unknown WMIs return ``None``; the
+            function never raises.
+
+    Returns:
+        The matching :class:`WmiEntry` or ``None``.  A miss means "not in
+        the curated subset", not "unallocated" - the full ISO 3780 table
+        runs to tens of thousands of entries.
+
+    Example:
+        wmi('1FA').manufacturer     # 'Ford'
+        wmi('wba').country          # 'Germany'
+        wmi('ZZZ')                  # None
+    """
+    if not isinstance(prefix, str):
+        return None
+    key = prefix.strip().upper()
+    if len(key) not in (2, 3) or not key.isalnum():
+        return None
+    _, by_wmi = _load_wmis()
+    return by_wmi.get(key)
+
+
+def search_wmis(query: Any) -> List[WmiEntry]:
+    """
+    Search WMI entries by a case-insensitive substring (v6.0).
+
+    Args:
+        query: substring to look for inside the (lowercased) manufacturer
+            or country.  An empty or whitespace-only string matches every
+            entry, so ``search_wmis('')`` returns the full list in pack
+            order; non-string input returns ``[]``.
+
+    Returns:
+        Matching :class:`WmiEntry` entries in pack order; never raises.
+
+    Example:
+        ford_wmis = search_wmis('ford')    # every curated Ford WMI
+        [e.wmi for e in search_wmis('germany')][:3]
+    """
+    entries, _ = _load_wmis()
+    if not isinstance(query, str):
+        return []
+    needle = query.strip().lower()
+    return [entry for entry in entries
+            if needle in entry.manufacturer.lower()
+            or needle in entry.country.lower()]
+
+
+def wmis_count() -> int:
+    """
+    Number of parsed WMI entries (0 when the pack is missing) (v6.0).
+
+    Example:
+        wmis_count() >= 100    # True with the shipped pack
+    """
+    entries, _ = _load_wmis()
+    return len(entries)
+
+
+def airline(code: Any) -> Optional[Airline]:
+    """
+    Look up an airline by its IATA or ICAO designator (v6.0).
+
+    Args:
+        code: two-letter IATA designator (``"BA"``, ``"ua"``) or
+            three-letter ICAO designator (``"BAW"``, ``"dlh"``); a few
+            leisure carriers carry three-letter IATA designators (``TOM``),
+            so both lengths are checked in both indexes.  Non-string input,
+            wrong lengths, non-alphanumeric codes and unknown designators
+            return ``None``; the function never raises.
+
+    Returns:
+        The matching :class:`Airline` or ``None``.  IATA and ICAO spellings
+        of one carrier resolve to the identical cached object.
+
+    Example:
+        airline('BA').name        # 'British Airways'
+        airline('baw').callsign   # 'SPEEDBIRD'
+        airline('XX')             # None
+    """
+    if not isinstance(code, str):
+        return None
+    key = code.strip().upper()
+    if len(key) not in (2, 3) or not key.isalnum():
+        return None
+    _, by_iata, by_icao = _load_airlines()
+    return by_iata.get(key) or by_icao.get(key)
+
+
+def search_airlines(query: Any) -> List[Airline]:
+    """
+    Search airlines by a case-insensitive substring (v6.0).
+
+    Args:
+        query: substring to look for inside the (lowercased) airline name,
+            country or callsign.  An empty or whitespace-only string
+            matches every entry, so ``search_airlines('')`` returns the
+            full list in pack order; non-string input returns ``[]``.
+
+    Returns:
+        Matching :class:`Airline` entries in pack order; never raises.
+
+    Example:
+        names = [a.name for a in search_airlines('united')]
+        # ['United Airlines', 'United Express', ...]
+    """
+    entries, _, _ = _load_airlines()
+    if not isinstance(query, str):
+        return []
+    needle = query.strip().lower()
+    return [entry for entry in entries
+            if needle in entry.name.lower()
+            or needle in entry.country.lower()
+            or needle in entry.callsign.lower()]
+
+
+def airlines_count() -> int:
+    """
+    Number of parsed airline entries (0 when the pack is missing) (v6.0).
+
+    Example:
+        airlines_count() >= 100    # True with the shipped pack
+    """
+    entries, _, _ = _load_airlines()
+    return len(entries)
+
+
+def mid(value: Any) -> Optional[MidEntry]:
+    """
+    Look up a Maritime Identification Digit assignment (v6.0).
+
+    Args:
+        value: three-digit MID as int or digit-string (``366``, ``"366"``,
+            ``"036"``).  Non-string/non-int input, wrong digit counts and
+            unknown MIDs return ``None``; the function never raises.
+
+    Returns:
+        The matching :class:`MidEntry` or ``None``.  MIDs are kept as
+        three-digit strings so future leading-zero allocations survive.
+
+    Example:
+        mid(366).country    # 'United States'
+        mid('232').country  # 'United Kingdom'
+        mid(999)            # None
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        key = str(value)
+    elif isinstance(value, str):
+        key = value.strip()
+    else:
+        return None
+    if len(key) != 3 or not key.isdigit():
+        return None
+    _, by_mid = _load_mids()
+    return by_mid.get(key)
+
+
+def search_mids(query: Any) -> List[MidEntry]:
+    """
+    Search MID assignments by a case-insensitive substring (v6.0).
+
+    Args:
+        query: substring to look for inside the (lowercased) country name.
+            An empty or whitespace-only string matches every entry, so
+            ``search_mids('')`` returns the full list in pack order;
+            non-string input returns ``[]``.
+
+    Returns:
+        Matching :class:`MidEntry` entries in pack order; never raises.
+
+    Example:
+        [e.mid for e in search_mids('germany')]     # ['211', '218', ...]
+    """
+    entries, _ = _load_mids()
+    if not isinstance(query, str):
+        return []
+    needle = query.strip().lower()
+    return [entry for entry in entries
+            if needle in entry.country.lower()]
+
+
+def mids_count() -> int:
+    """
+    Number of parsed MID entries (0 when the pack is missing) (v6.0).
+
+    Example:
+        mids_count() >= 80    # True with the shipped pack
+    """
+    entries, _ = _load_mids()
+    return len(entries)
+
+
+# ---------------------------------------------------------------------------
+# Public API -- license plate formats (v6.0)
+# ---------------------------------------------------------------------------
+
+
+def plates_for_country(country: Any) -> List[PlateEntry]:
+    """
+    Look up every curated plate format of an issuing jurisdiction (v6.0).
+
+    Args:
+        country: two-letter country code or two-letter + state-suffix form
+            (``'DE'``, ``'us-ca'``, ``'AU-NSW'``); case and surrounding
+            whitespace are tolerated.  Non-string input and unknown codes
+            return ``[]``; the function never raises.
+
+    Returns:
+        The jurisdiction's :class:`PlateEntry` rows in pack order (Germany
+        ships fifteen per-city rows, the US ships per-state rows).  A miss
+        means "not in the curated subset", not "no such jurisdiction".
+
+    Example:
+        berlin = [e for e in plates_for_country('DE') if e.region == 'B']
+        berlin[0].example    # 'B-AB 1234'
+    """
+    if not isinstance(country, str):
+        return []
+    key = country.strip().upper()
+    if not _PLATE_COUNTRY_RE.match(key):
+        return []
+    _, by_country = _load_plates()
+    return list(by_country.get(key, ()))
+
+
+def search_plates(query: Any) -> List[PlateEntry]:
+    """
+    Search plate formats by a case-insensitive substring (v6.0).
+
+    Args:
+        query: substring to look for inside the (lowercased) country,
+            region, example or notes.  An empty or whitespace-only string
+            matches every entry, so ``search_plates('')`` returns the full
+            list in pack order; non-string input returns ``[]``.
+
+    Returns:
+        Matching :class:`PlateEntry` entries in pack order; never raises.
+
+    Example:
+        berlin = search_plates('Berlin')
+        berlin[0].region    # 'B'
+    """
+    entries, _ = _load_plates()
+    if not isinstance(query, str):
+        return []
+    needle = query.strip().lower()
+    return [entry for entry in entries
+            if needle in entry.country.lower()
+            or needle in entry.region.lower()
+            or needle in entry.example.lower()
+            or needle in entry.notes.lower()]
+
+
+def plates_count() -> int:
+    """
+    Number of parsed plate format entries (0 when the pack is missing) (v6.0).
+
+    Example:
+        plates_count() >= 70    # True with the shipped pack
+    """
+    entries, _ = _load_plates()
+    return len(entries)
+
+
+# ---------------------------------------------------------------------------
 # Public API -- catalog statistics
 # ---------------------------------------------------------------------------
 
 #: (pack name, zero-argument callable returning the pack's entry count), in
 #: the display order used by :func:`catalog_stats` / :func:`catalog_summary`.
+#: The four v6.0 identifier-registry packs close the list.
 _PACK_COUNTERS: Tuple[Tuple[str, Callable[[], int]], ...] = (
     (_COUNTRIES_PACK, lambda: len(_load_countries()[0])),
     (_LANGUAGES_PACK, lambda: len(_load_languages()[0])),
@@ -1928,7 +2552,33 @@ _PACK_COUNTERS: Tuple[Tuple[str, Callable[[], int]], ...] = (
     (_EXTENSIONS_PACK, lambda: len(_load_extensions()[0])),
     (_MIMES_PACK, lambda: len(_load_mimes()[0])),
     (_USER_AGENTS_PACK, lambda: len(_load_user_agents())),
+    # v6.0 identifier registries
+    (_VIN_WMI_PACK, lambda: len(_load_wmis()[0])),
+    (_AIRLINES_PACK, lambda: len(_load_airlines()[0])),
+    (_MID_PACK, lambda: len(_load_mids()[0])),
+    (_PLATE_FORMATS_PACK, lambda: len(_load_plates()[0])),
 )
+
+#: One-line description per pack, rendered by :func:`catalog_summary` (the
+#: "说明" column of ``obscuralens data stats``) and usable anywhere a pack
+#: manifest is shown.  Keys mirror :data:`_PACK_COUNTERS` names.
+PACK_DESCRIPTIONS: Dict[str, str] = {
+    _COUNTRIES_PACK: 'ISO 3166-1 country codes (alpha-2/alpha-3/numeric)',
+    _LANGUAGES_PACK: 'ISO 639 language codes and English names',
+    _CURRENCIES_PACK: 'ISO 4217 currencies with minor units',
+    _PORTS_PACK: 'IANA port/service registrations (tcp/udp/sctp/dccp)',
+    _HTTP_PACK: 'RFC 9110 HTTP status phrases and categories',
+    _CWES_PACK: 'MITRE CWE weakness catalogue (curated subset)',
+    _TLDS_PACK: 'IANA delegated root-zone TLD list',
+    _EXTENSIONS_PACK: 'Curated file-extension registry',
+    _MIMES_PACK: 'Curated MIME type registry',
+    _USER_AGENTS_PACK: 'Realistic user-agent string pool',
+    # v6.0 identifier registries
+    _VIN_WMI_PACK: 'ISO 3780 World Manufacturer Identifiers (VIN makers)',
+    _AIRLINES_PACK: 'IATA / ICAO airline designators with callsigns',
+    _MID_PACK: 'ITU-R M.1085 Maritime Identification Digits (flag states)',
+    _PLATE_FORMATS_PACK: 'Curated license-plate formats (country|region|series)',
+}
 
 
 def catalog_stats() -> List[CatalogStats]:
@@ -1941,12 +2591,13 @@ def catalog_stats() -> List[CatalogStats]:
     ``entries=0, loaded=False``.
 
     Returns:
-        One :class:`CatalogStats` per pack -- ten entries in total -- in
-        catalog display order.
+        One :class:`CatalogStats` per pack -- fourteen entries in total
+        (the ten v5.1 packs plus the four v6.0 identifier registries) --
+        in catalog display order.
 
     Example:
         stats = catalog_stats()
-        len(stats)                                     # 10
+        len(stats)                                     # 14
         {s.name for s in stats} >= {'iana_tlds'}       # True
     """
     stats: List[CatalogStats] = []
@@ -1960,8 +2611,9 @@ def catalog_summary() -> str:
     """
     Render :func:`catalog_stats` as a fixed-width plain-text table.
 
-    The table lists every pack with its entry count and load state plus a
-    totals row.  It always contains the ten pack names and their entry
+    The table lists every pack with its entry count, load state and a
+    one-line description (from :data:`PACK_DESCRIPTIONS`) plus a totals
+    row.  It always contains the fourteen pack names and their entry
     counts, which makes it a handy one-shot smoke test of the catalog.
 
     Returns:
@@ -1971,15 +2623,16 @@ def catalog_summary() -> str:
         print(catalog_summary())
         # ObscuraLens offline data catalog
         #
-        # pack                  entries    loaded
-        # ------------------------------  -------
-        # countries_iso3166           249      yes
+        # pack                  entries    loaded  description
+        # ---------------------------------------  -------  -----------
+        # countries_iso3166           249      yes  ISO 3166-1 country ...
         # ...
-        # total                       6387   10/10
+        # total                      7120   13/13
     """
     stats = catalog_stats()
-    header = '{:<20}{:>10}{:>10}'.format('pack', 'entries', 'loaded')
-    rule = '-' * len(header)
+    header = '{:<22}{:>10}{:>10}  {}'.format(
+        'pack', 'entries', 'loaded', 'description')
+    rule = '-' * 38 + '  ' + '-' * 11
     lines = ['ObscuraLens offline data catalog', '', header, rule]
     total = 0
     loaded_packs = 0
@@ -1987,10 +2640,11 @@ def catalog_summary() -> str:
         total += stat.entries
         if stat.loaded:
             loaded_packs += 1
-        lines.append('{:<20}{:>10}{:>10}'.format(
-            stat.name, stat.entries, 'yes' if stat.loaded else 'no'))
+        lines.append('{:<22}{:>10}{:>10}  {}'.format(
+            stat.name, stat.entries, 'yes' if stat.loaded else 'no',
+            PACK_DESCRIPTIONS.get(stat.name, '')))
     lines.append(rule)
-    lines.append('{:<20}{:>10}{:>10}'.format(
+    lines.append('{:<22}{:>10}{:>10}'.format(
         'total', total, '{}/{}'.format(loaded_packs, len(stats))))
     return '\n'.join(lines)
 
@@ -2007,6 +2661,10 @@ __all__ = [
     'FileExtension',
     'MimeType',
     'UserAgent',
+    'WmiEntry',
+    'Airline',
+    'MidEntry',
+    'PlateEntry',
     'CatalogStats',
     # countries (ISO 3166-1)
     'country',
@@ -2051,6 +2709,19 @@ __all__ = [
     'mimes_count',
     # user agents
     'random_user_agent',
+    # v6.0 identifier registries (WMI / airlines / MID / plate formats)
+    'wmi',
+    'search_wmis',
+    'wmis_count',
+    'airline',
+    'search_airlines',
+    'airlines_count',
+    'mid',
+    'search_mids',
+    'mids_count',
+    'plates_for_country',
+    'search_plates',
+    'plates_count',
     # catalog statistics
     'catalog_stats',
     'catalog_summary',

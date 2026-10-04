@@ -30,6 +30,8 @@ const DEFAULT_TIMEOUT = 90000;
 export const KINDS = [
   'ip', 'domain', 'email', 'username', 'phone', 'url',
   'crypto', 'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords',
+  // v6.0 kinds
+  'vin', 'flight', 'mmsi', 'app', 'bssid', 'plate',
 ];
 
 /** Friendly metadata for each kind, used by selects and the palette. */
@@ -48,6 +50,13 @@ export const KIND_META = {
   iban:     { label: 'IBAN',           hint: 'DE89 3704 0044 0532 0130 00' },
   imei:     { label: 'IMEI',           hint: '356938035643809' },
   coords:   { label: 'Coordinates',    hint: '48.8584, 2.2945 or UTM/MGRS' },
+  // v6.0 kinds
+  vin:      { label: 'VIN',            hint: '1M8GDM9AXKP042788 (17 chars)' },
+  flight:   { label: 'Flight number',  hint: 'BA2490, UA1 or DLH400A' },
+  mmsi:     { label: 'MMSI',           hint: '366910000 (9 digits)' },
+  app:      { label: 'Software package', hint: 'pypi:requests or npm:lodash' },
+  bssid:    { label: 'WiFi BSSID',      hint: '00:1A:2B:3C:4D:5E' },
+  plate:    { label: 'License plate',   hint: 'DE:B-AB 1234 or GB:AB12 CDE' },
 };
 
 /* ---------------------------------------------------------------------- */
