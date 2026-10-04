@@ -22,7 +22,9 @@ Multi-source OSINT console and investigation platform for **14 target kinds**: I
 - **Offline data catalog (10 new packs)**: IANA port registry (~2,600 entries), ISO 3166 countries, ISO 639 languages, ISO 4217 currencies, HTTP status codes, a MITRE CWE selection, the IANA root-zone TLD list (~1,400), file extensions, MIME types and a user-agent rotation pool — behind a typed, never-raising API with the new `obscuralens data` CLI. See [docs/data-packs.md](docs/data-packs.md).
 - **Python SDK**: sync + async REST API clients with retries, exponential backoff, Retry-After handling, a typed exception hierarchy and a `StaticTransport` test double for offline script testing. See [docs/sdk.md](docs/sdk.md).
 - **Explainable risk rule packs**: a YAML rule DSL (23 operators including `in_cidr`, `age_lt_days` and `known_pack`) with 15 packs covering every target kind — every hit explains itself. See [docs/rules.md](docs/rules.md).
-- **Report templates**: standalone HTML, Markdown and executive-summary Jinja2 templates with a renderer module (`esc`, `nl2br`, `fmt_pct` filters).
+- **Report templates**: standalone HTML, Markdown and executive-summary Jinja2 templates with a renderer
+  module (`esc`, `nl2br`, `fmt_pct` filters), wired into every lookup via `--template`
+  (`obscuralens ip 8.8.8.8 --template standalone_report --risk -o report.html`).
 - **8 new pipeline examples**: email triage, phishing URL review, CVE patch priority, crypto screening, malware hash response, brand username audit, network sweep and weekly exec brief.
 - **v5.0**: 4 new trackers (mac/iban/imei/coords), the experimental toolbox, the advanced-analysis package, the single-page web UI and the one-command launcher.
 - **v4.0**: 5 new trackers (URL/crypto/hash/CVE/ASN), correlation/timeline/risk, case management, YAML pipelines, threat-intel feeds, graph exports, source health + circuit breaker.
@@ -42,10 +44,6 @@ Multi-source OSINT console and investigation platform for **14 target kinds**: I
 - **MCP server grows to 34 tools** (16 new: the four new lookups plus twelve toolbox wrappers).
 - **REST API v5**: kind registry, history search, key/settings management, ten toolbox endpoints, HTML reports, patterns, alerts and per-target snapshot diffs — all v4 endpoints unchanged. See [docs/api.md](docs/api.md).
 - **4 new offline data packs**: `oui.txt` (766 curated IEEE OUI assignments), `tac.txt` (139 TAC entries), `iban_structures.txt` (124 country structures), `country_centroids.txt` (115 country centroids).
-- **v4.0**: 5 new trackers (URL, crypto, hash, CVE, ASN), correlation/timeline/risk, case management, YAML pipelines, threat-intel feeds, graph exports, source health + circuit breaker.
-- **v3.1**: web UI + REST API, Textual TUI, MCP server, Docker/GHCR, standalone exe, run scripts, scheduled monitoring, dev container and task runners.
-- **v3.0**: universal `investigate` with pivots + Mermaid graph, `watch` snapshots with change detection, plugin system, RIPEstat/urlscan.io/Wayback sources.
-- **v2.0**: non-interactive CLI, Domain tracker, field provenance, HTTP cache/rate limiting/proxy, Shodan InternetDB + IPinfo + AbuseIPDB, 7 JSON API username platforms, DNS/DKIM/DNSSEC posture, pytest suite + CI.
 
 ## What's new in v4.0
 
@@ -54,14 +52,11 @@ Multi-source OSINT console and investigation platform for **14 target kinds**: I
 - **14 new CLI commands**: `url`, `crypto`, `hash`, `cve`, `asn`, `risk`, `timeline`, `correlate`, `diff`, `export`, `case`, `pipeline`, `intel`, `experimental` — plus `sources health` and a `--risk` flag on every lookup.
 - **Correlation, timeline and risk scoring** across your stored lookup history: clusters, bridge entities, chronological event timelines and explainable per-kind risk signals. See [docs/advanced.md](docs/advanced.md).
 - **Case management** (SQLite): items, notes, tags, markdown/JSON export.
-- **YAML pipelines**: lookup/risk/timeline/correlate/assert/output steps with `$variables`; three examples ship in `pipelines/examples/`.
+- **YAML pipelines**: lookup/risk/timeline/correlate/assert/output steps with `$variables`; eleven worked examples ship in `pipelines/examples/`.
 - **Experimental features**: LLM narrative summaries, username permutations, a bounded robots-aware web crawler and a phishing heuristic score. See [docs/experimental.md](docs/experimental.md).
 - **Graph exports**: GraphML, GEXF, DOT, JSONL and CSV for Gephi, yEd, Cytoscape and Graphviz.
 - **Source health + circuit breaker**: per-source reliability statistics; failing sources are tripped for a cooldown. See [docs/advanced.md](docs/advanced.md#source-health-and-circuit-breaker).
 - Full data-source catalog in [docs/sources.md](docs/sources.md); REST API reference in [docs/api.md](docs/api.md).
-- **v3.1**: web UI + REST API, Textual TUI, MCP server, Docker/GHCR, standalone exe, run scripts, scheduled monitoring, dev container and task runners.
-- **v3.0**: universal `investigate` with pivots + Mermaid graph, `watch` snapshots with change detection, plugin system, RIPEstat/urlscan.io/Wayback sources.
-- **v2.0**: non-interactive CLI, Domain tracker, field provenance, HTTP cache/rate limiting/proxy, Shodan InternetDB + IPinfo + AbuseIPDB, 7 JSON API username platforms, DNS/DKIM/DNSSEC posture, pytest suite + CI.
 
 ## What it does
 
@@ -449,16 +444,17 @@ Its fields appear in results with `plugin:<file>:<name>` provenance. See
 
 ## Verify
 
-Unit tests (no network, fast) — 738 tests:
+Unit tests (no network, fast) — 1,973 tests:
 
 ```powershell
 pytest
 ```
 
-Live integration suite (hits real sources, 100+ checks):
+Live smoke test (hits real sources, 100+ checks):
 
 ```powershell
-python test_core.py
+python scripts/smoke_live.py
+# or: make integration / just integration
 # or: pytest -m integration
 ```
 
@@ -508,20 +504,22 @@ ObscuraLens/
 │   └── data/                # offline packs: disposable domains, popular
 │                            # domains, phishing keywords, OUI, TAC,
 │                            # IBAN structures, country centroids
-├── pipelines/               # user pipelines + examples/ (3 shipped)
+├── pipelines/               # user pipelines + examples/ (11 shipped)
 ├── config/                  # config.yaml + secrets.yaml (git-ignored)
 ├── docs/                    # plugins, scheduling, sources, advanced,
 │                            # experimental, api, web-ui and v5 guides
-├── plugins/                 # project-level drop-in sources (optional)
-├── scripts/                 # scheduled_check.py, PyInstaller spec + entry
-├── tests/                   # pytest unit suite (mocked network, 738 tests)
+├── plugins/                 # project-level drop-in sources (optional,
+│                            # created by you; scanned when present)
+├── scripts/                 # scheduled_check.py, smoke_live.py,
+│                            # PyInstaller spec + entry
+├── tests/                   # pytest unit suite (mocked network, 1,973 tests)
+├── asset/                   # README screenshots
 ├── .devcontainer/           # VS Code dev container
 ├── .vscode/                 # tasks, launch configs, extensions
 ├── Dockerfile / docker-compose.yml
 ├── Makefile / justfile / run.ps1 / run.sh / start.ps1 / start.sh
 ├── reports/                 # generated reports and charts
-├── data/                    # sqlite database + HTTP cache
-└── test_core.py             # live integration suite
+└── data/                    # sqlite database + HTTP cache
 ```
 
 ## Local-first by design

@@ -478,3 +478,131 @@ class TestConvenienceWrappers:
         assert 'Domain Posture' in html  # still renders fine with extras
         summary = tr.render_template('summary.html.j2', sections=[], meta=meta)
         assert 'example.com' in summary
+
+class TestResolveTemplateName:
+    """Name resolution: exact, +.j2, and unique-prefix matching."""
+
+    def test_exact_name_resolves(self):
+        for name in TEMPLATE_NAMES:
+            assert tr.resolve_template_name(name) == name
+
+    def test_suffixless_name_gets_j2_appended(self):
+        assert tr.resolve_template_name('report.md') == 'report.md.j2'
+
+    def test_unique_prefix_resolves_to_full_filename(self):
+        # The CLI user types `standalone_report`, not the full file name.
+        assert tr.resolve_template_name('standalone_report') == \
+            'standalone_report.html.j2'
+        assert tr.resolve_template_name('summary') == 'summary.html.j2'
+
+    def test_unknown_name_resolves_to_none(self):
+        assert tr.resolve_template_name('nope') is None
+        assert tr.resolve_template_name('') is None
+
+    def test_ambiguous_prefix_resolves_to_none(self):
+        # `report` is a prefix of exactly one shipped template, but a
+        # hypothetical second one must not silently pick a winner.
+        monkey = tr.available_templates
+        try:
+            tr.available_templates = lambda: ['report.md.j2', 'report.html.j2']
+            assert tr.resolve_template_name('report') is None
+        finally:
+            tr.available_templates = monkey
+
+
+class TestSectionRowAdaptation:
+    """The templates want a header row first; our builders do not emit one."""
+
+    def test_columns_become_the_header_row(self):
+        sections = tr._normalize_sections([
+            {'title': 'Sources Queried', 'type': 'table',
+             'columns': ['Source', 'Status'],
+             'rows': [['ipinfo.io', 'ok'], ['rdap.arin.net', 'ok']]},
+        ])
+        assert sections[0]['rows'][0] == ['Source', 'Status']
+        assert len(sections[0]['rows']) == 3  # header + 2 body rows
+
+    def test_already_headered_rows_do_not_gain_a_duplicate(self):
+        sections = tr._normalize_sections([
+            {'title': 'T', 'type': 'table', 'columns': ['A', 'B'],
+             'rows': [['A', 'B'], ['1', '2']]},
+        ])
+        assert sections[0]['rows'] == [['A', 'B'], ['1', '2']]
+
+    def test_grid_data_becomes_a_field_value_table(self):
+        sections = tr._normalize_sections([
+            {'title': 'Summary', 'type': 'grid',
+             'data': {'Registrar': 'Example Inc', 'Created': '1995-08-14'}},
+        ])
+        rows = sections[0]['rows']
+        assert rows[0] == ['Field', 'Value']
+        assert ['Registrar', 'Example Inc'] in rows
+
+    def test_section_with_neither_shape_yields_no_rows(self):
+        sections = tr._normalize_sections([
+            {'title': 'Empty', 'type': 'grid', 'data': 'not-a-dict'},
+        ])
+        assert sections[0]['rows'] == []
+
+    def test_rendered_html_contains_the_column_headers(self):
+        html = tr.render_standalone_html_report([
+            {'title': 'Sources Queried', 'type': 'table',
+             'columns': ['Source', 'Status'], 'rows': [['ipinfo.io', 'ok']]},
+        ], META)
+        assert 'Source' in html and 'Status' in html and 'ipinfo.io' in html
+
+
+class TestRenderReport:
+    """render_report(): the CLI --template entry point."""
+
+    SECTIONS = [{'title': 'T', 'type': 'table', 'columns': ['A'],
+                 'rows': [['1']]}]
+
+    def test_builds_meta_from_lookup_arguments(self):
+        html = tr.render_report('standalone_report', sections=self.SECTIONS,
+                                title='IP Report - 8.8.8.8', kind='ip',
+                                target='8.8.8.8')
+        assert '8.8.8.8' in html
+        assert PACKAGE_VERSION in html
+
+    def test_risk_band_is_mapped_from_the_verdict(self):
+        for verdict, band in (('clean', 'clean'), ('low', 'watch'),
+                              ('medium', 'elevated'), ('high', 'high'),
+                              ('critical', 'critical')):
+            html = tr.render_report(
+                'standalone_report', sections=self.SECTIONS,
+                risk={'score': 42, 'verdict': verdict,
+                      'signals': [{'label': 's'}]})
+            assert f'active-{band}' in html, verdict
+
+    def test_unknown_verdict_claims_no_band(self):
+        html = tr.render_report('standalone_report', sections=self.SECTIONS,
+                                risk={'score': 0, 'verdict': 'unknown',
+                                      'signals': []})
+        assert 'band-seg is-active' not in html
+
+    def test_explicit_meta_band_wins_over_the_risk_verdict(self):
+        html = tr.render_report('standalone_report', sections=self.SECTIONS,
+                                meta={'band': 'critical'},
+                                risk={'score': 1, 'verdict': 'clean',
+                                      'signals': []})
+        assert 'active-critical' in html
+
+    def test_top_signals_reach_the_summary_card(self):
+        html = tr.render_report(
+            'summary', sections=self.SECTIONS,
+            risk={'score': 70, 'verdict': 'high',
+                  'signals': [{'label': 'Tor exit node'},
+                              {'label': 'Known scanner'}]})
+        assert 'Tor exit node' in html and 'Known scanner' in html
+
+    def test_rendered_documents_are_not_empty(self):
+        for name in TEMPLATE_NAMES:
+            out = tr.render_report(name, sections=self.SECTIONS,
+                                   title='T', kind='ip', target='1.1.1.1')
+            assert out.strip(), name
+
+    def test_bad_name_still_raises_with_the_catalogue(self):
+        with pytest.raises(TemplateNotFound) as excinfo:
+            tr.render_report('does-not-exist', sections=self.SECTIONS)
+        assert 'available templates' in str(excinfo.value)

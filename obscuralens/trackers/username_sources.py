@@ -894,16 +894,12 @@ def api_profile(platform: str, data: Any) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# v5.0 HTML platform registry + verdict rules
-#
-# ``username_tracker.HTML_PLATFORMS`` owns the 34 platform entries that ship
-# with the tracker itself. The v5.0 wave adds the four platforms below in the
-# exact same ``{"name", "url"}`` shape, so the tracker can adopt them with a
-# one-line union (``HTML_PLATFORMS + username_sources.HTML_PLATFORMS``)
-# without duplicating anything: twitch, vimeo, flickr, deviantart, soundcloud,
-# medium and bitbucket were already registered as HTML platforms in v4.0, and
-# DockerHub is covered (with a far stronger signal) by the JSON API entry in
-# ``API_PLATFORMS`` above.
+# Additional HTML platforms registered here in the same ``{"name", "url"}``
+# shape as ``username_tracker.HTML_PLATFORMS``: the tracker adopts them with
+# a one-line union without duplicating anything. twitch, vimeo, flickr,
+# deviantart, soundcloud, medium and bitbucket already ship in the
+# tracker's own registry, and DockerHub is covered (with a far stronger
+# signal) by the JSON API entry in ``API_PLATFORMS`` above.
 # ---------------------------------------------------------------------------
 
 HTML_PLATFORMS: List[Dict[str, str]] = [

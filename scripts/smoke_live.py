@@ -1,9 +1,15 @@
 #!/usr/bin/env python
 """
-ObscuraLens Core Functionality Test
+ObscuraLens live smoke test.
 
 Verifies every tracker against live data sources, then checks reporting,
-visualisation and persistence. Run from the project root.
+visualisation and persistence.
+
+This is a manual script, not part of the pytest suite: it needs network
+access and writes artefacts (reports, charts) into ``reports/``.  Run it
+from the repository root::
+
+    python scripts/smoke_live.py
 """
 
 import contextlib
@@ -11,7 +17,9 @@ import io
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# The package lives one level up, so add the repository root (not this
+# script's own directory) to sys.path to import a source checkout.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from obscuralens.config import config
 from obscuralens.database import db

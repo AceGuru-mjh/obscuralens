@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit
 
-try:  # data_packs is being introduced by a parallel v4.0 workstream
+try:  # Optional offline data packs; absence degrades to built-in defaults.
     from ..utils import data_packs as _data_packs
 except ImportError:  # pragma: no cover - pack module not shipped yet
     _data_packs = None  # type: ignore

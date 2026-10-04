@@ -28,7 +28,7 @@ two families without breaking anything.
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-try:  # data_packs is maintained by a parallel workstream; absence is tolerated
+try:  # Optional offline data packs; absence degrades to built-in defaults.
     from ..utils import data_packs as _data_packs
 except ImportError:  # pragma: no cover - pack module not shipped
     _data_packs = None  # type: ignore
