@@ -232,7 +232,7 @@ def _import_module(path: Path) -> types.ModuleType:
 
 def _module_name(path: Path) -> str:
     """Build a unique module name so equal stems in different dirs coexist."""
-    digest = hashlib.sha1(str(path).encode('utf-8')).hexdigest()[:12]
+    digest = hashlib.sha256(str(path).encode('utf-8')).hexdigest()[:12]
     return f'_obscuralens_plugin_{path.stem}_{digest}'
 
 

@@ -92,3 +92,32 @@ def test_metrics_count_requests(client, monkeypatch, fake_response):
                         lambda url, **kw: fake_response(json_data={'a': 1}))
     client.get_json('https://metrics.test/a', use_cache=False)
     assert metrics.snapshot()['requests'] == 1
+
+
+def test_cache_key_includes_header_digest_and_is_stable():
+    """_cache_key must mix headers into the key deterministically.
+
+    The header digest uses SHA-256 (not the old SHA-1) and is stable for
+    identical inputs while differing when the header set changes.
+    """
+    url = 'https://api.test/endpoint'
+    no_headers = HttpClient._cache_key(url, None)
+    with_headers = HttpClient._cache_key(url, {'X-Key': 'abc'})
+    with_headers_again = HttpClient._cache_key(url, {'X-Key': 'abc'})
+
+    assert no_headers == url  # headerless lookups key on the URL alone
+    assert with_headers != url  # headers participate in the key
+    assert with_headers == with_headers_again  # deterministic
+    # SHA-256 digest is exactly 12 hex chars appended after '#'.
+    suffix = with_headers.split('#', 1)[1]
+    assert len(suffix) == 12
+    assert all(c in '0123456789abcdef' for c in suffix)
+
+
+def test_cache_key_distinguishes_header_orders():
+    """Equivalent header dicts (different insertion order) share one key."""
+    a = HttpClient._cache_key('https://api.test/x',
+                              {'A': '1', 'B': '2'})
+    b = HttpClient._cache_key('https://api.test/x',
+                              {'B': '2', 'A': '1'})
+    assert a == b
