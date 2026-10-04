@@ -5,14 +5,34 @@ Currently SQLite-backed; PostgreSQL/MySQL are reserved for a future release
 and rejected with a clear message instead of a bare NotImplementedError.
 """
 
+import contextlib
 import json
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .config import config
 from .utils.helpers import sanitize_secrets
+
+#: Optional observer invoked after every successful ``save_query`` (see
+#: :func:`set_save_hook`). The web layer registers it to feed its live event
+#: bus; the core package never sets it, so CLI/SDK behaviour is unchanged.
+_SAVE_HOOK: Optional[Callable[[str, str, bool], Any]] = None
+
+
+def set_save_hook(fn: Optional[Callable[[str, str, bool], Any]]) -> None:
+    """
+    Register (or clear, with ``None``) the post-save observer.
+
+    The hook receives ``(query_type, query_value, success)`` after a history
+    row has been committed. It is invoked defensively: an observer that
+    raises is silently ignored so a broken live-feed listener can never lose
+    a lookup. The web SSE layer uses this to publish ``lookup`` events; the
+    core package itself never registers a hook.
+    """
+    global _SAVE_HOOK  # module-level observer slot
+    _SAVE_HOOK = fn
 
 
 @dataclass
@@ -117,6 +137,12 @@ class DatabaseManager:
             conn.commit()
 
         self._prune_history()
+
+        # v6.0 part 3: post-save observer (used by the web SSE event bus).
+        # Defensive by design — a raising observer must never lose a lookup.
+        if _SAVE_HOOK is not None:
+            with contextlib.suppress(Exception):
+                _SAVE_HOOK(query_type, query_value, success)
         return inserted
 
     def _prune_history(self) -> int:

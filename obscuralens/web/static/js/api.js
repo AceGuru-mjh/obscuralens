@@ -338,6 +338,102 @@ export const api = {
    */
   batch(body) { return request('/api/tools/batch', { method: 'POST', body }); },
 
+  /* ---- analytics (v6.0 part 2/3) ---- */
+
+  /**
+   * Descriptive statistics + histogram for a numeric list.
+   * @param {number[]|string[]} values Raw numbers (non-numbers are dropped
+   *        server-side).
+   * @param {{bins?: number}} [opts]
+   */
+  analyticsStats(values, opts = {}) {
+    return request('/api/analytics/stats', {
+      method: 'POST',
+      body: { values, bins: opts.bins },
+    });
+  },
+
+  /**
+   * Outlier detection over a numeric list.
+   * @param {number[]} values
+   * @param {string} [method] ensemble|zscore|iqr|mad|grubbs|threshold.
+   * @param {number} [threshold] Z-score cut-off (zscore method only).
+   */
+  analyticsAnomalies(values, method = 'ensemble', threshold = null) {
+    const body = { values, method };
+    if (Number.isFinite(Number(threshold))) body.threshold = Number(threshold);
+    return request('/api/analytics/anomalies', { method: 'POST', body });
+  },
+
+  /**
+   * Stopword-filtered keyword mining for one text.
+   * @param {string} text
+   * @param {number} [top] Maximum keywords returned.
+   */
+  analyticsKeywords(text, top = 10) {
+    return request('/api/analytics/keywords', {
+      method: 'POST',
+      body: { text, top },
+    });
+  },
+
+  /**
+   * Script + language fingerprint for one text.
+   * @param {string} text
+   */
+  analyticsLanguage(text) {
+    return request('/api/analytics/language', {
+      method: 'POST',
+      body: { text },
+    });
+  },
+
+  /**
+   * Enrichment report over stored query history.
+   * @param {number} [limit] Newest rows considered (default 500).
+   */
+  analyticsHistory(limit = 500) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    return request(`/api/analytics/history?${params}`);
+  },
+
+  /* ---- live stream aggregation views (v6.0 part 3) ---- */
+
+  /**
+   * Geographic points distilled from stored lookup history.
+   * @param {number} [limit] Newest rows scanned (default 500).
+   */
+  mapPoints(limit = 500) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    return request(`/api/map/points?${params}`);
+  },
+
+  /**
+   * Aggregated activity profile for one target across stored history.
+   * @param {string} kind One of KINDS.
+   * @param {string} target Raw target value.
+   * @param {number} [limit] Newest rows considered (default 200).
+   */
+  profile(kind, target, limit = 200) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    return request(`/api/profile/${enc(kind)}/${enc(target)}?${params}`);
+  },
+
+  /**
+   * Field-level diff between two live lookups (A versus B).
+   * @param {string} kindA
+   * @param {string} targetA
+   * @param {string} kindB
+   * @param {string} targetB
+   */
+  compare(kindA, targetA, kindB, targetB) {
+    const params = new URLSearchParams({
+      kind_a: kindA, target_a: targetA,
+      kind_b: kindB, target_b: targetB,
+    });
+    return request(`/api/compare?${params}`);
+  },
+
   /* ---- reports / alerts ---- */
 
   /**
