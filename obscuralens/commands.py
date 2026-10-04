@@ -156,6 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help='disable ANSI colours')
         p.add_argument('--risk', action='store_true',
                        help='attach heuristic risk scoring (v4.0)')
+        p.add_argument('--template', nargs='?', const='list', metavar='NAME',
+                       help='render through a shipped Jinja report template '
+                            'instead of the built-in formatter; a bare '
+                            '--template lists the available names')
 
     p_ip = sub.add_parser('ip', help='look up an IP address')
     p_ip.add_argument('target', help='IPv4 or IPv6 address')
@@ -740,9 +744,42 @@ def _csv_from_batch(kind: str, results: List[Dict[str, Any]]) -> str:
     return buffer.getvalue().rstrip('\n')
 
 
+def _render_via_template(name: str, kind: str, result: Dict[str, Any],
+                         title: str) -> str:
+    """
+    Render a lookup through a shipped Jinja report template.
+
+    ``--template`` with no value short-circuits to the catalogue listing so
+    the available names are discoverable from the CLI itself.  A bad name is
+    reported as a normal error, never as a traceback.
+    """
+    from jinja2 import TemplateNotFound
+
+    from .reporting.template_render import available_templates, render_report
+
+    if name == 'list':
+        names = available_templates()
+        return ('Available report templates:\n  '
+                + ('\n  '.join(names) if names else '(none installed)'))
+
+    sections = _sections_for_kind(kind, result)
+    sections.extend(_extra_sections(result))
+    try:
+        return render_report(
+            name, sections=sections, title=title, kind=kind,
+            target=_result_target(kind, result), risk=result.get('risk'),
+        )
+    except TemplateNotFound as exc:
+        return f'Error: {exc}'
+
+
 def _emit_result(args: argparse.Namespace, kind: str, result: Dict[str, Any],
                  title: str) -> None:
+    template = getattr(args, 'template', None)
     fmt = args.format or 'table'
+    if template:
+        _emit(_render_via_template(template, kind, result, title), args.output)
+        return
     if fmt == 'json':
         _emit(json.dumps(result, indent=2, ensure_ascii=False, default=str),
               args.output)

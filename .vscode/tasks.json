@@ -21,9 +21,9 @@
       "problemMatcher": []
     },
     {
-      "label": "Run integration tests",
+      "label": "Run live smoke test",
       "type": "shell",
-      "command": "python test_core.py",
+      "command": "python scripts/smoke_live.py",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "test",
       "problemMatcher": []

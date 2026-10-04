@@ -15,7 +15,7 @@ test:
 
 # Run the live integration script (hits real network services).
 integration:
-    python test_core.py
+    python scripts/smoke_live.py
 
 # Lint with ruff.
 lint:

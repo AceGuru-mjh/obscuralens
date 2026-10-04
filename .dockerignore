@@ -14,7 +14,7 @@ reports
 config/secrets.yaml
 *.db
 tests
-test_core.py
+scripts/smoke_live.py
 scripts
 docs
 plugins

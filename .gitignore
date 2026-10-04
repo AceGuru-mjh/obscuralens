@@ -53,12 +53,15 @@ reports/*
 .DS_Store
 Thumbs.db
 
-# Scratch / one-off scripts and any transient credentials (project root only)
-/_*.py
-/_*.json
-/_*.txt
-/_*.ps1
-/_token.txt
+# Scheduled-watch state (written into the working directory by
+# `obscuralens watch check --report` and scripts/scheduled_check.py)
+.watch-state.json
+watch-report.json
+
+# Personal scratch files do NOT belong here: put your own one-off scripts,
+# device-flow tokens and notes in `.git/info/exclude`, which is local-only
+# and never shipped. Hiding such patterns in this file would silently mask
+# real source files from every future contributor.
 
 # Runtime state produced by the advanced alerts module (webhook config + log)
 data/alerts.json

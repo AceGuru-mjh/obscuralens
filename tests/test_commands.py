@@ -254,3 +254,48 @@ def test_plugins_list_json(monkeypatch, capsys):
     rows = json.loads(capsys.readouterr().out)
     assert rows[0]['name'] == 'demo'
     assert rows[0]['kinds'] == 'ip'
+
+
+class TestTemplateOutput:
+    """`--template` routes a lookup through a shipped Jinja template."""
+
+    def test_bare_template_lists_the_catalogue(self, fake_tracker, capsys):
+        assert commands.run(['ip', '8.8.8.8', '--template']) == 0
+        out = capsys.readouterr().out
+        assert 'Available report templates' in out
+        assert 'standalone_report.html.j2' in out
+
+    def test_template_renders_html_instead_of_the_table(self, fake_tracker, capsys):
+        code = commands.run(['ip', '8.8.8.8', '--template', 'standalone_report'])
+        assert code == 0
+        out = capsys.readouterr().out
+        assert '<!DOCTYPE html>' in out
+        assert 'Mountain View' in out
+
+    def test_short_template_name_resolves(self, fake_tracker, capsys):
+        assert commands.run(['ip', '8.8.8.8', '--template', 'summary']) == 0
+        assert '8.8.8.8' in capsys.readouterr().out
+
+    def test_unknown_template_reports_an_error_not_a_traceback(
+            self, fake_tracker, capsys):
+        assert commands.run(['ip', '8.8.8.8', '--template', 'nope']) == 0
+        out = capsys.readouterr().out
+        assert out.startswith('Error:')
+        assert 'available templates' in out
+        assert 'Traceback' not in out
+
+    def test_template_overrides_the_format_flag(self, fake_tracker, capsys):
+        code = commands.run(['ip', '8.8.8.8', '-f', 'json',
+                             '--template', 'report.md'])
+        assert code == 0
+        out = capsys.readouterr().out
+        assert out.lstrip().startswith('#')      # Markdown, not JSON
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(out)
+
+    def test_without_the_flag_the_table_format_is_unchanged(
+            self, fake_tracker, capsys):
+        assert commands.run(['ip', '8.8.8.8']) == 0
+        out = capsys.readouterr().out
+        assert '<!DOCTYPE html>' not in out
+        assert 'United States' in out

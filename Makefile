@@ -19,7 +19,7 @@ test: ## Run the unit tests (excludes integration)
         $(PYTHON) -m pytest -m "not integration" --no-color
 
 integration: ## Run the live integration script (hits real network services)
-        $(PYTHON) test_core.py
+        $(PYTHON) scripts/smoke_live.py
 
 lint: ## Lint with ruff
         $(PYTHON) -m ruff check .

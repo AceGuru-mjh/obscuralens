@@ -44,7 +44,7 @@ jobs:
       - name: Install package
         run: pip install -e ".[dev]"
       - name: Byte-compile all sources
-        run: python -m compileall -q obscuralens tests test_core.py
+        run: python -m compileall -q obscuralens tests scripts
       - name: Import smoke test
         run: |
           python -c "import obscuralens, obscuralens.commands, obscuralens.cli, obscuralens.investigate, obscuralens.watchlist, obscuralens.plugins, obscuralens.mcp_server"

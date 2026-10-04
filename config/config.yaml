@@ -19,7 +19,8 @@ app:
   save_history: true
   max_history_entries: 1000
   request_timeout: 30
-  user_agent: ObscuraLens/3.1.0
+  # user_agent defaults to "ObscuraLens/<version>" and tracks __version__
+  # automatically. Set it here only to override (e.g. a contact address).
   deep_username_scan: true
   parallel_sources: true
   max_workers: 12
