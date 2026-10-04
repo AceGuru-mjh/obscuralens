@@ -1,0 +1,43 @@
+# Weekly source health digest (v6.0 part 4)
+# ------------------------------------------
+# The platform-side ritual: a canary lookup that exercises the source
+# fan-out, a gate on the answer, and a digest to the audit channel.
+#   obscuralens automation add --name weekly-source-health \
+#       --action pipeline --weekly --at 09:00 --weekday 0 \
+#       --params '{"name": "weekly-source-health"}'
+#   obscuralens automation add --name feed-refresh-weekly \
+#       --action feed_refresh --weekly --at 08:45 --weekday 0
+# Override with --set canary=... (any well-covered target works).
+name: weekly-source-health
+description: Weekly source-fanout health check with a digest notification
+variables:
+  canary: 8.8.8.8
+
+steps:
+  # 1. Canary lookup: one well-known target whose every source answers
+  #    under normal conditions - failures surface here first.
+  - lookup: $canary
+  # 2. Health gate: sources_ok lists every source that answered; an
+  #    absent list means the fan-out is degraded - the finding the
+  #    digest leads with.
+  - assert:
+      field: sources_ok
+      op: exists
+      value: true
+      message: canary lookup produced a sources_ok list
+  # 3. Risk scoring keeps the digest comparable week over week.
+  - risk: true
+  # 4. v6.0 part 4 notify, shorthand form: the run's own summary (step
+  #    count, result count, findings, errors) becomes the digest body.
+  #    The event_type lets the audit channel subscribe to exactly
+  #    `source_digest` events and stay quiet for everything else.
+  - notify:
+      event_type: source_digest
+  # 5. Markdown digest for the platform health folder.
+  - output:
+      format: markdown
+      path: weekly-source-health.md
+  # 6. JSON form for the metrics dashboard.
+  - output:
+      format: json
+      path: weekly-source-health.json

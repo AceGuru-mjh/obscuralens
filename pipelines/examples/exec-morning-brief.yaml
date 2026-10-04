@@ -1,0 +1,44 @@
+# Executive morning brief (v6.0 part 4)
+# --------------------------------------
+# The every-morning run behind the exec channel: refresh the headline
+# indicator, build the timeline, and push a markdown brief to the chat
+# (weekly aggregation stays in weekly-exec-brief.yaml). Schedule:
+#   obscuralens automation add --name exec-morning-brief \
+#       --action pipeline --daily --at 08:30 \
+#       --params '{"name": "exec-morning-brief"}'
+name: exec-morning-brief
+description: Multi-step morning refresh with a markdown channel brief
+variables:
+  focus: 45.148.10.99
+
+steps:
+  # 1. Refresh the focus indicator - feeds drift overnight.
+  - lookup: $focus
+  # 2. Attach risk scores: the headline number with its signal list.
+  - risk: true
+  # 3. Timeline from every dated field - "what changed since yesterday".
+  - timeline: true
+  # 4. Headline gate: threshold-crossing runs lead the brief.
+  - assert:
+      field: risk_score
+      op: '>='
+      value: 50
+      message: focus indicator crossed the briefing threshold
+  # 5. v6.0 part 4 notify: markdown body for the chat channel; the
+  #    morning_brief event type mutes everything else for this channel.
+  - notify:
+      title: 'Morning brief: $focus'
+      body: |
+        - refreshed the focus indicator for today's brief
+        - risk scoring, timeline and gates ran clean
+        - artefacts: exec-morning-brief.md / .json
+      severity: info
+      event_type: morning_brief
+  # 6. The markdown artefact the brief points at.
+  - output:
+      format: markdown
+      path: exec-morning-brief.md
+  # 7. JSON form for the metrics dashboard.
+  - output:
+      format: json
+      path: exec-morning-brief.json

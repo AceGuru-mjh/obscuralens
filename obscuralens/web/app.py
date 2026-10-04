@@ -1857,6 +1857,243 @@ def create_app():
                            'kind': record.query_type})
         return {'points': points, 'count': len(points), 'limit': safe_limit}
 
+    # ------------------------------------------------------------------
+    # v6.0 Part 4: notifications, scheduler and STIX/MISP export
+    # ------------------------------------------------------------------
+
+    @app.get('/api/notify/channels')
+    def api_notify_channels() -> Dict[str, Any]:
+        """
+        Every configured notification channel plus the protocol
+        vocabularies (channel types, severity ladder) a UI needs to render
+        pickers.
+        """
+        from ..automation import notifications
+        channels = notifications.list_channels()
+        return {'count': len(channels), 'channels': channels,
+                'channel_types': list(notifications.CHANNEL_TYPES),
+                'severities': list(notifications.SEVERITY_LEVELS)}
+
+    @app.post('/api/notify/channels')
+    def api_notify_channels_add(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Register one notification channel.
+
+        Body: ``{"name": "team-chat", "type": "telegram", "target":
+        "bot_token:chat_id", "events": ["lookup", "watch_diff"],
+        "min_severity": "low", "quiet_hours": [22, 7]}`` — ``target`` may
+        be empty for the chat/mail types when the matching global config
+        key is set. ``400`` when the spec is rejected (unknown type,
+        missing target, duplicate name...); the module's reason is the
+        ``detail``.
+        """
+        from ..automation import notifications
+        result = notifications.add_channel(body or {})
+        if not result.get('ok'):
+            raise HTTPException(status_code=400,
+                                detail=str(result.get('error')
+                                           or 'channel rejected'))
+        return {'ok': True, 'channel': result.get('channel')}
+
+    @app.delete('/api/notify/channels/{name}')
+    def api_notify_channels_remove(name: str) -> Dict[str, Any]:
+        """Delete one channel by name (delivery history stays behind)."""
+        from ..automation import notifications
+        result = notifications.remove_channel(name)
+        if not result.get('ok'):
+            raise HTTPException(status_code=404,
+                                detail=str(result.get('error')
+                                           or 'channel not found'))
+        return {'ok': True, 'removed': result.get('removed')}
+
+    @app.post('/api/notify/channels/{name}/test')
+    def api_notify_channels_test(name: str) -> Dict[str, Any]:
+        """
+        Probe one channel with a one-off test message.
+
+        The subscription/severity/quiet-hours/dedup filters are bypassed -
+        the question answered is "does the pipe work?". A delivery failure
+        is a ``200`` with ``{"ok": false, "error": ...}`` (data, not an
+        HTTP error); an unknown channel name is a ``404``.
+        """
+        from ..automation import notifications
+        if notifications.get_channel(name) is None:
+            raise HTTPException(status_code=404,
+                                detail=f"channel '{name}' not found")
+        return notifications.test_channel(name)
+
+    @app.get('/api/notify/recent')
+    def api_notify_recent(limit: int = 20) -> Dict[str, Any]:
+        """
+        Recent notification history, newest first: sends, failures and
+        skips alike (the log is the account of everything the module
+        wanted to say). ``?limit=20`` caps the window.
+        """
+        from ..automation import notifications
+        safe_limit = max(0, min(200, limit if isinstance(limit, int)
+                                and limit > 0 else 20))
+        entries = notifications.recent(safe_limit)
+        return {'count': len(entries), 'recent': entries}
+
+    @app.post('/api/notify/broadcast')
+    def api_notify_broadcast(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Fan one event out to every configured channel.
+
+        Body: ``{"title": "watch diff", "body": "…", "severity": "high",
+        "event_type": "watch_diff"}`` — per-channel filters (event
+        subscriptions, severity floors, quiet hours, dedup) apply inside
+        :func:`broadcast`. ``400`` when ``title``/``body`` are missing.
+        """
+        from ..automation import notifications
+        payload = body or {}
+        title = str(payload.get('title', '') or '').strip()
+        body_text = str(payload.get('body', '') or '')
+        if not title:
+            raise HTTPException(status_code=400, detail='title is required')
+        if not body_text.strip():
+            raise HTTPException(status_code=400, detail='body is required')
+        severity = str(payload.get('severity', 'info') or 'info')
+        event_type = str(payload.get('event_type', 'manual') or 'manual')
+        return notifications.broadcast(event_type, title, body_text,
+                                       severity=severity)
+
+    @app.get('/api/automation/tasks')
+    def api_automation_tasks() -> Dict[str, Any]:
+        """Every scheduled task (schedules, bookkeeping fields, health)."""
+        from ..automation import scheduler
+        tasks = scheduler.list_tasks()
+        return {'count': len(tasks), 'tasks': tasks,
+                'actions': list(scheduler.TASK_ACTIONS),
+                'schedule_types': list(scheduler.SCHEDULE_TYPES)}
+
+    @app.post('/api/automation/tasks')
+    def api_automation_tasks_add(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Register one scheduled task.
+
+        Body: ``{"name": "daily-watch", "action": "watch_check",
+        "schedule": "daily", "at_time": "09:00", "params": {...}}`` —
+        schedule is interval/daily/weekly (default interval with
+        ``interval_seconds`` 3600). ``400`` when the spec is rejected;
+        the stored task carries a freshly computed ``next_run``.
+        """
+        from ..automation import scheduler
+        result = scheduler.add_task(body or {})
+        if not result.get('ok'):
+            raise HTTPException(status_code=400,
+                                detail=str(result.get('error')
+                                           or 'task rejected'))
+        return {'ok': True, 'task': result.get('task')}
+
+    @app.delete('/api/automation/tasks/{name}')
+    def api_automation_tasks_remove(name: str) -> Dict[str, Any]:
+        """Delete one scheduled task by name."""
+        from ..automation import scheduler
+        result = scheduler.remove_task(name)
+        if not result.get('ok'):
+            raise HTTPException(status_code=404,
+                                detail=str(result.get('error')
+                                           or 'task not found'))
+        return {'ok': True, 'removed': result.get('removed')}
+
+    @app.post('/api/automation/tasks/{name}/run')
+    def api_automation_tasks_run(name: str) -> Dict[str, Any]:
+        """
+        Execute one task now, regardless of its schedule.
+
+        A failing executor is a ``200`` with ``{"ok": false, "error":
+        ...}`` - the run outcome, not an HTTP error. ``404`` when the
+        task name is unknown. The persisted bookkeeping (``run_count``,
+        ``next_run``...) is left to ``run-due``.
+        """
+        from ..automation import scheduler
+        if scheduler.get_task(name) is None:
+            raise HTTPException(status_code=404,
+                                detail=f"task '{name}' not found")
+        return scheduler.run_task(name)
+
+    @app.post('/api/automation/run-due')
+    def api_automation_run_due() -> Dict[str, Any]:
+        """
+        Run every task whose schedule has arrived, then persist the
+        bookkeeping (``last_run``, ``run_count``, ``error_count``,
+        ``next_run``). This is exactly what the background tick loop
+        does every 30 seconds.
+        """
+        from ..automation import scheduler
+        results = scheduler.run_due()
+        return {'ran': len(results), 'results': results}
+
+    @app.get('/api/automation/next')
+    def api_automation_next() -> Dict[str, Any]:
+        """
+        When every task runs next: the stored ``next_run`` plus a fresh
+        recomputation from *now* (the two differ while a due task waits
+        for the next tick). An empty schedule yields an empty list.
+        """
+        from ..automation import scheduler
+        tasks = []
+        for task in scheduler.list_tasks():
+            tasks.append({
+                'name': task.get('name'),
+                'action': task.get('action'),
+                'schedule': task.get('schedule'),
+                'enabled': task.get('enabled'),
+                'stored_next_run': task.get('next_run'),
+                'recomputed_next_run': scheduler.compute_next_run(task),
+            })
+        return {'count': len(tasks), 'tasks': tasks}
+
+    def _history_envelope(kind: str, target: str) -> Dict[str, Any]:
+        """
+        The newest stored tracker envelope for kind/target (shared by the
+        STIX/MISP export endpoints).
+
+        ``404`` when no stored lookup matches - the exports describe what
+        was observed, so the analyst runs the lookup first.
+        """
+        needle = str(target or '').strip().lower()
+        for record in db.get_history(query_type=kind, limit=500):
+            if str(record.query_value or '').strip().lower() == needle:
+                try:
+                    envelope = json.loads(record.result_data or '{}')
+                except ValueError:
+                    continue
+                if isinstance(envelope, dict):
+                    return envelope
+        raise HTTPException(
+            status_code=404,
+            detail=f"no stored {kind} lookup for {target!r} - "
+                   f"run the lookup first")
+
+    @app.get('/api/export/stix/{kind}/{target}')
+    def api_export_stix(kind: str, target: str) -> Dict[str, Any]:
+        """
+        A STIX 2.1 bundle for the newest stored lookup of one target:
+        identity + indicator (or vulnerability for CVEs) + observed data +
+        provenance note, deterministic UUIDv5 ids throughout so
+        re-imports merge. ``400`` unknown kind; ``404`` no stored lookup.
+        """
+        from ..export.stix import build_bundle
+        if kind not in KINDS:
+            raise HTTPException(status_code=400, detail='unknown kind')
+        return build_bundle(kind, target, _history_envelope(kind, target))
+
+    @app.get('/api/export/misp/{kind}/{target}')
+    def api_export_misp(kind: str, target: str) -> Dict[str, Any]:
+        """
+        A MISP core-format event for the newest stored lookup of one
+        target: fixed ObscuraLens ``orgc``, the target attribute, one
+        text attribute per ``info`` field and a threat level derived
+        from source health. ``400`` unknown kind; ``404`` no stored
+        lookup.
+        """
+        from ..export.misp import build_misp_event
+        if kind not in KINDS:
+            raise HTTPException(status_code=400, detail='unknown kind')
+        return build_misp_event(kind, target, _history_envelope(kind, target))
+
     return app
 
 

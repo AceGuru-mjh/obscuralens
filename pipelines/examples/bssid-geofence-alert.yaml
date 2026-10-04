@@ -1,0 +1,44 @@
+# BSSID geofence alert (v6.0 part 4)
+# -----------------------------------
+# Physical-world watch: resolve a WiFi BSSID to its location (offline
+# IEEE OUI vendor decode + WiGLE), assert that a fix actually came
+# back, and notify when the access point changes state. Pair it with
+# the watchlist (`watch add --kind bssid`) for movement detection.
+name: bssid-geofence-alert
+description: Resolve a BSSID to coordinates and alert on the geofence
+variables:
+  bssid: a4:2b:8c:0f:1d:e3
+
+steps:
+  # 1. BSSID lookup: the offline OUI pack identifies the vendor with
+  #    zero network calls; WiGLE (when keyed) adds lat/lon + history.
+  - lookup:
+      kind: bssid
+      target: $bssid
+  # 2. Geofence gate: `lat` exists only when a location source answered.
+  #    An absent fix is the alert condition here (the AP vanished from
+  #    the crowdsourced maps); flip the value for the inverse fence.
+  - assert:
+      field: lat
+      op: exists
+      value: false
+      message: BSSID lost its location fix - possible movement
+  # 3. v6.0 part 4 notify: a body that states the interpretation, not
+  #    just the fact; quiet hours keep a 03:00 tick from waking anyone.
+  - notify:
+      title: BSSID geofence event
+      body: >
+        $bssid changed state: the location fix is gone from the
+        crowdsourced maps. Check whether the AP moved out of the zone
+        of interest or was re-deployed elsewhere.
+      severity: low
+      event_type: geofence
+  # 4. v6.0 part 4 export: a mac-addr indicator plus every observed
+  #    field in the observed-data object, for the case's CTI store.
+  - export:
+      format: stix
+      path: bssid-$bssid.json
+  # 5. Compact console view for the analyst running it by hand.
+  - output:
+      format: table
+      path: ''

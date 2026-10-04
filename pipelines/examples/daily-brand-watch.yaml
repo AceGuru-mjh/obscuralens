@@ -1,0 +1,43 @@
+# Daily brand watch pipeline (v6.0 part 4)
+# ----------------------------------------
+# Automation-shaped companion to brand-abuse.yaml: refresh the brand
+# domain, score it, and push the run's own summary to every configured
+# notification channel. Wire it in with:
+#   obscuralens automation add --name daily-brand-watch --action pipeline \
+#       --daily --at 09:00 --params '{"name": "daily-brand-watch"}'
+#
+# Useful variable overrides (--set key=value):
+#   domain   the brand domain under watch
+
+name: daily-brand-watch
+description: Daily brand refresh with a channel notification summary
+
+variables:
+  domain: example.com
+
+steps:
+  # 1. Refresh the brand domain: registrar, DNS posture, mail security.
+  - lookup: $domain
+
+  # 2. Attach risk scores (age, typosquat matches, posture) so the
+  #    notification below can quote a number.
+  - risk: true
+
+  # 3. Escalation gate: a young registration on the brand zone is the
+  #    classic look-alike setup move - record it as a finding.
+  - assert:
+      field: domain_age_days
+      op: '<='
+      value: 30
+      message: brand domain registration is suspiciously young
+
+  # 4. v6.0 part 4 notify step, shorthand form: broadcast the run's own
+  #    summary (steps, results, findings) to every configured channel.
+  #    Channels decide delivery via subscriptions, severity floors,
+  #    quiet hours and dedup - no chat URL lives in this file.
+  - notify: true
+
+  # 5. Keep a markdown trail of what each morning's check saw.
+  - output:
+      format: markdown
+      path: daily-brand-watch-$domain.md

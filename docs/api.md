@@ -408,6 +408,37 @@ top targets. An empty history yields a well-formed empty report.
 curl "http://127.0.0.1:8000/api/analytics/history?limit=500"
 ```
 
+### Notify, automation & export endpoints *(v6.0 Part 4)*
+
+The v6.0 Part 4 [automation & sharing package](automation.md) adds the
+notification centre, the task scheduler and the STIX/MISP exports. One
+row per endpoint — request bodies, response shapes and filter semantics
+are documented in [docs/automation.md](automation.md):
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/notify/channels` | every configured channel plus the protocol vocabularies |
+| POST | `/api/notify/channels` | register one channel (`400` on a rejected spec) |
+| DELETE | `/api/notify/channels/{name}` | delete one channel (`404` unknown) |
+| POST | `/api/notify/channels/{name}/test` | probe one channel, bypassing its filters (`404` unknown) |
+| GET | `/api/notify/recent?limit=20` | recent notification history — sends, failures and skips |
+| POST | `/api/notify/broadcast` | fan one event out to every channel (per-channel filters apply) |
+| GET | `/api/automation/tasks` | every scheduled task with health counters |
+| POST | `/api/automation/tasks` | register one task (`400` on a rejected spec) |
+| DELETE | `/api/automation/tasks/{name}` | delete one task (`404` unknown) |
+| POST | `/api/automation/tasks/{name}/run` | execute one task now, regardless of its schedule |
+| POST | `/api/automation/run-due` | run every due task and persist the cron bookkeeping |
+| GET | `/api/automation/next` | stored and freshly recomputed `next_run` per task |
+| GET | `/api/export/stix/{kind}/{target}` | a STIX 2.1 bundle for the newest stored lookup (`404` without one) |
+| GET | `/api/export/misp/{kind}/{target}` | a MISP core-format event for the newest stored lookup (`404` without one) |
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/notify/broadcast \
+     -H "Content-Type: application/json" \
+     -d '{"title": "Escalation", "body": "risk crossed 80", "severity": "high"}'
+curl http://127.0.0.1:8000/api/export/stix/ip/8.8.8.8
+```
+
 ## Threat intel (v4.0)
 
 ### `GET /api/intel/{target}`
@@ -769,6 +800,8 @@ Response shape: `[{"target": "8.8.8.8", "result": {…tracker envelope
 - [docs/advanced.md](advanced.md) — correlation, timelines, risk scoring,
   cases, graph exports, batch/alerts/patterns/geospatial/reports from the
   CLI.
+- [docs/automation.md](automation.md) — the notification centre, the task
+  scheduler and the STIX/MISP exports behind the Part 4 endpoints.
 - [docs/experimental.md](experimental.md) — the toolbox modules behind
   `/api/tools/*`.
 - [docs/web-ui.md](web-ui.md) — the web application these endpoints serve.

@@ -1,7 +1,7 @@
 """
 Model Context Protocol (MCP) server for ObscuraLens.
 
-Exposes 40 ObscuraLens tools to AI assistants over stdio using
+Exposes 53 ObscuraLens tools to AI assistants over stdio using
 newline-delimited JSON-RPC 2.0 (one JSON object per line), which is the
 transport MCP defines. This is deliberately *not* LSP Content-Length
 framing.
@@ -19,6 +19,10 @@ Tool families:
 * 10 v5.0 analyst toolbox tools - tools_encode, tools_decode, tools_jwt,
   tools_hash_id, tools_extract, tools_squat, tools_exif, tools_stego,
   tools_coords_convert and the 10-target-capped tools_batch.
+* 7 v6.0 analytics tools - the analytics_* family.
+* 5 v6.0 part-4 automation & sharing tools - notify_channels,
+  notify_broadcast, automation_tasks, automation_run_due and
+  export_stix.
 
 Run it with::
 
@@ -906,6 +910,100 @@ TOOLS: List[Dict[str, Any]] = [
             'additionalProperties': False,
         },
     },
+    # v6.0 part 4: automation & sharing tools
+    {
+        'name': 'notify_channels',
+        'description': 'List the configured notification channels (webhook / '
+                       'Telegram / Discord / Slack / SMTP) with their event '
+                       'subscriptions, severity floors, quiet-hours windows '
+                       'and last delivery time, plus the protocol '
+                       'vocabularies (channel types, severity ladder). '
+                       'Purely local state; no message is sent.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {},
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'notify_broadcast',
+        'description': 'Fan one event out to every configured notification '
+                       'channel. Per-channel filters apply (event '
+                       'subscriptions, severity floors, local quiet hours, '
+                       '5-minute dedup); the aggregate reports sent / failed '
+                       '/ skipped per channel. Delivery leaves the machine - '
+                       'this is the one tool in this group that talks to the '
+                       'network.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'title': {'type': 'string',
+                          'description': 'One-line headline for the message.'},
+                'body': {'type': 'string',
+                         'description': 'Message body.'},
+                'severity': {'type': 'string',
+                             'description': 'info (default), low, medium, '
+                                            'high or critical.'},
+                'event_type': {'type': 'string',
+                               'description': 'Event label channels '
+                                              'subscribe to (default: '
+                                              'manual).'},
+            },
+            'required': ['title', 'body'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'automation_tasks',
+        'description': 'List the scheduled automation tasks (watchlist '
+                       're-checks, YAML pipelines, history reports, feed '
+                       'refreshes, notification probes) with their '
+                       'interval/daily/weekly schedules, next run, run and '
+                       'error counts. Purely local state; nothing executes.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {},
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'automation_run_due',
+        'description': 'Run every scheduled task whose next_run has arrived '
+                       '(exactly what the background tick loop does every 30 '
+                       'seconds) and persist the bookkeeping: last_run, '
+                       'run_count, error_count and the fresh next_run. Each '
+                       'executor is individually wrapped - a broken pipeline '
+                       'or dead webhook surfaces as an error in the results, '
+                       'never as a failed call.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {},
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'export_stix',
+        'description': 'Build a STIX 2.1 bundle for the newest stored lookup '
+                       'of a target: the ObscuraLens identity, an Indicator '
+                       'SDO (or a Vulnerability SDO for CVEs), an Observed '
+                       'Data SDO carrying every info field, and a provenance '
+                       'note - deterministic UUIDv5 ids so re-imports merge. '
+                       'The lookup must already exist in the local history '
+                       '(run ip_lookup or a sibling first). Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'kind': {'type': 'string',
+                         'description': 'Target kind (ip, domain, url, '
+                                        'email, hash, cve, ...).'},
+                'target': {'type': 'string',
+                           'description': 'The exact target value that was '
+                                          'looked up.'},
+            },
+            'required': ['kind', 'target'],
+            'additionalProperties': False,
+        },
+    },
 ]
 
 
@@ -1556,6 +1654,133 @@ def _tool_analytics_history(arguments: Dict[str, Any]) -> Dict[str, Any]:
     return enrichment_report(limit=limit)
 
 
+# ---------------------------------------------------------------------------
+# v6.0 part 4: automation & sharing handlers
+# ---------------------------------------------------------------------------
+
+def _tool_notify_channels(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    List the configured notification channels.
+
+    Input: none.
+
+    Output: ``{'count': n, 'channels': [{name, type, target, events,
+    enabled, min_severity, quiet_hours, dedup_key, note, last_sent}],
+    'channel_types': [...], 'severities': [...]}`` - the full channel
+    census plus the protocol vocabularies. No message is sent.
+
+    Sources: purely offline (notifications.json local state).
+    """
+    from .automation import notifications
+    channels = notifications.list_channels()
+    return {'count': len(channels), 'channels': channels,
+            'channel_types': list(notifications.CHANNEL_TYPES),
+            'severities': list(notifications.SEVERITY_LEVELS)}
+
+
+def _tool_notify_broadcast(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Fan one event out to every configured notification channel.
+
+    Input: ``title`` and ``body`` - the message; ``severity`` - optional
+    severity label (default info); ``event_type`` - optional event label
+    channels subscribe to (default manual).
+
+    Output: the broadcast aggregate ``{'sent': n, 'failed': [{channel,
+    error}], 'skipped': n, 'total': n, 'results': [per-channel send()
+    dicts]}``. Per-channel filters (subscriptions, severity floors, quiet
+    hours, 5-minute dedup) decide what actually leaves the machine.
+
+    Sources: the configured channels' endpoints (webhook/Telegram/
+    Discord/Slack via the shared HTTP client, SMTP via smtplib).
+    """
+    from .automation import notifications
+    title = _required_str(arguments, 'title')
+    body = _required_str(arguments, 'body')
+    severity = arguments.get('severity')
+    severity = severity if isinstance(severity, str) and severity.strip() \
+        else 'info'
+    event_type = arguments.get('event_type')
+    event_type = event_type if isinstance(event_type, str) \
+        and event_type.strip() else 'manual'
+    return notifications.broadcast(event_type, title, body, severity)
+
+
+def _tool_automation_tasks(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    List the scheduled automation tasks.
+
+    Input: none.
+
+    Output: ``{'count': n, 'tasks': [{name, action, params, schedule,
+    interval_seconds, at_time, weekday, enabled, last_run, next_run,
+    run_count, error_count, last_error}], 'actions': [...],
+    'schedule_types': [...]}``. Nothing executes.
+
+    Sources: purely offline (scheduler.json local state).
+    """
+    from .automation import scheduler
+    tasks = scheduler.list_tasks()
+    return {'count': len(tasks), 'tasks': tasks,
+            'actions': list(scheduler.TASK_ACTIONS),
+            'schedule_types': list(scheduler.SCHEDULE_TYPES)}
+
+
+def _tool_automation_run_due(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Run every scheduled task whose next_run has arrived.
+
+    Input: none.
+
+    Output: ``{'ran': n, 'results': [{task, action, ok, started,
+    finished, error, summary}]}`` plus the persisted bookkeeping update
+    (last_run / run_count / error_count / next_run per task). Executors
+    are individually wrapped: a broken pipeline or a dead webhook is an
+    error inside its result, never a failed tool call.
+
+    Sources: whatever the due tasks execute - the watchlist, YAML
+    pipelines, the query history (report action), intel feeds, or a
+    notification channel probe.
+    """
+    from .automation import scheduler
+    results = scheduler.run_due()
+    return {'ran': len(results), 'results': results}
+
+
+def _tool_export_stix(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build a STIX 2.1 bundle for the newest stored lookup of a target.
+
+    Input: ``kind`` - the target kind; ``target`` - the exact value that
+    was looked up (matched case-insensitively against the stored
+    history).
+
+    Output: ``{'type': 'bundle', 'id': ..., 'objects': [identity,
+    indicator|vulnerability, observed-data, relationship, note]}`` with
+    deterministic UUIDv5 ids, ready for any STIX-aware platform. Raises
+    ValueError (an isError result) when no stored lookup matches - run
+    the lookup first.
+
+    Sources: purely offline (the local SQLite history + export.stix).
+    """
+    from .database import db
+    from .export.stix import build_bundle
+    kind = _required_str(arguments, 'kind')
+    target = _required_str(arguments, 'target')
+    needle = target.strip().lower()
+    for record in db.get_history(query_type=kind, limit=500):
+        if str(record.query_value or '').strip().lower() == needle:
+            try:
+                envelope = json.loads(record.result_data or '{}')
+            except ValueError:
+                continue
+            if isinstance(envelope, dict):
+                return build_bundle(kind, target, envelope)
+    raise ValueError(
+        f"no stored {kind} lookup for {target!r} - run the lookup "
+        f"first (e.g. ip_lookup)")
+
+
 def _tool_encode(arguments: Dict[str, Any]) -> Dict[str, Any]:
     """
     Every encoding and every digest of a text, in one call.
@@ -2071,6 +2296,12 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     'analytics_similarity': _tool_analytics_similarity,
     'analytics_graph': _tool_analytics_graph,
     'analytics_history': _tool_analytics_history,
+    # v6.0 part 4: automation & sharing tools
+    'notify_channels': _tool_notify_channels,
+    'notify_broadcast': _tool_notify_broadcast,
+    'automation_tasks': _tool_automation_tasks,
+    'automation_run_due': _tool_automation_run_due,
+    'export_stix': _tool_export_stix,
 }
 
 

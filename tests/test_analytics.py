@@ -1404,7 +1404,7 @@ class TestAnalyticsMCP:
                 'analytics_keywords', 'analytics_language',
                 'analytics_similarity', 'analytics_graph',
                 'analytics_history'} <= names
-        assert len(TOOLS) == 48  # 47 + tools_dorks (v6.1)
+        assert len(TOOLS) == 53  # 47 + tools_dorks (v6.1) + 5 part-4 automation
 
     def test_analytics_tool_schemas_valid(self):
         from obscuralens.mcp_server import TOOLS

@@ -510,10 +510,15 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(p_diff)
 
     p_export = sub.add_parser(
-        'export', help='export an investigation graph to a file format')
+        'export', help='export an investigation to a file format '
+                       '(graph, STIX 2.1 or MISP)')
     p_export.add_argument('fmt', choices=('graphml', 'gexf', 'dot', 'jsonl',
-                                          'csv', 'mermaid'))
-    p_export.add_argument('target', help='any supported target')
+                                          'csv', 'mermaid', 'stix', 'misp'))
+    p_export.add_argument('kind', nargs='?', default=None,
+                          help='target kind (stix/misp: kind + target; with '
+                               'a single value the kind is auto-detected)')
+    p_export.add_argument('target', nargs='?', default=None,
+                          help='any supported target')
     p_export.add_argument('--no-pivot', action='store_false', dest='pivot')
     p_export.add_argument('--max-pivots', type=int, default=3)
     p_export.add_argument('--from-json', metavar='FILE',
@@ -807,6 +812,151 @@ def build_parser() -> argparse.ArgumentParser:
                           help='how many newest history rows to consider '
                                '(default: 500)')
     add_analytics_common(p_a_hist)
+
+    # -- v6.0 part 4: automation & sharing -----------------------------------
+
+    p_notify = sub.add_parser(
+        'notify', help='multi-channel notifications: channels, broadcast, '
+                       'delivery history (v6.0)')
+    notify_sub = p_notify.add_subparsers(dest='action', metavar='<action>')
+
+    def add_notify_common(p: argparse.ArgumentParser) -> None:
+        p.add_argument('-f', '--format', choices=('table', 'json'), default=None,
+                       help='output format (default: table)')
+        p.add_argument('-o', '--output', metavar='FILE',
+                       help='write output to FILE instead of stdout')
+        p.add_argument('--no-color', action='store_true',
+                       help='disable ANSI colours')
+
+    add_notify_common(notify_sub.add_parser(
+        'channels', help='list configured notification channels'))
+
+    p_notify_add = notify_sub.add_parser(
+        'add', help='register a notification channel')
+    p_notify_add.add_argument('--type', required=True,
+                              choices=('webhook', 'telegram', 'discord',
+                                       'slack', 'smtp'),
+                              help='channel protocol')
+    p_notify_add.add_argument('--name', required=True, metavar='NAME',
+                              help='unique channel label')
+    p_notify_add.add_argument('--target', default='', metavar='TARGET',
+                              help='delivery target: URL, bot_token:chat_id, '
+                                   'or host:port:from:to[:user:pass] (empty '
+                                   '= use the global config key)')
+    p_notify_add.add_argument('--events', metavar='LIST',
+                              help='comma-separated event subscriptions '
+                                   '(empty = every event)')
+    p_notify_add.add_argument('--min-severity', default='info', metavar='LEVEL',
+                              help='weakest severity worth waking this '
+                                   'channel: info|low|medium|high|critical '
+                                   '(default: info)')
+    p_notify_add.add_argument('--quiet-hours', metavar='RANGE',
+                              help='local-time quiet window, e.g. 22-07 '
+                                   '(no deliveries inside it)')
+    p_notify_add.add_argument('--dedup-key', default=None, metavar='RECIPE',
+                              choices=('event', 'title', 'event+title'),
+                              help='what counts as a duplicate message')
+    p_notify_add.add_argument('--note', default='', metavar='TEXT',
+                              help='free-form operator note')
+    p_notify_add.add_argument('--disabled', action='store_true',
+                              help='register the channel disabled')
+    add_notify_common(p_notify_add)
+
+    p_notify_rm = notify_sub.add_parser('remove', help='remove a channel')
+    p_notify_rm.add_argument('name', help='channel name')
+    add_notify_common(p_notify_rm)
+
+    p_notify_test = notify_sub.add_parser(
+        'test', help='send a one-off test message to a channel')
+    p_notify_test.add_argument('name', help='channel name')
+    add_notify_common(p_notify_test)
+
+    p_notify_recent = notify_sub.add_parser(
+        'recent', help='recent notification history (sends, failures, skips)')
+    p_notify_recent.add_argument('--limit', type=int, default=20, metavar='N',
+                                 help='how many entries to show (default: 20)')
+    add_notify_common(p_notify_recent)
+
+    p_notify_bcast = notify_sub.add_parser(
+        'broadcast', help='fan one event out to every configured channel')
+    p_notify_bcast.add_argument('--title', required=True, metavar='TEXT',
+                                help='one-line headline')
+    p_notify_bcast.add_argument('--body', required=True, metavar='TEXT',
+                                help='message body')
+    p_notify_bcast.add_argument('--severity', default='info', metavar='LEVEL',
+                                help='info|low|medium|high|critical '
+                                     '(default: info)')
+    p_notify_bcast.add_argument('--event-type', default='manual',
+                                metavar='NAME',
+                                help='event label for channel subscriptions '
+                                     '(default: manual)')
+    add_notify_common(p_notify_bcast)
+
+    p_auto = sub.add_parser(
+        'automation', help='scheduled tasks: watch checks, pipelines, '
+                           'reports, feed refreshes (v6.0)')
+    auto_sub = p_auto.add_subparsers(dest='action', metavar='<action>')
+
+    def add_automation_common(p: argparse.ArgumentParser) -> None:
+        p.add_argument('-f', '--format', choices=('table', 'json'), default=None,
+                       help='output format (default: table)')
+        p.add_argument('-o', '--output', metavar='FILE',
+                       help='write output to FILE instead of stdout')
+        p.add_argument('--no-color', action='store_true',
+                       help='disable ANSI colours')
+
+    add_automation_common(auto_sub.add_parser(
+        'tasks', help='list scheduled tasks'))
+
+    p_auto_add = auto_sub.add_parser('add', help='register a scheduled task')
+    p_auto_add.add_argument('--name', required=True, metavar='NAME',
+                            help='unique task label')
+    p_auto_add.add_argument('--action', dest='task_action', required=True,
+                            choices=('watch_check', 'pipeline', 'report',
+                                     'feed_refresh', 'notify_test'),
+                            help='executor action (NB: dest is task_action '
+                                 'so the flag cannot shadow the subparser '
+                                 'action dest)')
+    schedule = p_auto_add.add_mutually_exclusive_group()
+    schedule.add_argument('--interval', type=int, default=None, metavar='SECONDS',
+                          help='run every N seconds (interval schedule)')
+    schedule.add_argument('--daily', action='store_true',
+                          help='run every day at --at (daily schedule)')
+    schedule.add_argument('--weekly', action='store_true',
+                          help='run every --weekday at --at (weekly schedule)')
+    p_auto_add.add_argument('--at', default='09:00', metavar='HH:MM',
+                            help='daily/weekly local run time (default: 09:00)')
+    p_auto_add.add_argument('--weekday', type=int, default=0, metavar='N',
+                            help='weekly weekday, 0=Monday .. 6=Sunday '
+                                 '(default: 0)')
+    p_auto_add.add_argument('--params', default='{}', metavar='JSON',
+                            help='executor params as JSON, e.g. '
+                                 '\'{"channel": "team-chat"}\'')
+    p_auto_add.add_argument('--disabled', action='store_true',
+                            help='register the task disabled')
+    add_automation_common(p_auto_add)
+
+    p_auto_rm = auto_sub.add_parser('remove', help='remove a scheduled task')
+    p_auto_rm.add_argument('name', help='task name')
+    add_automation_common(p_auto_rm)
+
+    p_auto_run = auto_sub.add_parser('run', help='execute one task now')
+    p_auto_run.add_argument('name', help='task name')
+    add_automation_common(p_auto_run)
+
+    add_automation_common(auto_sub.add_parser(
+        'run-due', help='run every task whose schedule has arrived'))
+
+    p_auto_start = auto_sub.add_parser(
+        'start', help='run the scheduler tick loop in the foreground '
+                      '(Ctrl+C to stop)')
+    p_auto_start.add_argument('--interval', type=float, default=30,
+                              metavar='SECONDS',
+                              help='wake-up period in seconds (default: 30)')
+    add_automation_common(p_auto_start)
+
+    add_automation_common(auto_sub.add_parser(
+        'next', help='show when every task runs next'))
 
     # -- v5.0 analysis commands ----------------------------------------------------
 
@@ -2144,8 +2294,95 @@ def _cmd_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+def _export_history_envelope(kind: str, target: str
+                             ) -> Optional[Dict[str, Any]]:
+    """
+    The newest stored tracker envelope for ``kind``/``target`` (or None).
+
+    STIX/MISP exports describe *what was observed*, so they read the most
+    recent successful-or-not lookup from the local history instead of
+    re-running a tracker: the export then matches what the analyst saw.
+    """
+    needle = str(target or '').strip().lower()
+    for record in db.get_history(query_type=kind, limit=500):
+        if str(record.query_value or '').strip().lower() == needle:
+            try:
+                envelope = json.loads(record.result_data or '{}')
+            except ValueError:
+                continue
+            if isinstance(envelope, dict):
+                return envelope
+    return None
+
+
+def _cmd_export_stix(args: argparse.Namespace) -> int:
+    """``export stix <kind> <target>`` - a STIX 2.1 bundle from history."""
+    from .export.stix import build_bundle, dump_bundle
+
+    kind = args.kind or ''
+    if kind not in KINDS:
+        kind = detect_kind(args.target) or ''
+    if kind not in KINDS:
+        _err(f"cannot determine target type: {args.target!r}")
+        return 2
+    envelope = _export_history_envelope(kind, args.target)
+    if envelope is None:
+        _err(f"no stored {kind} lookup for {args.target!r} - "
+             f"run `obscuralens {kind} {args.target}` first")
+        return 2
+    bundle = build_bundle(kind, args.target, envelope)
+    if args.output:
+        result = dump_bundle(bundle, args.output)
+        if not result.get('ok'):
+            _err(f"cannot write {args.output}: {result.get('error')}")
+            return 1
+        _info(f"STIX bundle exported: {result.get('path')} "
+              f"({result.get('bytes')} bytes)")
+        return 0
+    _emit(json.dumps(bundle, indent=2, ensure_ascii=False, default=str), None)
+    return 0
+
+
+def _cmd_export_misp(args: argparse.Namespace) -> int:
+    """``export misp <kind> <target>`` - a MISP core-format event."""
+    from .export.misp import build_misp_event, dump_event
+
+    kind = args.kind or ''
+    if kind not in KINDS:
+        kind = detect_kind(args.target) or ''
+    if kind not in KINDS:
+        _err(f"cannot determine target type: {args.target!r}")
+        return 2
+    envelope = _export_history_envelope(kind, args.target)
+    if envelope is None:
+        _err(f"no stored {kind} lookup for {args.target!r} - "
+             f"run `obscuralens {kind} {args.target}` first")
+        return 2
+    event = build_misp_event(kind, args.target, envelope)
+    if args.output:
+        result = dump_event(event, args.output)
+        if not result.get('ok'):
+            _err(f"cannot write {args.output}: {result.get('error')}")
+            return 1
+        _info(f"MISP event exported: {result.get('path')} "
+              f"({result.get('bytes')} bytes)")
+        return 0
+    _emit(json.dumps(event, indent=2, ensure_ascii=False, default=str), None)
+    return 0
+
+
 def _cmd_export(args: argparse.Namespace) -> int:
     from .export import export_graph
+
+    # v6.0 part 4: `export stix|misp <kind> <target>` shares the parser
+    # with the graph formats; a single positional keeps the v4.0 layout
+    # (`export graphml <target>`), so normalise before dispatching.
+    if args.target is None:
+        args.target, args.kind = args.kind, None
+    if args.fmt == 'stix':
+        return _cmd_export_stix(args)
+    if args.fmt == 'misp':
+        return _cmd_export_misp(args)
 
     if args.from_json:
         try:
@@ -3965,6 +4202,396 @@ def _cmd_analytics_history(args: argparse.Namespace) -> int:
     return _emit_analytics(args, payload, sections)
 
 
+# ---------------------------------------------------------------------------
+# v6.0 part 4: notification commands
+# ---------------------------------------------------------------------------
+
+def _emit_automation_table(args: argparse.Namespace,
+                           payload: Dict[str, Any],
+                           sections: List[Dict[str, Any]]) -> int:
+    """Emit a notify/automation result (JSON or rendered tables)."""
+    fmt = getattr(args, 'format', None) or 'table'
+    if fmt == 'json':
+        _emit(json.dumps(payload, indent=2, ensure_ascii=False, default=str),
+              getattr(args, 'output', None))
+    else:
+        _emit(_render_sections_text(sections), getattr(args, 'output', None))
+    return 0
+
+
+def _cmd_notify(args: argparse.Namespace) -> int:
+    action = getattr(args, 'action', None)
+    handlers: Dict[str, Any] = {
+        'channels': _cmd_notify_channels,
+        'add': _cmd_notify_add,
+        'remove': _cmd_notify_remove,
+        'test': _cmd_notify_test,
+        'recent': _cmd_notify_recent,
+        'broadcast': _cmd_notify_broadcast,
+    }
+    handler = handlers.get(action)
+    if handler is None:
+        _err('usage: obscuralens notify channels|add|remove|test|recent|'
+             'broadcast')
+        return 2
+    return handler(args)
+
+
+def _cmd_notify_channels(args: argparse.Namespace) -> int:
+    """List every configured notification channel."""
+    from .automation import notifications
+
+    channels = notifications.list_channels()
+    payload: Dict[str, Any] = {
+        'count': len(channels), 'channels': channels,
+        'channel_types': list(notifications.CHANNEL_TYPES),
+        'severities': list(notifications.SEVERITY_LEVELS),
+    }
+    sections = [
+        {'title': 'Notification Channels', 'type': 'table',
+         'columns': ['Name', 'Type', 'Target', 'Events', 'Min Severity',
+                     'Quiet Hours', 'Enabled', 'Last Sent'],
+         'rows': [[c.get('name'), c.get('type'), c.get('target'),
+                   ','.join(c.get('events') or []) or '(all)',
+                   c.get('min_severity'),
+                   '-'.join(str(h) for h in c['quiet_hours'])
+                   if c.get('quiet_hours') else '-',
+                   'yes' if c.get('enabled') else 'no',
+                   c.get('last_sent') or '-']
+                  for c in channels]},
+    ]
+    if not channels:
+        sections.append({'title': 'Hint', 'type': 'text',
+                         'content': 'No channels yet - add one with '
+                                    '`obscuralens notify add --type webhook '
+                                    '--name myhook --target https://...`.'})
+    return _emit_automation_table(args, payload, sections)
+
+
+def _cmd_notify_add(args: argparse.Namespace) -> int:
+    """Register one notification channel."""
+    from .automation import notifications
+
+    spec: Dict[str, Any] = {
+        'name': args.name,
+        'type': args.type,
+        'target': args.target,
+        'min_severity': args.min_severity,
+        'note': args.note,
+        'enabled': not args.disabled,
+    }
+    if args.events:
+        spec['events'] = args.events
+    if args.quiet_hours:
+        spec['quiet_hours'] = args.quiet_hours
+    if args.dedup_key:
+        spec['dedup_key'] = args.dedup_key
+    result = notifications.add_channel(spec)
+    if not result.get('ok'):
+        _err(str(result.get('error') or 'channel rejected'))
+        return 1
+    channel = result.get('channel') or {}
+    payload: Dict[str, Any] = {'ok': True, 'channel': channel}
+    sections = [
+        {'title': f"Channel '{channel.get('name')}' added", 'type': 'grid',
+         'data': {key: value for key, value in channel.items()
+                  if key not in ('events',)}},
+    ]
+    _emit_automation_table(args, payload, sections)
+    return 0
+
+
+def _cmd_notify_remove(args: argparse.Namespace) -> int:
+    """Delete one notification channel (history stays behind)."""
+    from .automation import notifications
+
+    result = notifications.remove_channel(args.name)
+    if not result.get('ok'):
+        _err(str(result.get('error') or 'channel not found'))
+        return 1
+    _emit(f"Removed channel: {result.get('removed')}", args.output)
+    return 0
+
+
+def _cmd_notify_test(args: argparse.Namespace) -> int:
+    """Send a one-off test message through a configured channel."""
+    from .automation import notifications
+
+    result = notifications.test_channel(args.name)
+    payload: Dict[str, Any] = dict(result)
+    if result.get('ok'):
+        sections = [{'title': f"Test notification sent to "
+                              f"'{result.get('channel')}'", 'type': 'grid',
+                     'data': {'ok': True, 'channel': result.get('channel')}}]
+    else:
+        sections = [{'title': f"Test notification to "
+                              f"'{result.get('channel')}' failed",
+                     'type': 'grid',
+                     'data': {'ok': False,
+                              'error': result.get('error') or 'failed'}}]
+    _emit_automation_table(args, payload, sections)
+    return 0 if result.get('ok') else 1
+
+
+def _cmd_notify_recent(args: argparse.Namespace) -> int:
+    """Show the recent notification history (sends, failures, skips)."""
+    from .automation import notifications
+
+    entries = notifications.recent(getattr(args, 'limit', 20) or 20)
+    payload: Dict[str, Any] = {'count': len(entries), 'recent': entries}
+    sections = [
+        {'title': f"Recent Notifications ({len(entries)})", 'type': 'table',
+         'columns': ['When (UTC)', 'Event', 'Channel', 'Severity', 'Title',
+                     'Delivery'],
+         'rows': [[entry.get('ts'), entry.get('event'), entry.get('channel'),
+                   entry.get('severity'), entry.get('title'),
+                   entry.get('delivery')] for entry in entries]},
+    ]
+    if not entries:
+        sections.append({'title': 'Hint', 'type': 'text',
+                         'content': 'Nothing recorded yet - send something '
+                                    'with `obscuralens notify broadcast`.'})
+    return _emit_automation_table(args, payload, sections)
+
+
+def _cmd_notify_broadcast(args: argparse.Namespace) -> int:
+    """Fan one event out to every configured channel."""
+    from .automation import notifications
+
+    result = notifications.broadcast(args.event_type, args.title, args.body,
+                                     severity=args.severity)
+    payload: Dict[str, Any] = dict(result)
+    failures = result.get('failed') or []
+    sections = [
+        {'title': 'Broadcast Result', 'type': 'grid', 'data': {
+            'sent': result.get('sent', 0),
+            'failed': len(failures),
+            'skipped': result.get('skipped', 0),
+            'total': result.get('total', 0),
+        }},
+    ]
+    if failures:
+        sections.append({'title': 'Failures', 'type': 'table',
+                         'columns': ['Channel', 'Error'],
+                         'rows': [[item.get('channel'), item.get('error')]
+                                  for item in failures]})
+    if result.get('total') == 0:
+        sections.append({'title': 'Hint', 'type': 'text',
+                         'content': 'No channels configured - add one with '
+                                    '`obscuralens notify add` first.'})
+    _emit_automation_table(args, payload, sections)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# v6.0 part 4: automation (scheduler) commands
+# ---------------------------------------------------------------------------
+
+def _cmd_automation(args: argparse.Namespace) -> int:
+    action = getattr(args, 'action', None)
+    handlers: Dict[str, Any] = {
+        'tasks': _cmd_automation_tasks,
+        'add': _cmd_automation_add,
+        'remove': _cmd_automation_remove,
+        'run': _cmd_automation_run,
+        'run-due': _cmd_automation_run_due,
+        'start': _cmd_automation_start,
+        'next': _cmd_automation_next,
+    }
+    handler = handlers.get(action)
+    if handler is None:
+        _err('usage: obscuralens automation tasks|add|remove|run|run-due|'
+             'start|next')
+        return 2
+    return handler(args)
+
+
+def _cmd_automation_tasks(args: argparse.Namespace) -> int:
+    """List every scheduled task."""
+    from .automation import scheduler
+
+    tasks = scheduler.list_tasks()
+    payload: Dict[str, Any] = {
+        'count': len(tasks), 'tasks': tasks,
+        'actions': list(scheduler.TASK_ACTIONS),
+    }
+    sections = [
+        {'title': 'Scheduled Tasks', 'type': 'table',
+         'columns': ['Name', 'Action', 'Schedule', 'Next Run', 'Runs',
+                     'Errors', 'Enabled'],
+         'rows': [[t.get('name'), t.get('action'),
+                   (f"every {t.get('interval_seconds')}s"
+                    if t.get('schedule') == 'interval'
+                    else f"{t.get('schedule')} {t.get('at_time')}"
+                    + (f" wd{t.get('weekday')}"
+                       if t.get('schedule') == 'weekly' else '')),
+                   t.get('next_run') or '-', t.get('run_count', 0),
+                   t.get('error_count', 0),
+                   'yes' if t.get('enabled') else 'no']
+                  for t in tasks]},
+    ]
+    if not tasks:
+        sections.append({'title': 'Hint', 'type': 'text',
+                         'content': 'No tasks yet - add one with '
+                                    '`obscuralens automation add --name '
+                                    'daily-watch --action watch_check '
+                                    '--daily --at 09:00`.'})
+    return _emit_automation_table(args, payload, sections)
+
+
+def _cmd_automation_add(args: argparse.Namespace) -> int:
+    """Register one scheduled task."""
+    from .automation import scheduler
+
+    if args.daily:
+        schedule = 'daily'
+    elif args.weekly:
+        schedule = 'weekly'
+    else:
+        schedule = 'interval'
+    try:
+        params = json.loads(args.params or '{}')
+    except ValueError:
+        _err(f"--params is not valid JSON: {args.params!r}")
+        return 2
+    if not isinstance(params, dict):
+        _err('--params must be a JSON object')
+        return 2
+    spec: Dict[str, Any] = {
+        'name': args.name,
+        'action': args.task_action,
+        'params': params,
+        'schedule': schedule,
+        'at_time': args.at,
+        'weekday': args.weekday,
+        'enabled': not args.disabled,
+    }
+    if args.interval is not None:
+        spec['interval_seconds'] = args.interval
+    result = scheduler.add_task(spec)
+    if not result.get('ok'):
+        _err(str(result.get('error') or 'task rejected'))
+        return 1
+    task = result.get('task') or {}
+    payload: Dict[str, Any] = {'ok': True, 'task': task}
+    sections = [
+        {'title': f"Task '{task.get('name')}' added", 'type': 'grid',
+         'data': {key: value for key, value in task.items()
+                  if key != 'params'}},
+    ]
+    _emit_automation_table(args, payload, sections)
+    return 0
+
+
+def _cmd_automation_remove(args: argparse.Namespace) -> int:
+    """Delete one scheduled task."""
+    from .automation import scheduler
+
+    result = scheduler.remove_task(args.name)
+    if not result.get('ok'):
+        _err(str(result.get('error') or 'task not found'))
+        return 1
+    _emit(f"Removed task: {result.get('removed')}", args.output)
+    return 0
+
+
+def _cmd_automation_run(args: argparse.Namespace) -> int:
+    """Execute one task now (bookkeeping is left to run_due)."""
+    from .automation import scheduler
+
+    result = scheduler.run_task(args.name)
+    payload: Dict[str, Any] = dict(result)
+    sections = [{'title': f"Task '{args.name}' run", 'type': 'grid',
+                 'data': {'ok': result.get('ok'),
+                          'started': result.get('started'),
+                          'finished': result.get('finished'),
+                          'error': result.get('error') or '-',
+                          'summary': result.get('summary') or '-'}}]
+    _emit_automation_table(args, payload, sections)
+    return 0 if result.get('ok') else 1
+
+
+def _cmd_automation_run_due(args: argparse.Namespace) -> int:
+    """Run every task whose schedule has arrived."""
+    from .automation import scheduler
+
+    results = scheduler.run_due()
+    payload: Dict[str, Any] = {'ran': len(results), 'results': results}
+    sections = [
+        {'title': f"Run-Due ({len(results)} task(s))", 'type': 'table',
+         'columns': ['Task', 'Action', 'OK', 'Summary / Error'],
+         'rows': [[r.get('task'), r.get('action'),
+                   'yes' if r.get('ok') else 'no',
+                   r.get('summary') or r.get('error') or '-']
+                  for r in results]},
+    ]
+    if not results:
+        sections.append({'title': 'Hint', 'type': 'text',
+                         'content': 'Nothing was due - the tick loop runs '
+                                    'this check every 30 seconds.'})
+    _emit_automation_table(args, payload, sections)
+    return 0
+
+
+def _cmd_automation_start(args: argparse.Namespace) -> int:
+    """
+    Run the scheduler tick loop in the foreground until Ctrl+C.
+
+    Deliberately *not* the daemon thread: a foreground loop keeps the
+    terminal attached, turns Ctrl+C into a clean shutdown and lets a
+    supervisor (systemd, docker, tmux) own the lifecycle exactly like
+    ``obscuralens serve`` does.
+    """
+    import threading
+
+    from .automation import scheduler
+
+    interval = max(0.5, float(args.interval or 30))
+    _info(f"Scheduler running (tick every {interval:g}s) - Ctrl+C to stop.")
+    stop_event = threading.Event()
+    try:
+        scheduler.tick_loop(stop_event, interval=interval)
+    except KeyboardInterrupt:
+        stop_event.set()
+    finally:
+        stop_event.set()
+        _info('Scheduler stopped.')
+    return 0
+
+
+def _cmd_automation_next(args: argparse.Namespace) -> int:
+    """Show when every task runs next."""
+    from .automation import scheduler
+
+    tasks = scheduler.list_tasks()
+    rows: List[List[Any]] = []
+    for task in tasks:
+        try:
+            next_run = scheduler.compute_next_run(task)
+        except Exception:  # defensive: display, never crash
+            next_run = task.get('next_run') or '-'
+        rows.append([task.get('name'), task.get('action'),
+                     task.get('schedule'), task.get('next_run') or '-',
+                     next_run])
+    payload: Dict[str, Any] = {
+        'count': len(tasks),
+        'tasks': [{'name': t.get('name'), 'schedule': t.get('schedule'),
+                   'stored_next_run': t.get('next_run'),
+                   'recomputed_next_run': scheduler.compute_next_run(t)}
+                  for t in tasks],
+    }
+    sections = [
+        {'title': 'Next Runs', 'type': 'table',
+         'columns': ['Task', 'Action', 'Schedule', 'Stored Next Run',
+                     'Recomputed (from now)'],
+         'rows': rows},
+    ]
+    if not tasks:
+        sections.append({'title': 'Hint', 'type': 'text',
+                         'content': 'No tasks scheduled yet.'})
+    return _emit_automation_table(args, payload, sections)
+
+
 _HANDLERS = {
     'ip': _cmd_ip,
     'phone': _cmd_phone,
@@ -4026,6 +4653,9 @@ _HANDLERS = {
     'data': _cmd_data,
     # v6.0 part 2: analytics
     'analytics': _cmd_analytics,
+    # v6.0 part 4: automation & sharing
+    'notify': _cmd_notify,
+    'automation': _cmd_automation,
 }
 
 

@@ -29,6 +29,9 @@ TOOL_NAMES = {
     'analytics_history',
     # v6.1 tools
     'tools_dorks',
+    # v6.0 part 4: automation & sharing tools
+    'notify_channels', 'notify_broadcast', 'automation_tasks',
+    'automation_run_due', 'export_stix',
 
 }
 
@@ -81,7 +84,12 @@ def test_tools_list_contains_all_tools_with_valid_schemas():
                           'analytics_stats', 'analytics_anomalies',
                           'analytics_keywords', 'analytics_language',
                           'analytics_similarity', 'analytics_graph',
-                          'analytics_history')
+                          'analytics_history',
+                          # v6.0 part 4 automation & sharing tools take
+                          # no target (or kind/target instead)
+                          'notify_channels', 'notify_broadcast',
+                          'automation_tasks', 'automation_run_due',
+                          'export_stix')
     for tool in tools:
         assert isinstance(tool['description'], str) and tool['description']
         schema = tool['inputSchema']
@@ -196,4 +204,4 @@ def test_main_end_to_end(monkeypatch):
     assert len(out_lines) == 2
     first, second = json.loads(out_lines[0]), json.loads(out_lines[1])
     assert first['result']['serverInfo']['name'] == 'obscuralens'
-    assert len(second['result']['tools']) == 48  # 8 core + 10 v4.0 + 16 v5.0 + 6 v6.0 + 7 v6.0-part2 + 1 v6.1 tools
+    assert len(second['result']['tools']) == 53  # 8 core + 10 v4.0 + 16 v5.0 + 6 v6.0 + 7 v6.0-part2 + 1 v6.1 + 5 v6.0-part4 tools
