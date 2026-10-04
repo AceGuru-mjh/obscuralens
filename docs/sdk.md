@@ -168,8 +168,8 @@ log the server's own explanation.
 
 ## Endpoint methods reference
 
-64 public methods, grouped by family. Signatures are abbreviated
-(`kind` = one of the 14 kinds; defaults shown where they matter).
+100+ public methods, grouped by family. Signatures are abbreviated
+(`kind` = one of the 20 kinds; defaults shown where they matter).
 "Returns" names the model from [Models](#models-reference) or the raw
 dict/list shape.
 
@@ -185,10 +185,12 @@ dict/list shape.
 | Method | HTTP | Returns |
 |---|---|---|
 | `lookup(kind, target)` | `GET /api/lookup/{kind}/{target}` | `LookupResult` |
-| `ip(target)` / `phone(target)` / `username(target)` / `email(target)` / `domain(target)` / `url(target)` / `crypto(target)` / `hash_(target)` / `cve(target)` / `asn(target)` / `mac(target)` / `iban(target)` / `imei(target)` / `coords(target)` | `GET /api/lookup/{kind}/{target}` | `LookupResult` |
+| `ip(target)` / `phone(target)` / `username(target)` / `email(target)` / `domain(target)` / `url(target)` / `crypto(target)` / `hash_(target)` / `cve(target)` / `asn(target)` / `mac(target)` / `iban(target)` / `imei(target)` / `coords(target)` / `vin(target)` / `flight(target)` / `mmsi(target)` / `app(target)` / `package(target)` / `bssid(target)` / `plate(target)` | `GET /api/lookup/{kind}/{target}` | `LookupResult` |
 
-The 14 convenience methods are thin aliases for `lookup()` -- `hash_`
-carries the trailing underscore because `hash` is a Python builtin.
+The 21 convenience methods are thin aliases for `lookup()` -- `hash_`
+carries the trailing underscore because `hash` is a Python builtin, and
+`package()` is the friendly spelling of the `app` kind (both hit
+`GET /api/lookup/app/...`).
 
 ### Investigation, risk, timeline, correlation, intel
 
@@ -290,6 +292,73 @@ envelopes, never omitted). The server caps at 25 targets per request;
 the surplus is counted in `skipped`. There is no status endpoint to
 poll -- the server does not have one.
 
+### Dork builder (v6.1)
+
+| Method | HTTP | Returns |
+|---|---|---|
+| `dorks(target, kind=None)` | `GET /api/tools/dorks?target&kind` | `DorkReport` -- ready-to-open search-engine links for 13 kinds; `.links()` extracts the bare URLs |
+
+### Analytics (v6.0 part 2)
+
+All nine methods return an `AnalyticsEnvelope` -- a tagged, dict-backed
+wrapper (`.get(key)`, `.summary()`, `.raw`) that keeps every field the
+server computed.
+
+| Method | HTTP | Returns |
+|---|---|---|
+| `analytics_stats(values, bins=10)` | `POST /api/analytics/stats` body `{"values", "bins"}` | count/summary (mean, median, stdev, quartiles, skew, kurtosis) + histogram |
+| `analytics_anomalies(values, method='ensemble', threshold=None)` | `POST /api/analytics/anomalies` | anomaly records (value, score, method, detail); `threshold` is only sent for `method='zscore'` |
+| `analytics_timeseries(values)` | `POST /api/analytics/timeseries` | trend direction, slope, CUSUM changepoint count |
+| `analytics_clusters(points, eps_km=25.0, min_points=3)` | `POST /api/analytics/clusters` body `{"points": [[lat, lon], ...]}` | great-circle DBSCAN clusters |
+| `analytics_keywords(text, top=10)` | `POST /api/analytics/keywords` | stopword-filtered keyword records (term/count/weight) |
+| `analytics_language(text)` | `POST /api/analytics/language` | script fingerprint + language guess with confidence |
+| `analytics_similarity(a, b)` | `POST /api/analytics/similarity` | Jaro-Winkler, Levenshtein ratio, bigram, cosine, mean |
+| `analytics_graph(entities, links)` | `POST /api/analytics/graph` | density, components, communities, PageRank/betweenness tops, bridges |
+| `analytics_history(limit=500)` | `GET /api/analytics/history?limit` | query-history enrichment report |
+
+### Notifications (v6.0 part 4)
+
+| Method | HTTP | Returns |
+|---|---|---|
+| `notify_channels()` | `GET /api/notify/channels` | `NotifyChannels` -- channels + the type/severity vocabularies |
+| `add_notify_channel(name, channel_type, target='', events=None, min_severity=None, quiet_hours=None)` | `POST /api/notify/channels` | `NotifyChannel`; optional keys are omitted when `None` |
+| `remove_notify_channel(name)` | `DELETE /api/notify/channels/{name}` | `dict` |
+| `test_notify_channel(name)` | `POST /api/notify/channels/{name}/test` | `NotifyDelivery` -- bypasses filters; a dead pipe is data, not an exception |
+| `notify_recent(limit=20)` | `GET /api/notify/recent?limit` | `dict` -- sends, failures and skips, newest first |
+| `notify_broadcast(title, body, severity='info', event_type='manual')` | `POST /api/notify/broadcast` | `NotifyDelivery` -- per-channel filters (events, severity floor, quiet hours, dedup) apply server-side |
+
+### Automation (v6.0 part 4)
+
+| Method | HTTP | Returns |
+|---|---|---|
+| `automation_tasks()` | `GET /api/automation/tasks` | `AutomationTasks` -- tasks + actions/schedule vocabularies |
+| `add_automation_task(name, action, schedule='interval', interval_seconds=3600, at_time=None, weekday=None, params=None, enabled=True)` | `POST /api/automation/tasks` | `AutomationTaskView`; schedule-specific keys are only sent when relevant |
+| `remove_automation_task(name)` | `DELETE /api/automation/tasks/{name}` | `dict` |
+| `run_automation_task(name)` | `POST /api/automation/tasks/{name}/run` | `dict` -- a failing executor is `ok: False` data, not an HTTP error |
+| `run_due_automation()` | `POST /api/automation/run-due` | `dict` -- exactly what the background tick loop does |
+| `automation_next()` | `GET /api/automation/next` | `dict` -- stored vs recomputed `next_run` per task |
+
+### Intelligence sharing (v6.0 part 4)
+
+| Method | HTTP | Returns |
+|---|---|---|
+| `export_stix(kind, target)` | `GET /api/export/stix/{kind}/{target}` | `StixBundle` -- `.object_types()`, `.indicator_count()`; deterministic UUIDv5 ids |
+| `export_misp(kind, target)` | `GET /api/export/misp/{kind}/{target}` | `MispEvent` -- `.attribute_count()`, `.to_json()`; MISP core format |
+
+Both require a stored lookup for the exact target (case-insensitive)
+-- the exports describe what was observed, so run the lookup first; a
+missing one raises `NotFoundError`.
+
+### Live stream
+
+| Method | HTTP | Returns |
+|---|---|---|
+| `set_stream_topics(topics)` | `POST /api/stream/subscribe` body `{"topics"}` | `dict`; accepts a list or a comma-separated string; empty list clears the filter |
+
+The stream itself (`GET /api/stream`) is server-sent events -- consume
+it with your own SSE client; the SDK deliberately does not own a
+long-lived connection.
+
 ### Escape hatches
 
 | Method | HTTP | Returns |
@@ -303,7 +372,7 @@ mapping as the typed methods.
 
 ## Models reference
 
-31 dataclasses in `obscuralens.sdk.models`, all built through
+31+9 dataclasses in `obscuralens.sdk.models`, all built through
 `from_dict()` which tolerates extra and missing keys, and all keep the
 original payload on `.raw`. The ones you will meet most:
 
@@ -324,6 +393,12 @@ original payload on `.raw`. The ones you will meet most:
 | `AlertEntry` | one event-log row: event type, timestamp, payload, delivery status |
 | `AlertConfig` | `.webhook_url`, `.events` whitelist, `.enabled` / `.is_enabled()`, `.event_types`, `.log` (recent `AlertEntry` rows) |
 | `PatternFinding` / `PatternReport` | hour/weekday histograms, 7x24 activity matrix, cadence statistics, bursts, verdict lines; `.peak_hour` and friends |
+| `DorkReport` | `.target`, `.detected_kind`, `.count`, `.dorks` (engine/label/url records), `.dork_kinds`; `.links()` -- just the URLs |
+| `AnalyticsEnvelope` | tagged analytics payload: `.kind` (which endpoint), `.get(key, default)`, `.summary()`, `.raw`; `__getitem__`/`__contains__` |
+| `NotifyChannel` / `NotifyChannels` / `NotifyDelivery` | channel spec (name/type/target/events/min_severity/quiet_hours); the registry + vocabularies; one delivery outcome (ok/sent/skipped/failed/error/result) |
+| `AutomationTaskView` / `AutomationTasks` | one scheduled task (name/action/params/schedule/enabled/last_run/next_run/run_count/error_count); the registry + actions/schedule_types |
+| `StixBundle` | `.type`/`.id`/`.objects`; `.object_types()` (Counter of SDO types), `.indicator_count()`, `.summary()` |
+| `MispEvent` | wraps `{'Event': {...}}`; `.attribute_count()`, `.to_json(indent=None)`, `.summary()` |
 
 The rest (`KindInfo`, `ServiceKey`, `HistoryItem`/`HistoryResult`,
 `BatchEntry`/`BatchProgress`, `IntelVerdict`, `DiffReport`,
@@ -433,12 +508,51 @@ Catch order matters: the specific subclasses first, `SdkError` last.
 `ping()` is the cheap pre-flight when you want a boolean instead of an
 exception.
 
+## Investigation sessions (v6.0 part 5)
+
+`InvestigationSession` is a thin workflow layer over the client for
+guided multi-step investigations: every action records a step (action,
+target, ok/error, duration, field count), errors are captured by
+default instead of aborting the run, and the whole thing exports as a
+JSON receipt you can reload later:
+
+```python
+from obscuralens.sdk import ObscuraLensClient, InvestigationSession
+
+with ObscuraLensClient() as client:
+    with InvestigationSession(client, label='phishing-2024') as session:
+        session.lookup('ip', '1.2.3.4')
+        session.investigate('evil.example.com')
+        session.risk('domain', 'evil.example.com')
+        session.note('victim reported 2024-05-01')
+        session.dorks('evil.example.com')
+        session.to_case('Phishing case')          # case + every target as items
+        session.export_stix('domain', 'evil.example.com')
+        print(session.summary())                  # multi-line human report
+        session.dump('session.json')              # receipt, reloadable
+```
+
+- `session.steps` -- the step log; `len(session)` and iteration walk it.
+- `session.targets()` -- every distinct target seen, sorted.
+- `strict=True` (constructor) re-raises step errors instead of
+  recording them and continuing -- default is `strict=False`.
+- `to_case(name)` creates the case through the API and adds every
+  collected target as a case item; per-item failures are recorded as
+  steps, not raised.
+- `dump(path)` / `InvestigationSession.load(path)` -- the receipt
+  round-trips; `load` works without a client (replay/audit mode).
+- Everything is composition over `ObscuraLensClient` -- the session
+  owns no HTTP of its own, so a `StaticTransport` test double covers it
+  end to end.
+
 ## The async client
 
 `AsyncObscuraLensClient` mirrors the sync surface as coroutines:
-`ping`, `health`, `lookup` plus all 14 kind conveniences, `investigate`,
+`ping`, `health`, `lookup` plus all 21 kind conveniences, `investigate`,
 `risk`, `timeline`, `correlate`, `correlate_pair`, `intel`, `sources`,
-`sources_health`, `stats`, `kinds`, `history`, `cases`, `watch`, plus a
+`sources_health`, `stats`, `kinds`, `history`, `cases`, `watch`, the
+nine `analytics_*` methods, the six `notify_*` methods, the six
+`automation_*` methods, `export_stix`/`export_misp`, `dorks`, and a
 `gather()` convenience. Constructor arguments are the sync ones (minus
 `sleep_fn`) plus `executor` / `max_workers`.
 
@@ -480,7 +594,7 @@ testable offline, exactly like the sync one.
 
 ## Limitations, honestly
 
-- The SDK models the v5.x REST API of `obscuralens serve` -- it cannot
+- The SDK models the v6.x REST API of `obscuralens serve` -- it cannot
   talk to the CLI directly, and it cannot run lookups in-process.
 - `batch()` is synchronous client-side because the server endpoint is
   synchronous; 25 targets per request is a server cap, not an SDK one.

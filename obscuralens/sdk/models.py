@@ -16,8 +16,18 @@ classmethod::
     payload = client.raw_get('/api/lookup/ip/8.8.8.8')
     result = LookupResult.from_dict(payload, kind='ip')
     print(result.summary())
+
+v6 additions (parts 2-4): :class:`DorkReport` for the dork builder,
+:class:`AnalyticsEnvelope` wrapping the nine ``/api/analytics/*``
+endpoints, :class:`NotifyChannel` / :class:`NotifyChannels` /
+:class:`NotifyDelivery` for the notification bus,
+:class:`AutomationTaskView` / :class:`AutomationTasks` for the
+scheduler, and :class:`StixBundle` / :class:`MispEvent` for the
+intelligence-sharing exports.
 """
 
+import json as _json
+from collections import Counter
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from datetime import datetime
@@ -56,6 +66,15 @@ __all__ = [
     'BatchEntry',
     'BatchProgress',
     'IntelVerdict',
+    'DorkReport',
+    'AnalyticsEnvelope',
+    'NotifyChannel',
+    'NotifyChannels',
+    'NotifyDelivery',
+    'AutomationTaskView',
+    'AutomationTasks',
+    'StixBundle',
+    'MispEvent',
     'TARGET_KEYS',
     'KINDS',
 ]
@@ -2046,3 +2065,987 @@ class IntelVerdict:
         """One-liner: ``"45.148.10.99: 2 feed(s), tor exit"``."""
         extra = ', tor exit' if self.tor_exit else ''
         return f'{self.ip or "?"}: {self.listed_count} feed hit(s){extra}'
+
+
+# ---------------------------------------------------------------------------
+# v6.0 — dork builder
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DorkReport:
+    """
+    The ``GET /api/tools/dorks`` response — ready-to-open search links.
+
+    The server auto-detects the target's kind (unless overridden), then
+    renders local search-engine links. Every dork entry is a dict with
+    ``engine`` / ``label`` / ``query`` / ``url`` keys; the analyst stays
+    in control of every active query.
+
+    Attributes:
+        target: the queried value.
+        detected_kind: the server's auto-detected (or requested) kind.
+        count: number of dork links as reported by the server.
+        dorks: the link dicts, verbatim.
+        dork_kinds: kinds that carry dork templates today.
+        raw: the untouched payload.
+    """
+
+    target: str = ''
+    detected_kind: str = ''
+    count: int = 0
+    dorks: List[Dict[str, Any]] = dc_field(default_factory=list)
+    dork_kinds: List[str] = dc_field(default_factory=list)
+    raw: Dict[str, Any] = dc_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> 'DorkReport':
+        """
+        Build from a dorks payload.
+
+        Args:
+            data: ``{'target': ..., 'detected_kind': ..., 'count': n,
+                'dorks': [{'engine', 'label', 'query', 'url'}, ...],
+                'dork_kinds': [...]}``.
+
+        Returns:
+            A populated :class:`DorkReport`; junk input yields defaults.
+
+        Example:
+            >>> report = DorkReport.from_dict({'target': 'example.com',
+            ...     'detected_kind': 'domain', 'count': 1,
+            ...     'dorks': [{'engine': 'Google', 'label': 'Pages',
+            ...                'query': 'site:example.com',
+            ...                'url': 'https://www.google.com/search?q=x'}],
+            ...     'dork_kinds': ['domain']})
+            >>> report.links()
+            ['https://www.google.com/search?q=x']
+        """
+        payload = from_dict(data)
+        dorks = [dict(item) for item in payload.get('dorks') or []
+                 if isinstance(item, Mapping)]
+        return cls(
+            target=_as_str(_pick(payload, 'target', 'value')),
+            detected_kind=_as_str(_pick(payload, 'detected_kind', 'kind')),
+            count=_as_int(payload.get('count'), default=len(dorks)),
+            dorks=dorks,
+            dork_kinds=_as_str_list(_pick(payload, 'dork_kinds', 'kinds')),
+            raw=payload,
+        )
+
+    # -- accessors ----------------------------------------------------------
+
+    def links(self) -> List[str]:
+        """
+        The dork URLs in payload order (the analyst clicks these).
+
+        Returns:
+            The ``url`` value of every dork entry, skipping malformed
+            entries without a URL.
+
+        Example:
+            >>> DorkReport.from_dict({'dorks': [{'url': 'https://x'}]}).links()
+            ['https://x']
+        """
+        return [_as_str(dork.get('url')) for dork in self.dorks
+                if isinstance(dork, Mapping) and dork.get('url')]
+
+    def engines(self) -> List[str]:
+        """Distinct engine names in first-appearance order."""
+        seen: Dict[str, None] = {}
+        for dork in self.dorks:
+            engine = _as_str(dork.get('engine') if isinstance(dork, Mapping)
+                             else None)
+            if engine:
+                seen.setdefault(engine, None)
+        return list(seen.keys())
+
+    def for_engine(self, engine: str) -> List[Dict[str, Any]]:
+        """Dork entries for one engine (case-insensitive)."""
+        needle = engine.lower()
+        return [dork for dork in self.dorks
+                if _as_str(dork.get('engine')).lower() == needle]
+
+    def summary(self) -> str:
+        """
+        One-liner: ``"example.com [domain]: 6 dork(s) across 3 engine(s)"``.
+
+        Example:
+            >>> DorkReport.from_dict({'target': 'example.com',
+            ...     'detected_kind': 'domain', 'count': 0,
+            ...     'dorks': [], 'dork_kinds': []}).summary()
+            'example.com [domain]: 0 dork(s) across 0 engine(s)'
+        """
+        return (f'{self.target or "?"} [{self.detected_kind or "?"}]: '
+                f'{self.count} dork(s) across '
+                f'{len(self.engines())} engine(s)')
+
+
+# ---------------------------------------------------------------------------
+# v6.0 part 2 — analytics envelope
+# ---------------------------------------------------------------------------
+
+@dataclass
+class AnalyticsEnvelope:
+    """
+    Generic wrapper for the nine ``/api/analytics/*`` payloads.
+
+    The analytics endpoints each return a small, endpoint-specific dict
+    (``{'count', 'summary', 'histogram'}`` for stats,
+    ``{'keyword_count', 'keywords'}`` for keywords, ...). Rather than
+    nine near-identical dataclasses, one tolerant envelope keeps the
+    payload whole and tags it with the endpoint ``kind`` so downstream
+    code can branch on it::
+
+        envelope = client.analytics_stats([1, 2, 3])
+        envelope.kind                  # 'stats'
+        envelope.get('count')          # 3
+        envelope['summary']            # the raw summarize() block
+        envelope.payload['summary']    # same, via the verbatim payload
+
+    Attributes:
+        kind: the endpoint tag (``stats``, ``anomalies``, ``timeseries``,
+            ``clusters``, ``keywords``, ``language``, ``similarity``,
+            ``graph``, ``history``).
+        payload: the endpoint's JSON response, kept verbatim.
+    """
+
+    kind: str = ''
+    payload: Dict[str, Any] = dc_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any, kind: Optional[str] = None) -> 'AnalyticsEnvelope':
+        """
+        Build from any analytics payload.
+
+        Args:
+            data: the endpoint's JSON response (any mapping).
+            kind: the endpoint tag when the caller knows it; read from
+                ``data['kind']`` or ``data['analysis']`` otherwise.
+
+        Returns:
+            A populated :class:`AnalyticsEnvelope`; junk input yields an
+            empty payload and never raises.
+
+        Example:
+            >>> envelope = AnalyticsEnvelope.from_dict(
+            ...     {'count': 3, 'summary': {'mean': 2.0}}, kind='stats')
+            >>> envelope.get('count')
+            3
+        """
+        payload = from_dict(data)
+        resolved = _as_str(kind or payload.get('kind')
+                           or payload.get('analysis'))
+        return cls(kind=resolved, payload=payload)
+
+    # -- accessors ----------------------------------------------------------
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        Read one key from the analytics payload.
+
+        Args:
+            key: payload key (``'count'``, ``'summary'``, ...).
+            default: value returned when the key is absent/``None``.
+
+        Returns:
+            The payload value or ``default``.
+
+        Example:
+            >>> AnalyticsEnvelope.from_dict({'a': 1}).get('missing', 'x')
+            'x'
+        """
+        return self.payload.get(key, default)
+
+    def keys(self) -> List[str]:
+        """The payload's top-level keys, in response order."""
+        return list(self.payload.keys())
+
+    def __getitem__(self, key: str) -> Any:
+        """
+        Read one payload key with dict semantics.
+
+        Unlike :meth:`get` a missing key raises ``KeyError`` — useful
+        when the contract of a specific endpoint is known.
+
+        Args:
+            key: payload key (``'count'``, ``'summary'``, ...).
+
+        Returns:
+            The payload value.
+
+        Raises:
+            KeyError: the key is absent.
+
+        Example:
+            >>> AnalyticsEnvelope.from_dict({'count': 3})['count']
+            3
+        """
+        return self.payload[key]
+
+    def __contains__(self, key: object) -> bool:
+        """``'count' in envelope`` — payload key membership."""
+        return key in self.payload
+
+    @property
+    def count(self) -> Optional[int]:
+        """
+        The payload's count-ish number, when one exists.
+
+        Looks for ``count`` first, then any ``<something>_count`` key
+        (``keyword_count``, ``cluster_count``, ``anomaly_count``,
+        ``entity_count``, ``point_count``...).
+        """
+        if 'count' in self.payload:
+            return _as_int(self.payload.get('count'))
+        for key, value in self.payload.items():
+            if key.endswith('_count'):
+                return _as_int(value)
+        return None
+
+    def summary(self) -> str:
+        """
+        One-liner naming the endpoint and its headline keys.
+
+        Example:
+            >>> AnalyticsEnvelope.from_dict({'count': 3}, 'stats').summary()
+            'stats: 1 key(s) — count'
+        """
+        keys = self.keys()
+        shown = ', '.join(keys[:4]) + (', …' if len(keys) > 4 else '')
+        return f'{self.kind or "analytics"}: {len(keys)} key(s) — {shown}'
+
+
+# ---------------------------------------------------------------------------
+# v6.0 part 4 — notifications
+# ---------------------------------------------------------------------------
+
+@dataclass
+class NotifyChannel:
+    """
+    One configured notification channel (webhook/telegram/discord/
+    slack/smtp).
+
+    ``from_dict`` accepts the bare channel dict *or* the wrapped
+    ``{'ok': True, 'channel': {...}}`` shape the add-channel endpoint
+    returns.
+
+    Attributes:
+        name: unique human label.
+        type: one of the server's ``channel_types``
+            (webhook/telegram/discord/slack/smtp).
+        target: where messages go (URL, ``bot_token:chat_id``, SMTP
+            spec); empty means "use the global config key".
+        events: subscribed event types (empty = everything).
+        enabled: master switch — disabled channels are never contacted.
+        min_severity: weakest severity rung worth waking this channel.
+        quiet_hours: optional ``(start, end)`` local-hour pair.
+        dedup_key: optional dedup recipe (``event``/``title``/
+            ``event+title``).
+        note: free-form operator note.
+        last_sent: ISO timestamp of the last delivery, when reported.
+        raw: the untouched channel dict.
+    """
+
+    name: str = ''
+    type: str = ''
+    target: str = ''
+    events: List[str] = dc_field(default_factory=list)
+    enabled: bool = True
+    min_severity: str = 'info'
+    quiet_hours: Optional[List[int]] = None
+    dedup_key: Optional[str] = None
+    note: str = ''
+    last_sent: str = ''
+    raw: Dict[str, Any] = dc_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> 'NotifyChannel':
+        """
+        Build from a channel dict (bare or ``{'channel': {...}}``-wrapped).
+
+        Args:
+            data: the channel mapping, or the add-channel response.
+
+        Returns:
+            A populated :class:`NotifyChannel`; junk input yields
+            defaults and never raises.
+
+        Example:
+            >>> channel = NotifyChannel.from_dict(
+            ...     {'name': 'team-chat', 'type': 'telegram',
+            ...      'target': 'bot:chat', 'events': ['lookup']})
+            >>> channel.is_enabled()
+            True
+        """
+        payload = from_dict(data)
+        if isinstance(payload.get('channel'), Mapping):
+            payload = from_dict(payload.get('channel'))
+        quiet = payload.get('quiet_hours')
+        if isinstance(quiet, Mapping):
+            quiet = [quiet.get('start'), quiet.get('end')]
+        quiet_hours: Optional[List[int]] = None
+        if isinstance(quiet, (list, tuple)) and len(quiet) == 2:
+            quiet_hours = [_as_int(quiet[0]), _as_int(quiet[1])]
+        dedup_key = _as_str(payload.get('dedup_key')) or None
+        return cls(
+            name=_as_str(payload.get('name')),
+            type=_as_str(_pick(payload, 'type', 'channel_type')),
+            target=_as_str(payload.get('target')),
+            events=_as_str_list(payload.get('events')),
+            enabled=_as_bool(payload.get('enabled'), default=True),
+            min_severity=_as_str(payload.get('min_severity'),
+                                 default='info') or 'info',
+            quiet_hours=quiet_hours,
+            dedup_key=dedup_key,
+            note=_as_str(payload.get('note')),
+            last_sent=_as_str(payload.get('last_sent')),
+            raw=payload,
+        )
+
+    # -- helpers ------------------------------------------------------------
+
+    def is_enabled(self) -> bool:
+        """True when the channel's master switch is on."""
+        return self.enabled
+
+    def subscribes_to(self, event: str) -> bool:
+        """
+        True when this channel wants one event type.
+
+        An empty ``events`` list subscribes to everything.
+        """
+        if not self.events:
+            return True
+        needle = event.lower()
+        return any(item.lower() == needle for item in self.events)
+
+    def summary(self) -> str:
+        """
+        One-liner: ``"team-chat [telegram]: 2 event(s), enabled"``.
+
+        Example:
+            >>> NotifyChannel.from_dict({'name': 'x', 'type': 'webhook',
+            ...     'events': ['lookup']}).summary()
+            'x [webhook]: 1 event(s), enabled'
+        """
+        state = 'enabled' if self.enabled else 'disabled'
+        events = 'everything' if not self.events \
+            else f'{len(self.events)} event(s)'
+        return f'{self.name or "?"} [{self.type or "?"}]: {events}, {state}'
+
+
+@dataclass
+class NotifyChannels:
+    """
+    The ``GET /api/notify/channels`` response — channels + vocabularies.
+
+    Attributes:
+        count: channel count as reported by the server.
+        channels: the parsed channels.
+        channel_types: the protocol vocabulary (valid ``type`` values).
+        severities: the severity ladder, weakest to strongest.
+        raw: the untouched payload.
+    """
+
+    count: int = 0
+    channels: List[NotifyChannel] = dc_field(default_factory=list)
+    channel_types: List[str] = dc_field(default_factory=list)
+    severities: List[str] = dc_field(default_factory=list)
+    raw: Dict[str, Any] = dc_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> 'NotifyChannels':
+        """
+        Build from a channels payload.
+
+        Args:
+            data: ``{'count': n, 'channels': [...],
+                'channel_types': [...], 'severities': [...]}``.
+
+        Returns:
+            A populated :class:`NotifyChannels`.
+
+        Example:
+            >>> channels = NotifyChannels.from_dict(
+            ...     {'count': 1, 'channels': [{'name': 'ops',
+            ...      'type': 'webhook'}],
+            ...      'channel_types': ['webhook'],
+            ...      'severities': ['info', 'low']})
+            >>> channels.by_name('ops').type
+            'webhook'
+        """
+        payload = from_dict(data)
+        channels = [NotifyChannel.from_dict(item)
+                    for item in payload.get('channels') or []
+                    if isinstance(item, Mapping)]
+        return cls(
+            count=_as_int(payload.get('count'), default=len(channels)),
+            channels=channels,
+            channel_types=_as_str_list(payload.get('channel_types')),
+            severities=_as_str_list(payload.get('severities')),
+            raw=payload,
+        )
+
+    # -- accessors ----------------------------------------------------------
+
+    def by_name(self, name: str) -> Optional[NotifyChannel]:
+        """One channel by name (case-insensitive), or ``None``."""
+        needle = name.lower()
+        for channel in self.channels:
+            if channel.name.lower() == needle:
+                return channel
+        return None
+
+    def enabled(self) -> List[NotifyChannel]:
+        """Only the channels whose master switch is on."""
+        return [channel for channel in self.channels if channel.enabled]
+
+    def summary(self) -> str:
+        """One-liner: ``"1 channel(s), 1 enabled, 5 type(s)"``."""
+        return (f'{self.count} channel(s), {len(self.enabled())} enabled, '
+                f'{len(self.channel_types)} type(s)')
+
+
+@dataclass
+class NotifyDelivery:
+    """
+    The outcome of a broadcast or a channel test.
+
+    Two shapes flow through this model: the test-channel response
+    ``{'ok', 'error', 'channel'}`` and the broadcast aggregate
+    ``{'sent', 'skipped', 'total', 'failed': [...], 'results': [...]}``.
+    Both are normalised onto the same fields.
+
+    Attributes:
+        ok: True when nothing failed (test delivered / no broadcast
+            failures). Explicit in test payloads; derived for broadcast
+            aggregates; False when the payload carries neither.
+        sent: channels the broadcast reached.
+        skipped: channels filtered out (disabled, quiet hours, dedup).
+        failed: ``[{'channel', 'error'}, ...]`` failure records.
+        total: channels the broadcast considered.
+        error: the error text of a failed test delivery.
+        channel: the channel name a test probed.
+        result: the broadcast's per-channel outcome records
+            (``[{'channel', 'ok', ...}, ...]``); empty for test probes.
+        raw: the untouched payload.
+    """
+
+    ok: bool = False
+    sent: int = 0
+    skipped: int = 0
+    failed: List[Dict[str, Any]] = dc_field(default_factory=list)
+    total: int = 0
+    error: str = ''
+    channel: str = ''
+    result: List[Dict[str, Any]] = dc_field(default_factory=list)
+    raw: Dict[str, Any] = dc_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> 'NotifyDelivery':
+        """
+        Build from a test or broadcast payload.
+
+        Args:
+            data: the ``POST /api/notify/channels/{name}/test`` or
+                ``POST /api/notify/broadcast`` response.
+
+        Returns:
+            A populated :class:`NotifyDelivery`; junk input yields
+            defaults and never raises.
+
+        Example:
+            >>> delivery = NotifyDelivery.from_dict(
+            ...     {'ok': False, 'error': 'no target configured',
+            ...      'channel': 'team-chat'})
+            >>> delivery.ok
+            False
+        """
+        payload = from_dict(data)
+        failed = [dict(item) for item in payload.get('failed') or []
+                  if isinstance(item, Mapping)]
+        result = [dict(item) for item in _pick(payload, 'results', 'result')
+                  or [] if isinstance(item, Mapping)]
+        ok_raw = payload.get('ok')
+        broadcast_keys = ('sent', 'skipped', 'total', 'failed', 'results')
+        looks_like_broadcast = any(key in payload for key in broadcast_keys)
+        if ok_raw is not None:
+            ok = _as_bool(ok_raw)
+        elif looks_like_broadcast:
+            ok = not failed
+        else:
+            ok = False
+        return cls(
+            ok=ok,
+            sent=_as_int(payload.get('sent')),
+            skipped=_as_int(payload.get('skipped')),
+            failed=failed,
+            total=_as_int(payload.get('total')),
+            error=_as_str(payload.get('error')),
+            channel=_as_str(payload.get('channel')),
+            result=result,
+            raw=payload,
+        )
+
+    # -- helpers ------------------------------------------------------------
+
+    @property
+    def failure_count(self) -> int:
+        """How many channels failed (broadcast shape)."""
+        return len(self.failed)
+
+    def failure_lines(self) -> List[str]:
+        """One ``"channel: error"`` line per failed delivery."""
+        return [f"{_as_str(item.get('channel'))}: "
+                f"{_as_str(item.get('error'))}" for item in self.failed]
+
+    def summary(self) -> str:
+        """
+        One-liner describing the delivery attempt.
+
+        Test shape: ``"team-chat: delivered"`` /
+        ``"team-chat: FAILED: <error>"``. Broadcast shape:
+        ``"2 sent, 1 skipped, 1 failed of 4"``.
+
+        Example:
+            >>> NotifyDelivery.from_dict({'sent': 2, 'skipped': 1,
+            ...     'failed': [], 'total': 3}).summary()
+            '2 sent, 1 skipped, 0 failed of 3'
+        """
+        if self.channel and self.total == 0 and self.sent == 0 \
+                and self.skipped == 0 and not self.failed:
+            state = 'delivered' if self.ok else f'FAILED: {self.error or "?"}'
+            return f'{self.channel}: {state}'
+        return (f'{self.sent} sent, {self.skipped} skipped, '
+                f'{self.failure_count} failed of {self.total}')
+
+
+# ---------------------------------------------------------------------------
+# v6.0 part 4 — automation
+# ---------------------------------------------------------------------------
+
+@dataclass
+class AutomationTaskView:
+    """
+    One scheduled task (the scheduler's ``TaskSpec`` as JSON).
+
+    ``from_dict`` accepts the bare task dict *or* the wrapped
+    ``{'ok': True, 'task': {...}}`` shape the add-task endpoint returns.
+
+    Attributes:
+        name: unique human label.
+        action: executor action (``watch_check`` / ``pipeline`` /
+            ``report`` / ``feed_refresh`` / ``notify_test``).
+        params: the executor's payload (e.g. ``{'path': ...}``).
+        schedule: ``interval`` / ``daily`` / ``weekly``.
+        interval_seconds: period for the interval schedule.
+        at_time: ``'HH:MM'`` local time for daily/weekly schedules.
+        weekday: 0 = Monday ... 6 = Sunday (weekly schedule).
+        enabled: master switch — disabled tasks are never due.
+        last_run: ISO timestamp of the last execution.
+        next_run: ISO timestamp of the next scheduled run.
+        run_count: how many times the task has executed.
+        error_count: how many executions failed.
+        last_error: the most recent failure reason.
+        raw: the untouched task dict.
+    """
+
+    name: str = ''
+    action: str = ''
+    params: Dict[str, Any] = dc_field(default_factory=dict)
+    schedule: str = 'interval'
+    interval_seconds: int = 3600
+    at_time: str = ''
+    weekday: int = 0
+    enabled: bool = True
+    last_run: Optional[str] = None
+    next_run: Optional[str] = None
+    run_count: int = 0
+    error_count: int = 0
+    last_error: str = ''
+    raw: Dict[str, Any] = dc_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> 'AutomationTaskView':
+        """
+        Build from a task dict (bare or ``{'task': {...}}``-wrapped).
+
+        Args:
+            data: the task mapping, or the add-task response.
+
+        Returns:
+            A populated :class:`AutomationTaskView`; junk input yields
+            defaults and never raises.
+
+        Example:
+            >>> task = AutomationTaskView.from_dict(
+            ...     {'name': 'daily-watch', 'action': 'watch_check',
+            ...      'schedule': 'daily', 'at_time': '09:00'})
+            >>> task.is_due_style()
+            'daily'
+        """
+        payload = from_dict(data)
+        if isinstance(payload.get('task'), Mapping):
+            payload = from_dict(payload.get('task'))
+        return cls(
+            name=_as_str(payload.get('name')),
+            action=_as_str(payload.get('action')),
+            params=from_dict(payload.get('params')),
+            schedule=_as_str(payload.get('schedule'), default='interval')
+            or 'interval',
+            interval_seconds=_as_int(payload.get('interval_seconds'),
+                                     default=3600),
+            at_time=_as_str(payload.get('at_time')),
+            weekday=_as_int(payload.get('weekday')),
+            enabled=_as_bool(payload.get('enabled'), default=True),
+            last_run=_as_str(payload.get('last_run')) or None,
+            next_run=_as_str(payload.get('next_run')) or None,
+            run_count=_as_int(payload.get('run_count')),
+            error_count=_as_int(payload.get('error_count')),
+            last_error=_as_str(payload.get('last_error')),
+            raw=payload,
+        )
+
+    # -- helpers ------------------------------------------------------------
+
+    def is_due_style(self) -> str:
+        """The schedule flavour: ``interval`` / ``daily`` / ``weekly``."""
+        return self.schedule
+
+    def is_healthy(self) -> bool:
+        """True when the task has never failed (or never ran)."""
+        return not self.last_error and self.error_count == 0
+
+    def summary(self) -> str:
+        """
+        One-liner: ``"daily-watch [watch_check, daily 09:00]: 12 run(s)"``.
+
+        Example:
+            >>> AutomationTaskView.from_dict({'name': 'n', 'action': 'a',
+            ...     'schedule': 'interval', 'interval_seconds': 60
+            ...     }).summary()
+            'n [a, every 60s]: 0 run(s)'
+        """
+        if self.schedule == 'interval':
+            when = f'every {self.interval_seconds}s'
+        elif self.schedule == 'weekly':
+            when = f'weekly {self.at_time or "?"}'
+        else:
+            when = f'daily {self.at_time or "?"}'
+        return f'{self.name or "?"} [{self.action or "?"}, {when}]: ' \
+               f'{self.run_count} run(s)'
+
+
+@dataclass
+class AutomationTasks:
+    """
+    The ``GET /api/automation/tasks`` response — tasks + vocabularies.
+
+    Attributes:
+        count: task count as reported by the server.
+        tasks: the parsed tasks.
+        actions: valid executor actions.
+        schedule_types: valid schedule flavours.
+        raw: the untouched payload.
+    """
+
+    count: int = 0
+    tasks: List[AutomationTaskView] = dc_field(default_factory=list)
+    actions: List[str] = dc_field(default_factory=list)
+    schedule_types: List[str] = dc_field(default_factory=list)
+    raw: Dict[str, Any] = dc_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> 'AutomationTasks':
+        """
+        Build from a tasks payload.
+
+        Args:
+            data: ``{'count': n, 'tasks': [...], 'actions': [...],
+                'schedule_types': [...]}``.
+
+        Returns:
+            A populated :class:`AutomationTasks`.
+
+        Example:
+            >>> tasks = AutomationTasks.from_dict(
+            ...     {'count': 1, 'tasks': [{'name': 't', 'action': 'a'}],
+            ...      'actions': ['a'], 'schedule_types': ['interval']})
+            >>> tasks.by_name('t').action
+            'a'
+        """
+        payload = from_dict(data)
+        tasks = [AutomationTaskView.from_dict(item)
+                 for item in payload.get('tasks') or []
+                 if isinstance(item, Mapping)]
+        return cls(
+            count=_as_int(payload.get('count'), default=len(tasks)),
+            tasks=tasks,
+            actions=_as_str_list(payload.get('actions')),
+            schedule_types=_as_str_list(payload.get('schedule_types')),
+            raw=payload,
+        )
+
+    # -- accessors ----------------------------------------------------------
+
+    def by_name(self, name: str) -> Optional[AutomationTaskView]:
+        """One task by name (case-insensitive), or ``None``."""
+        needle = name.lower()
+        for task in self.tasks:
+            if task.name.lower() == needle:
+                return task
+        return None
+
+    def enabled(self) -> List[AutomationTaskView]:
+        """Only the tasks whose master switch is on."""
+        return [task for task in self.tasks if task.enabled]
+
+    def summary(self) -> str:
+        """One-liner: ``"2 task(s), 2 enabled, 5 action(s)"``."""
+        return (f'{self.count} task(s), {len(self.enabled())} enabled, '
+                f'{len(self.actions)} action(s)')
+
+
+# ---------------------------------------------------------------------------
+# v6.0 part 4 — intelligence-sharing exports
+# ---------------------------------------------------------------------------
+
+@dataclass
+class StixBundle:
+    """
+    The ``GET /api/export/stix/{kind}/{target}`` response.
+
+    A STIX 2.1 bundle: identity + indicator (or vulnerability for CVEs)
+    + observed data + provenance note, deterministic UUIDv5 ids so
+    re-imports merge. Objects are kept as verbatim dicts — the SDK does
+    not re-model the STIX object layer.
+
+    Attributes:
+        type: always ``'bundle'``.
+        id: the bundle id (``bundle--<uuid5>``).
+        objects: the STIX objects, in bundle order.
+        raw: the untouched payload.
+    """
+
+    type: str = 'bundle'
+    id: str = ''
+    objects: List[Dict[str, Any]] = dc_field(default_factory=list)
+    raw: Dict[str, Any] = dc_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> 'StixBundle':
+        """
+        Build from a bundle payload.
+
+        Args:
+            data: ``{'type': 'bundle', 'id': ..., 'objects': [...]}``.
+
+        Returns:
+            A populated :class:`StixBundle`; junk input yields defaults
+            and never raises.
+
+        Example:
+            >>> bundle = StixBundle.from_dict({'type': 'bundle', 'id': 'b',
+            ...     'objects': [{'type': 'indicator'},
+            ...                 {'type': 'identity'}]})
+            >>> dict(bundle.object_types())
+            {'indicator': 1, 'identity': 1}
+        """
+        payload = from_dict(data)
+        objects = [dict(item) for item in payload.get('objects') or []
+                   if isinstance(item, Mapping)]
+        return cls(
+            type=_as_str(payload.get('type'), default='bundle') or 'bundle',
+            id=_as_str(payload.get('id')),
+            objects=objects,
+            raw=payload,
+        )
+
+    # -- accessors ----------------------------------------------------------
+
+    def object_types(self) -> Counter:
+        """
+        A :class:`~collections.Counter` of STIX object types → counts.
+
+        Example:
+            >>> StixBundle.from_dict({'objects': [
+            ...     {'type': 'indicator'}, {'type': 'indicator'},
+            ...     {'type': 'note'}]}).object_types()
+            Counter({'indicator': 2, 'note': 1})
+        """
+        return Counter(_as_str(item.get('type'))
+                       for item in self.objects
+                       if isinstance(item, Mapping))
+
+    def indicator_count(self) -> int:
+        """
+        How many indicator objects the bundle carries.
+
+        Example:
+            >>> StixBundle.from_dict({'objects': [
+            ...     {'type': 'indicator'}, {'type': 'identity'}]}
+            ...     ).indicator_count()
+            1
+        """
+        return sum(1 for item in self.objects
+                   if isinstance(item, Mapping)
+                   and _as_str(item.get('type')) == 'indicator')
+
+    def objects_of_type(self, stix_type: str) -> List[Dict[str, Any]]:
+        """The objects of one STIX type (e.g. ``'vulnerability'``)."""
+        needle = stix_type.lower()
+        return [item for item in self.objects
+                if isinstance(item, Mapping)
+                and _as_str(item.get('type')).lower() == needle]
+
+    def to_json(self, indent: Optional[int] = None) -> str:
+        """
+        Serialise the bundle back to JSON text.
+
+        Args:
+            indent: pretty-print indent (``None`` = compact).
+
+        Returns:
+            The JSON document (ready for ``.stix`` / ``.json`` files).
+
+        Example:
+            >>> StixBundle.from_dict({'objects': []}).to_json()
+            '{"type": "bundle", "id": "", "objects": []}'
+        """
+        return _json.dumps({'type': self.type, 'id': self.id,
+                            'objects': self.objects},
+                           indent=indent, ensure_ascii=False,
+                           default=str)
+
+    def summary(self) -> str:
+        """One-liner: ``"bundle: 5 object(s), 1 indicator(s)"``."""
+        return (f'{self.type or "bundle"}: {len(self.objects)} object(s), '
+                f'{self.indicator_count()} indicator(s)')
+
+
+@dataclass
+class MispEvent:
+    """
+    The ``GET /api/export/misp/{kind}/{target}`` response.
+
+    A MISP core-format event: the fixed ObscuraLens ``orgc``, a
+    deterministic id, the target attribute plus one text attribute per
+    ``info`` field, and a threat level derived from source health. The
+    ``Event`` block is kept verbatim; helpers expose the attribute and
+    object graphs.
+
+    Attributes:
+        event: the ``Event`` block (info, date, threat_level_id, orgc,
+            Attribute list, Tag list...).
+        raw: the untouched payload (``{'Event': {...}}``).
+    """
+
+    event: Dict[str, Any] = dc_field(default_factory=dict)
+    raw: Dict[str, Any] = dc_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> 'MispEvent':
+        """
+        Build from a MISP payload.
+
+        Args:
+            data: ``{'Event': {...}}`` (the Event block itself is also
+                accepted — a payload whose top level *is* the event).
+
+        Returns:
+            A populated :class:`MispEvent`; junk input yields defaults
+            and never raises.
+
+        Example:
+            >>> event = MispEvent.from_dict({'Event': {
+            ...     'info': 'ObscuraLens domain lookup',
+            ...     'Attribute': [{'value': 'example.com'}]}})
+            >>> event.attribute_count()
+            1
+        """
+        payload = from_dict(data)
+        block = payload.get('Event') if isinstance(payload.get('Event'),
+                                                   Mapping) else None
+        if block is None:
+            # Tolerate the bare-event shape some MISP tooling emits.
+            block = payload if 'Attribute' in payload or 'info' in payload \
+                else {}
+        block = from_dict(block)
+        return cls(event=block, raw=payload)
+
+    # -- accessors ----------------------------------------------------------
+
+    @property
+    def info(self) -> str:
+        """The event headline (``Event.info``)."""
+        return _as_str(self.event.get('info'))
+
+    @property
+    def date(self) -> str:
+        """The event date (``Event.date``, ``YYYY-MM-DD``)."""
+        return _as_str(self.event.get('date'))
+
+    @property
+    def threat_level_id(self) -> str:
+        """The MISP threat level (1 low - 4 high... ``Event.threat_level_id``)."""
+        return _as_str(self.event.get('threat_level_id'))
+
+    @property
+    def tags(self) -> List[str]:
+        """Tag names rendered from the ``Event.Tag`` list."""
+        return [_as_str(tag.get('name'))
+                for tag in self.event.get('Tag') or []
+                if isinstance(tag, Mapping)]
+
+    @property
+    def attributes(self) -> List[Dict[str, Any]]:
+        """The ``Event.Attribute`` list (verbatim dicts)."""
+        return [dict(item) for item in self.event.get('Attribute') or []
+                if isinstance(item, Mapping)]
+
+    @property
+    def objects(self) -> List[Dict[str, Any]]:
+        """The ``Event.Object`` list, when the export carries one."""
+        return [dict(item) for item in self.event.get('Object') or []
+                if isinstance(item, Mapping)]
+
+    def attribute_count(self) -> int:
+        """
+        How many attributes the event carries.
+
+        Example:
+            >>> MispEvent.from_dict({'Event': {'Attribute': []}}
+            ...     ).attribute_count()
+            0
+        """
+        return len(self.attributes)
+
+    def object_count(self) -> int:
+        """How many MISP objects the event carries."""
+        return len(self.objects)
+
+    def attribute_values(self) -> List[str]:
+        """The attribute values, in event order."""
+        return [_as_str(item.get('value')) for item in self.attributes]
+
+    def to_json(self, indent: Optional[int] = None) -> str:
+        """
+        Serialise the event back to JSON text.
+
+        Args:
+            indent: pretty-print indent (``None`` = compact).
+
+        Returns:
+            The JSON document (ready for ``.json`` MISP import).
+
+        Example:
+            >>> MispEvent.from_dict({'Event': {'info': 'x'}}).to_json()
+            '{"Event": {"info": "x"}}'
+        """
+        return _json.dumps({'Event': self.event}, indent=indent,
+                           ensure_ascii=False, default=str)
+
+    def summary(self) -> str:
+        """One-liner: ``"ObscuraLens domain lookup: 6 attribute(s)"``."""
+        return f'{self.info or "MISP event"}: {self.attribute_count()} ' \
+               f'attribute(s)'

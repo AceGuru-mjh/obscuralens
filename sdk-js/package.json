@@ -1,0 +1,36 @@
+{
+  "name": "obscuralens-sdk",
+  "version": "6.1.0",
+  "description": "Dependency-free TypeScript/JavaScript SDK for the ObscuraLens OSINT REST API (20 target kinds, analyst toolbox, analytics, notify, automation, STIX/MISP exports, investigation sessions).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build": "tsc -p tsconfig.json"
+  },
+  "keywords": [
+    "osint",
+    "security",
+    "intelligence",
+    "threat-intel",
+    "stix",
+    "misp",
+    "sdk"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AceGuru-mjh/obscuralens"
+  },
+  "devDependencies": {}
+}

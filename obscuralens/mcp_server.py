@@ -1,7 +1,7 @@
 """
 Model Context Protocol (MCP) server for ObscuraLens.
 
-Exposes 53 ObscuraLens tools to AI assistants over stdio using
+Exposes 63 ObscuraLens tools to AI assistants over stdio using
 newline-delimited JSON-RPC 2.0 (one JSON object per line), which is the
 transport MCP defines. This is deliberately *not* LSP Content-Length
 framing.
@@ -23,6 +23,9 @@ Tool families:
 * 5 v6.0 part-4 automation & sharing tools - notify_channels,
   notify_broadcast, automation_tasks, automation_run_due and
   export_stix.
+* 10 v6.0 part-5 ecosystem tools - export_misp, analytics_clusters,
+  analytics_trend, analytics_forecast, history_search, watch_add,
+  watch_remove, case_list, case_create and data_pack_lookup.
 
 Run it with::
 
@@ -1004,6 +1007,246 @@ TOOLS: List[Dict[str, Any]] = [
             'additionalProperties': False,
         },
     },
+    # v6.0 part 5: ecosystem tools
+    {
+        'name': 'export_misp',
+        'description': 'Build a MISP core-format event for the newest '
+                       'stored lookup of a target: the fixed ObscuraLens '
+                       'orgc identity, a deterministic event id, the '
+                       'target attribute (ip-src, domain, url, email-src, '
+                       'sha256/sha1/md5 by digest length, text for the '
+                       'rest), every info field as a text attribute and a '
+                       'threat level mapped from the lookup outcome - the '
+                       'JSON shape MISP itself accepts on import. The '
+                       'lookup must already exist in the local history '
+                       '(run ip_lookup or a sibling first). Purely '
+                       'offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'kind': {'type': 'string',
+                         'description': 'Target kind (ip, domain, url, '
+                                        'email, hash, cve, ...).'},
+                'target': {'type': 'string',
+                           'description': 'The exact target value that was '
+                                          'looked up.'},
+            },
+            'required': ['kind', 'target'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'analytics_clusters',
+        'description': 'Geographic DBSCAN clustering of [lat, lon] pairs '
+                       'in kilometre space (a local tangent plane around '
+                       'the set centroid, so eps_km means what it says at '
+                       'any latitude): clusters with centroid, member '
+                       'labels, size and radius, largest first; isolated '
+                       'noise points are excluded. Unusable rows are '
+                       'dropped defensively. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'points': {
+                    'type': 'array',
+                    'items': {'type': 'array',
+                              'items': {'type': 'number'}},
+                    'description': '[lat, lon] pairs to cluster.',
+                },
+                'eps_km': {'type': 'number',
+                           'description': 'Cluster radius in kilometres '
+                                          '(default: 25).'},
+                'min_points': {'type': 'integer',
+                               'description': 'Minimum cluster membership '
+                                              '(default: 3).'},
+            },
+            'required': ['points'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'analytics_trend',
+        'description': 'Trend and changepoint summary for a value '
+                       'sequence indexed as consecutive days: count, '
+                       'span, the least-squares trend with a direction '
+                       'verdict, mean/variance and the CUSUM changepoint '
+                       'count - the day-series triage view. Non-numeric '
+                       'items are dropped defensively. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'values': {
+                    'type': 'array',
+                    'items': {'type': 'number'},
+                    'description': 'Values in day order.',
+                },
+            },
+            'required': ['values'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'analytics_forecast',
+        'description': 'Linear-trend forecast for a value sequence: the '
+                       'least-squares line extrapolated the next horizon '
+                       'steps, with slope/intercept per index step, a '
+                       'rising/falling/flat verdict and confidence '
+                       'always low - an extrapolation, not a prophecy. '
+                       'Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'values': {
+                    'type': 'array',
+                    'items': {'type': 'number'},
+                    'description': 'Historical values in order.',
+                },
+                'horizon': {'type': 'integer',
+                            'description': 'How many future values to '
+                                           'extrapolate (default: 3, '
+                                           'clamped to 1-24).'},
+            },
+            'required': ['values'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'history_search',
+        'description': 'Search the stored lookup history: the query is '
+                       'matched as a case-insensitive substring against '
+                       'both the target value and the kind, with an '
+                       'optional kind filter. Returns lightweight rows '
+                       '(id, kind, target, created_at, success) - never '
+                       'the bulky result payloads. Reads the local '
+                       'SQLite history read-only. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'query': {'type': 'string',
+                          'description': 'Substring matched against the '
+                                         'value and the kind.'},
+                'limit': {'type': 'integer',
+                          'description': 'Maximum rows returned '
+                                         '(default: 25, clamped to '
+                                         '1-100).'},
+                'kind': {'type': 'string',
+                         'description': 'Restrict the search to one kind '
+                                        '(ip, domain, email, ...).'},
+            },
+            'required': ['query'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'watch_add',
+        'description': 'Add a target to the watchlist, auto-detecting its '
+                       'kind when not given. Returns the stored entry '
+                       '(id, target, kind, label, created_at). Duplicate '
+                       'targets and unrecognisable values are reported '
+                       'as tool errors. Purely local state.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'target': {'type': 'string',
+                           'description': 'Target to watch (the kind is '
+                                          'auto-detected).'},
+                'label': {'type': 'string',
+                          'description': 'Optional free-form label.'},
+                'kind': {'type': 'string',
+                         'description': 'Optional explicit kind (ip, '
+                                        'domain, email, ...).'},
+            },
+            'required': ['target'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'watch_remove',
+        'description': 'Remove one watchlist entry by numeric id or by '
+                       'exact target value; the result reports how many '
+                       'rows were removed (0 means nothing matched, '
+                       'which is an ok result, not an error). Purely '
+                       'local state.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'identifier': {
+                    'type': ['string', 'integer'],
+                    'description': 'Watch id or exact target value.',
+                },
+            },
+            'required': ['identifier'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'case_list',
+        'description': 'List the investigation cases (newest activity '
+                       'first) with their status, description, item/note/'
+                       'tag counts and per-kind item breakdown; archived '
+                       'cases are hidden unless requested. Reads the '
+                       'local case database. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'include_archived': {'type': 'boolean',
+                                     'description': 'Also list archived '
+                                                    'cases (default: '
+                                                    'false).'},
+            },
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'case_create',
+        'description': 'Create an investigation case and optionally add '
+                       'its first indicator in the same call (kind '
+                       'auto-detected, exactly what `case add --kind '
+                       'auto` does). Duplicate names are rejected as a '
+                       'tool error naming the existing case id. Purely '
+                       'local state.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'name': {'type': 'string',
+                         'description': 'Unique case name.'},
+                'description': {'type': 'string',
+                                'description': 'Optional case '
+                                               'description.'},
+                'target': {'type': 'string',
+                           'description': 'Optional first indicator to '
+                                          'add (kind auto-detected).'},
+            },
+            'required': ['name'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'data_pack_lookup',
+        'description': 'Offline data-catalog lookup for one key: country '
+                       '(ISO 3166), port (IANA service), language '
+                       '(ISO 639), currency (ISO 4217), http_status, '
+                       'cwe, airline (IATA), wmi (vehicle manufacturer '
+                       'prefix) or mid (card issuer country). The '
+                       'catalog is bundled with the app - nothing '
+                       'leaves the machine.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'pack': {'type': 'string',
+                         'description': 'Catalog: country, port, language, '
+                                        'currency, http_status, cwe, '
+                                        'airline, wmi or mid.'},
+                'key': {
+                    'type': ['string', 'integer'],
+                    'description': 'Catalog key (code, number or prefix '
+                                   'as the pack expects).',
+                },
+            },
+            'required': ['pack', 'key'],
+            'additionalProperties': False,
+        },
+    },
 ]
 
 
@@ -1781,6 +2024,331 @@ def _tool_export_stix(arguments: Dict[str, Any]) -> Dict[str, Any]:
         f"first (e.g. ip_lookup)")
 
 
+# ---------------------------------------------------------------------------
+# v6.0 part 5: ecosystem handlers
+# ---------------------------------------------------------------------------
+
+#: Catalog packs exposed by ``data_pack_lookup``, in advertised order.
+_DATA_PACKS = ('country', 'port', 'language', 'currency', 'http_status',
+               'cwe', 'airline', 'wmi', 'mid')
+
+
+def _tool_export_misp(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build a MISP core-format event for the newest stored lookup.
+
+    Input: ``kind`` - the target kind; ``target`` - the exact value that
+    was looked up (matched case-insensitively against the stored
+    history).
+
+    Output: ``{'Event': {...}}`` with the fixed ObscuraLens orgc block,
+    a deterministic event id, the target attribute (ip-src, domain,
+    url, email-src, sha256/sha1/md5 by digest length, text for the
+    rest), one text attribute per info field (capped at 200) and a
+    threat level mapped from the lookup outcome (3 = clean success,
+    2 = anything errored). Raises ValueError (an isError result) when
+    no stored lookup matches - run the lookup first.
+
+    Sources: purely offline (the local SQLite history + export.misp).
+    """
+    from .database import db
+    from .export.misp import build_misp_event
+    kind = _required_str(arguments, 'kind')
+    target = _required_str(arguments, 'target')
+    needle = target.strip().lower()
+    for record in db.get_history(query_type=kind, limit=500):
+        if str(record.query_value or '').strip().lower() == needle:
+            try:
+                envelope = json.loads(record.result_data or '{}')
+            except ValueError:
+                continue
+            if isinstance(envelope, dict):
+                return build_misp_event(kind, target, envelope)
+    raise ValueError(
+        f"no stored {kind} lookup for {target!r} - run the lookup "
+        f"first (e.g. ip_lookup)")
+
+
+def _tool_analytics_clusters(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Geographic DBSCAN clustering of [lat, lon] pairs.
+
+    Input: ``points`` - non-empty list of [lat, lon] two-number arrays
+    (unusable rows are dropped; none at all is a ValueError);
+    ``eps_km`` - cluster radius in kilometres (default 25, positive
+    numbers only); ``min_points`` - minimum cluster membership
+    (default 3, positive integers only).
+
+    Output: ``{'point_count', 'eps_km', 'min_points', 'cluster_count',
+    'clusters': [{centroid, members, size, radius_km, labels}]}``
+    sorted by size descending; isolated noise points are excluded.
+
+    Sources: purely offline (analytics.geoanalytics module).
+    """
+    from .analytics.geoanalytics import cluster_points
+    raw = arguments.get('points')
+    if not isinstance(raw, list) or not raw:
+        raise ValueError('points must be a non-empty list of '
+                         '[lat, lon] pairs')
+    points: List[List[float]] = []
+    for item in raw:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            lat, lon = item
+            if isinstance(lat, (int, float)) and not isinstance(lat, bool) \
+                    and isinstance(lon, (int, float)) \
+                    and not isinstance(lon, bool):
+                points.append([float(lat), float(lon)])
+    if not points:
+        raise ValueError('points contains no usable [lat, lon] pairs')
+    eps = arguments.get('eps_km', 25.0)
+    eps = float(eps) if isinstance(eps, (int, float)) \
+        and not isinstance(eps, bool) and eps > 0 else 25.0
+    min_points = arguments.get('min_points', 3)
+    min_points = int(min_points) if isinstance(min_points, int) \
+        and not isinstance(min_points, bool) and min_points > 0 else 3
+    clusters = cluster_points(points, eps_km=eps, min_points=min_points)
+    return {'point_count': len(points), 'eps_km': eps,
+            'min_points': min_points, 'cluster_count': len(clusters),
+            'clusters': clusters}
+
+
+def _tool_analytics_trend(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Trend and changepoint summary for a value sequence.
+
+    Input: ``values`` - numbers indexed as consecutive days
+    (non-numeric items are dropped defensively).
+
+    Output: ``{'count': usable values, 'summary': {count,
+    first_timestamp, last_timestamp, span_days, trend, direction,
+    mean, variance, changepoint_count}}`` - the day-indexed series
+    triage view, well-formed even for a two-value sequence.
+
+    Sources: purely offline (analytics.timeseries module).
+    """
+    from .analytics.timeseries import series_summary, to_points
+    values = _required_numbers(arguments)
+    points = to_points([(index * 86400, value)
+                        for index, value in enumerate(values)])
+    return {'count': len(values), 'summary': series_summary(points)}
+
+
+def _tool_analytics_forecast(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Linear-trend forecast for a value sequence.
+
+    Input: ``values`` - numbers in order; ``horizon`` - how many future
+    values to extrapolate (default 3, clamped to 1-24).
+
+    Output: the ``simple_forecast`` report ``{'forecasts': [...],
+    'slope', 'intercept', 'trend'`` (rising/falling/flat/unknown),
+    ``'confidence'`` (always 'low') and ``'n'`` (values used)``.
+    Fewer than two usable values yield empty forecasts - an
+    extrapolation, not a prophecy.
+
+    Sources: purely offline (analytics.predict module).
+    """
+    from .analytics.predict import simple_forecast
+    values = _required_numbers(arguments)
+    horizon = arguments.get('horizon', 3)
+    horizon = horizon if isinstance(horizon, int) \
+        and not isinstance(horizon, bool) else 3
+    horizon = max(1, min(24, horizon))
+    return simple_forecast(values, horizon=horizon)
+
+
+def _tool_history_search(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Search the stored lookup history.
+
+    Input: ``query`` - substring matched case-insensitively against
+    both the target value and the kind; ``limit`` - maximum rows
+    (default 25, clamped to 1-100); ``kind`` - optional kind filter
+    (history is fetched for that kind, then the substring match runs
+    against the values).
+
+    Output: ``{'count': n, 'results': [{id, kind, target, created_at,
+    success}]}`` newest first - deliberately without the bulky
+    ``result_data`` payloads.
+
+    Sources: purely offline (the local SQLite history, read-only).
+    """
+    from .database import db
+    query = _required_str(arguments, 'query')
+    limit = arguments.get('limit', 25)
+    limit = limit if isinstance(limit, int) and not isinstance(limit, bool) \
+        else 25
+    limit = max(1, min(100, limit))
+    kind = arguments.get('kind')
+    needle = query.strip().lower()
+    if isinstance(kind, str) and kind.strip():
+        rows = db.get_history(query_type=kind.strip().lower(), limit=limit)
+        rows = [r for r in rows
+                if needle in str(r.query_value or '').lower()]
+    else:
+        rows = db.search_history(query, limit)
+    results = [{'id': r.id, 'kind': r.query_type,
+                'target': r.query_value,
+                'created_at': str(r.created_at or ''),
+                'success': bool(r.success)}
+               for r in rows]
+    return {'count': len(results), 'results': results}
+
+
+def _tool_watch_add(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Add a target to the watchlist.
+
+    Input: ``target`` - the target to watch (the kind is auto-detected
+    when the optional ``kind`` is not given); ``label`` - optional
+    free-form label.
+
+    Output: ``{'ok': True, 'id': new watch id, 'entry': {id, target,
+    kind, label, created_at, last_checked, snapshots}}``. Raises
+    ValueError (an isError result) for duplicate targets ('already
+    watched') or values whose kind cannot be detected.
+
+    Sources: purely local state (the watchlist SQLite database).
+    """
+    from .watchlist import watchlist
+    target = _required_str(arguments, 'target')
+    label = arguments.get('label')
+    label = label if isinstance(label, str) else ''
+    kind = arguments.get('kind')
+    kind = kind if isinstance(kind, str) and kind.strip() else None
+    new_id = watchlist.add(target, kind=kind, label=label)
+    payload = {'ok': True, 'id': new_id}
+    entry = watchlist.get(new_id)
+    if entry is not None:
+        payload['entry'] = asdict(entry)
+    return payload
+
+
+def _tool_watch_remove(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Remove one watchlist entry.
+
+    Input: ``identifier`` - the numeric watch id (digit strings are
+    coerced, matching the watch_check convention) or the exact target
+    value.
+
+    Output: ``{'ok': True, 'removed': n}`` with the number of rows
+    removed, or ``{'ok': False, 'removed': 0}`` when nothing matched -
+    a miss is a result, not an error.
+
+    Sources: purely local state (the watchlist SQLite database).
+    """
+    from .watchlist import watchlist
+    identifier = arguments.get('identifier')
+    if isinstance(identifier, bool) or not isinstance(identifier,
+                                                      (str, int)):
+        raise ValueError('identifier is required')
+    if isinstance(identifier, str) and not identifier.strip():
+        raise ValueError('identifier is required')
+    removed = watchlist.remove(_identifier(identifier))
+    return {'ok': bool(removed), 'removed': int(removed)}
+
+
+def _tool_case_list(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    List the investigation cases.
+
+    Input: ``include_archived`` - also list archived cases (default
+    false).
+
+    Output: ``{'count': n, 'cases': [...]}`` where each case carries
+    id, name, status, description, created_at/updated_at, item/note/
+    tag counts and the per-kind item breakdown, newest activity
+    first. An empty casebook yields ``{'count': 0, 'cases': []}``.
+
+    Sources: purely offline (the local case database, read-only).
+    """
+    from .cases import cases
+    include_archived = arguments.get('include_archived', False)
+    include_archived = include_archived if isinstance(include_archived, bool) \
+        else False
+    listing = cases.list_cases(include_archived=include_archived)
+    return {'count': len(listing), 'cases': listing}
+
+
+def _tool_case_create(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Create a case and optionally add its first indicator.
+
+    Input: ``name`` - unique case name; ``description`` - optional body
+    text; ``target`` - optional first indicator, added with its kind
+    auto-detected (the same ``kind='auto'`` detection ``case add``
+    uses).
+
+    Output: ``{'ok': True, 'case': {...full row...}}`` plus ``'item'``
+    (the added indicator row) when a target was given. Raises
+    ValueError (an isError result) when the name already exists (the
+    reason names the existing id) or the indicator is rejected.
+
+    Sources: purely local state (the case SQLite database).
+    """
+    from .cases import cases
+    name = _required_str(arguments, 'name')
+    description = arguments.get('description')
+    description = description if isinstance(description, str) else ''
+    case = cases.create_case(name.strip(), description=description)
+    if case.get('error'):
+        reason = str(case['error'])
+        if case.get('id') is not None:
+            reason += f" (existing id: {case['id']})"
+        raise ValueError(reason)
+    payload = {'ok': True, 'case': case}
+    target = arguments.get('target')
+    if isinstance(target, str) and target.strip():
+        item = cases.add_item(case['id'], 'auto', target.strip())
+        if item.get('error'):
+            raise ValueError(str(item['error']))
+        payload['item'] = item
+    return payload
+
+
+def _tool_data_pack_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Offline data-catalog lookup for one pack and key.
+
+    Input: ``pack`` - one of country, port, language, currency,
+    http_status, cwe, airline, wmi or mid; ``key`` - the catalog key
+    (ISO code, port number, CWE id, IATA code, WMI prefix or MID as
+    the pack expects; string or integer).
+
+    Output: ``{'pack', 'key', 'record': {...}}`` with the record's
+    fields, or ``{'pack', 'key', 'found': False}`` when the key is not
+    in the catalog. Unknown packs raise ValueError listing the valid
+    names.
+
+    Sources: purely offline (the bundled data catalog).
+    """
+    from .utils import data_catalog
+    pack = _required_str(arguments, 'pack').strip().lower()
+    key = arguments.get('key')
+    if key is None or isinstance(key, bool) \
+            or (isinstance(key, str) and not key.strip()):
+        raise ValueError('key is required')
+    lookups = {
+        'country': data_catalog.country,
+        'port': data_catalog.port_service,
+        'language': data_catalog.language,
+        'currency': data_catalog.currency,
+        'http_status': data_catalog.http_status,
+        'cwe': data_catalog.cwe,
+        'airline': data_catalog.airline,
+        'wmi': data_catalog.wmi,
+        'mid': data_catalog.mid,
+    }
+    if pack not in lookups:
+        available = ', '.join(_DATA_PACKS)
+        raise ValueError(f'unknown pack: {pack!r}; available: {available}')
+    record = lookups[pack](key)
+    if record is None:
+        return {'pack': pack, 'key': key, 'found': False}
+    return {'pack': pack, 'key': key, 'record': record.to_dict()}
+
+
 def _tool_encode(arguments: Dict[str, Any]) -> Dict[str, Any]:
     """
     Every encoding and every digest of a text, in one call.
@@ -2302,6 +2870,17 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     'automation_tasks': _tool_automation_tasks,
     'automation_run_due': _tool_automation_run_due,
     'export_stix': _tool_export_stix,
+    # v6.0 part 5: ecosystem tools
+    'export_misp': _tool_export_misp,
+    'analytics_clusters': _tool_analytics_clusters,
+    'analytics_trend': _tool_analytics_trend,
+    'analytics_forecast': _tool_analytics_forecast,
+    'history_search': _tool_history_search,
+    'watch_add': _tool_watch_add,
+    'watch_remove': _tool_watch_remove,
+    'case_list': _tool_case_list,
+    'case_create': _tool_case_create,
+    'data_pack_lookup': _tool_data_pack_lookup,
 }
 
 
