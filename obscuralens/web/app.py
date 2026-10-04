@@ -1093,6 +1093,227 @@ def create_app():
         from ..advanced.alerts import EVENT_TYPES
         return list(EVENT_TYPES)
 
+    # ------------------------------------------------------------------
+    # v6.0 Part 2: analytics endpoints (offline, pure computation)
+    # ------------------------------------------------------------------
+
+    def _numbers_of(body: Dict[str, Any]) -> List[float]:
+        """
+        Clean a request body's ``values`` list into finite floats.
+
+        Non-numeric items are dropped (the analytics package would drop them
+        anyway); an empty *result* - missing field, non-list, or nothing
+        usable left after cleaning - raises HTTP 400 so a malformed client
+        request cannot silently masquerade as "no data".
+        """
+        payload = body or {}
+        raw = payload.get('values')
+        if not isinstance(raw, list) or not raw:
+            raise HTTPException(status_code=400,
+                                detail='values must be a non-empty list of '
+                                       'numbers')
+        cleaned = [float(item) for item in raw
+                   if isinstance(item, (int, float))
+                   and not isinstance(item, bool)]
+        if not cleaned:
+            raise HTTPException(status_code=400,
+                                detail='values contains no usable numbers')
+        return cleaned
+
+    @app.post('/api/analytics/stats')
+    def api_analytics_stats(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Descriptive statistics plus a histogram for a numeric list.
+
+        Body: ``{"values": [1, 2, 3, 4, 100], "bins": 10}`` — non-numeric
+        items are dropped, then ``summarize`` (count/mean/median/stdev/
+        quartiles/skew/kurtosis) and ``histogram`` run over the survivors.
+        ``400`` when ``values`` is missing, not a list, or has no usable
+        numbers left after cleaning.
+        """
+        from ..analytics.stats import histogram, summarize
+        values = _numbers_of(body)
+        try:
+            bins = int((body or {}).get('bins', 10) or 10)
+        except (TypeError, ValueError):
+            bins = 10
+        bins = max(1, min(bins, 100))
+        return {'count': len(values), 'summary': summarize(values),
+                'histogram': histogram(values, bins=bins)}
+
+    @app.post('/api/analytics/anomalies')
+    def api_analytics_anomalies(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Outlier detection over a numeric list.
+
+        Body: ``{"values": [1, 2, 3, 4, 100], "method": "ensemble",
+        "threshold": 3.0}`` — method is one of zscore/iqr/mad/grubbs/
+        ensemble/threshold (default ensemble; unknown names return an empty
+        hit list). ``threshold`` only applies to the zscore detector.
+        Returns ``dataclass-asdict`` records: value, score, method, detail.
+        """
+        from dataclasses import asdict
+
+        from ..analytics.anomaly import detect_anomalies
+        values = _numbers_of(body)
+        method = str((body or {}).get('method', 'ensemble') or 'ensemble')
+        kwargs: Dict[str, Any] = {}
+        threshold = (body or {}).get('threshold')
+        if isinstance(threshold, (int, float)) \
+                and not isinstance(threshold, bool) and method == 'zscore':
+            kwargs['threshold'] = float(threshold)
+        hits = detect_anomalies(values, method=method, **kwargs)
+        return {'count': len(values), 'method': method,
+                'anomaly_count': len(hits),
+                'anomalies': [asdict(hit) for hit in hits]}
+
+    @app.post('/api/analytics/timeseries')
+    def api_analytics_timeseries(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Trend / changepoint summary for a value sequence.
+
+        Body: ``{"values": [5, 6, 5, 6, 20, 21]}`` — values are indexed as
+        consecutive days, then ``series_summary`` reports count, span,
+        least-squares trend with direction verdict, mean/variance and CUSUM
+        changepoint count.
+        """
+        from ..analytics.timeseries import series_summary, to_points
+        values = _numbers_of(body)
+        points = to_points([(index * 86400, value)
+                             for index, value in enumerate(values)])
+        return {'count': len(values), 'summary': series_summary(points)}
+
+    @app.post('/api/analytics/clusters')
+    def api_analytics_clusters(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Kilometre-space clustering of ``[lat, lon]`` coordinate pairs.
+
+        Body: ``{"points": [[52.0, 13.0], [52.1, 13.1]], "eps_km": 25,
+        "min_points": 3}`` — great-circle DBSCAN via ``cluster_points``.
+        ``400`` when ``points`` is missing, not a list, or contains no
+        usable two-number rows.
+        """
+        from ..analytics.geoanalytics import cluster_points
+        raw = (body or {}).get('points')
+        if not isinstance(raw, list) or not raw:
+            raise HTTPException(status_code=400,
+                                detail='points must be a non-empty list of '
+                                       '[lat, lon] pairs')
+        points: List[List[float]] = []
+        for item in raw:
+            if isinstance(item, (list, tuple)) and len(item) == 2:
+                lat, lon = item
+                if isinstance(lat, (int, float)) \
+                        and not isinstance(lat, bool) \
+                        and isinstance(lon, (int, float)) \
+                        and not isinstance(lon, bool):
+                    points.append([float(lat), float(lon)])
+        if not points:
+            raise HTTPException(status_code=400,
+                                detail='points contains no usable '
+                                       '[lat, lon] pairs')
+        eps = (body or {}).get('eps_km', 25.0)
+        eps = float(eps) if isinstance(eps, (int, float)) \
+            and not isinstance(eps, bool) and eps > 0 else 25.0
+        min_points = (body or {}).get('min_points', 3)
+        min_points = int(min_points) if isinstance(min_points, int) \
+            and not isinstance(min_points, bool) and min_points > 0 else 3
+        clusters = cluster_points(points, eps_km=eps, min_points=min_points)
+        return {'point_count': len(points), 'eps_km': eps,
+                'min_points': min_points, 'cluster_count': len(clusters),
+                'clusters': clusters}
+
+    @app.post('/api/analytics/keywords')
+    def api_analytics_keywords(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Stopword-filtered keyword mining for a text.
+
+        Body: ``{"text": "the quick brown fox ...", "top": 10}`` — returns
+        ``term``/``count``/``weight`` records sorted by weight.
+        """
+        from ..analytics.textmetrics import extract_keywords
+        text = str((body or {}).get('text', '') or '')
+        if not text.strip():
+            raise HTTPException(status_code=400, detail='text is required')
+        top = (body or {}).get('top', 10)
+        top = int(top) if isinstance(top, int) and not isinstance(top, bool) \
+            and top > 0 else 10
+        keywords = extract_keywords(text, top=top)
+        return {'keyword_count': len(keywords), 'keywords': keywords}
+
+    @app.post('/api/analytics/language')
+    def api_analytics_language(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Script and language fingerprint for a text.
+
+        Body: ``{"text": "Le renard brun ..."}`` — dominant script, per-
+        script character counts, a language guess with confidence and a
+        human-readable hint.
+        """
+        from ..analytics.textmetrics import detect_language_script
+        text = str((body or {}).get('text', '') or '')
+        if not text.strip():
+            raise HTTPException(status_code=400, detail='text is required')
+        return detect_language_script(text)
+
+    @app.post('/api/analytics/similarity')
+    def api_analytics_similarity(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Four-metric similarity between two texts.
+
+        Body: ``{"a": "paypal", "b": "paypa1"}`` — Jaro-Winkler, Levenshtein
+        ratio, bigram similarity, sparse cosine, their mean and lengths.
+        """
+        from ..analytics.textmetrics import text_similarity_report
+        a = str((body or {}).get('a', '') or '')
+        b = str((body or {}).get('b', '') or '')
+        if not a.strip() or not b.strip():
+            raise HTTPException(status_code=400,
+                                detail='a and b are both required')
+        return text_similarity_report(a, b)
+
+    @app.post('/api/analytics/graph')
+    def api_analytics_graph(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Graph metrics over an ``entities``/``links`` payload.
+
+        Body: ``{"entities": [{"id": "a"}, ...], "links": [{"source": "a",
+        "target": "b"}, ...]}`` — the investigate/correlation payload shape
+        (``from``/``to`` link keys are accepted too). Returns the one-shot
+        ``graph_summary`` dossier: node/edge counts, density, components,
+        communities, top entities by degree/PageRank/betweenness, bridges
+        and isolated nodes. ``400`` when neither list is present.
+        """
+        from ..analytics.graphmetrics import graph_summary
+        payload = body or {}
+        entities = payload.get('entities')
+        links = payload.get('links')
+        if not isinstance(entities, list) and not isinstance(links, list):
+            raise HTTPException(status_code=400,
+                                detail='entities and/or links lists are '
+                                       'required')
+        summary = graph_summary(entities if isinstance(entities, list) else [],
+                                links if isinstance(links, list) else [])
+        return {'entity_count': len(entities) if isinstance(entities, list)
+                else 0,
+                'link_count': len(links) if isinstance(links, list) else 0,
+                'summary': summary}
+
+    @app.get('/api/analytics/history')
+    def api_analytics_history(limit: int = 500) -> Dict[str, Any]:
+        """
+        Enrichment report over stored query history.
+
+        Query: ``?limit=500`` (newest rows considered) — kind frequency,
+        hour/weekday activity profiles, per-kind success rates, field-count
+        statistics, source reliability, day-volume anomalies and the most
+        re-queried targets. An empty history yields a well-formed empty
+        report, not an error.
+        """
+        from ..analytics.enrich import enrichment_report
+        safe_limit = limit if isinstance(limit, int) and limit > 0 else 500
+        return enrichment_report(limit=safe_limit)
+
     return app
 
 
