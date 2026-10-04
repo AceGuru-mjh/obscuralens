@@ -1,0 +1,44 @@
+# VIP domain monitor (v6.0 part 4)
+# ---------------------------------
+# High-touch monitoring for one domain the organisation cannot afford
+# to be surprised by: refresh, score, escalate on a risk threshold,
+# share a STIX bundle and notify at high severity. Schedule it hourly:
+#   obscuralens automation add --name vip-domain --action pipeline \
+#       --interval 3600 --params '{"name": "vip-domain-monitor"}'
+# Override with --set domain=... (defaults to the corporate zone).
+name: vip-domain-monitor
+description: Threshold-guarded VIP domain watch with STIX sharing
+variables:
+  domain: example.com
+
+steps:
+  # 1. Refresh the VIP domain - registrar, ages, DNS and mail posture.
+  - lookup:
+      kind: domain
+      target: $domain
+  # 2. Risk scoring: age, typosquat distance and posture -> one number.
+  - risk: true
+  # 3. Escalation gate: only a risk-scored run produces a finding.
+  - assert:
+      field: risk_score
+      op: '>='
+      value: 50
+      message: VIP domain risk crossed the escalation threshold
+  # 4. v6.0 part 4 notify: high severity so channels with a floor still
+  #    deliver; watch_diff pairs with watch-subscribed channels.
+  - notify:
+      title: VIP domain risk escalation
+      body: >
+        $domain crossed the risk threshold. The STIX bundle and the
+        markdown trail are in the report directory.
+      severity: high
+      event_type: watch_diff
+  # 5. v6.0 part 4 export: a STIX 2.1 bundle of the same lookup
+  #    (deterministic ids -> repeated exports merge on re-import).
+  - export:
+      format: stix
+      path: vip-$domain-stix.json
+  # 6. Human-readable trail for the monitoring folder.
+  - output:
+      format: markdown
+      path: vip-domain-monitor.md

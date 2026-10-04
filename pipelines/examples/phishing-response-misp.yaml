@@ -1,0 +1,44 @@
+# Phishing response with MISP export (v6.0 part 4)
+# -------------------------------------------------
+# Incident response for a confirmed phishing URL: enrich the lure, gate
+# it, export the indicators as a MISP event and page the on-call
+# channel. The v6.0 part 4 additions are the export step (last lookup
+# -> MISP event or STIX bundle) and the notify step.
+# Run: obscuralens pipeline run phishing-response-misp \
+#          --set target=https://secure-login.example-verify.com/
+name: phishing-response-misp
+description: Triage a phishing URL, export it to MISP and page the team
+variables:
+  target: https://secure-login.example-verify.com/
+
+steps:
+  # 1. URL lookup: redirect chain, page verdicts and archive history.
+  - lookup:
+      kind: url
+      target: $target
+  # 2. Escalation gate: only a Safe-Browsing-flagged lure goes further -
+  #    the MISP export and the page are reserved for confirmed incidents.
+  - assert:
+      field: gsb_malicious
+      op: '=='
+      value: true
+      message: URL flagged as phishing by Google Safe Browsing
+  # 3. v6.0 part 4 export: a MISP core-format event from the last
+  #    lookup - ObscuraLens orgc, the target attribute, one text
+  #    attribute per info field, threat level from source health.
+  - export:
+      format: misp
+      path: misp-phishing-$target.json
+  # 4. v6.0 part 4 notify: explicit title/body/severity so the on-call
+  #    message reads like an incident, not a log line.
+  - notify:
+      title: Phishing URL confirmed
+      body: >
+        Safe Browsing flagged $target. The MISP event with the full
+        indicator set is in the report directory - start the takedown.
+      severity: high
+      event_type: pipeline
+  # 5. The JSON snapshot for the case file.
+  - output:
+      format: json
+      path: phishing-response-$target.json

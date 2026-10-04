@@ -1,0 +1,43 @@
+# Crypto bridge alert (v6.0 part 4)
+# ----------------------------------
+# Sanctions-and-risk screening for a crypto bridge or mixer address:
+# refresh the multi-chain view, gate on exposure signals, notify and
+# export a STIX bundle. Run with --set address=0x4838B1...
+name: crypto-bridge-alert
+description: Screen a bridge/mixer address and alert on exposure signals
+variables:
+  address: '0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97'
+
+steps:
+  # 1. Crypto lookup: balances across chains, token portfolios,
+  #    activity stamps and any tagging source that answers.
+  - lookup:
+      kind: crypto
+      target: $address
+  # 2. Risk scoring (mixer proximity, balance drift, tag severity).
+  - risk: true
+  # 3. Escalation gate: the finding joins the notify summary.
+  - assert:
+      field: risk_score
+      op: '>='
+      value: 60
+      message: bridge address crossed the exposure threshold
+  # 4. v6.0 part 4 notify: severity medium - a same-day review, not a
+  #    page; quiet hours on the channel do the overnight filtering.
+  - notify:
+      title: Crypto bridge exposure
+      body: >
+        $address needs a review: risk signals crossed the screening
+        threshold. The STIX bundle with every observed field is in
+        the report directory.
+      severity: medium
+      event_type: pipeline
+  # 5. v6.0 part 4 export: STIX has no crypto-address observable, so
+  #    the indicator uses the x-obscuralens custom extension.
+  - export:
+      format: stix
+      path: crypto-$address.json
+  # 6. Console table for the analyst running it by hand.
+  - output:
+      format: table
+      path: ''

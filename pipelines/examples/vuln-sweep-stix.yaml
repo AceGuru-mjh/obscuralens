@@ -1,0 +1,44 @@
+# Vulnerability sweep with STIX export (v6.0 part 4)
+# ----------------------------------------------------
+# Patch-priority workflow for one CVE: enrich it, gate on exploit
+# availability, share a STIX 2.1 bundle and notify the patch channel.
+# Run: obscuralens pipeline run vuln-sweep-stix --set cve=CVE-2024-3094
+name: vuln-sweep-stix
+description: Enrich one CVE, gate on exploitability, share it as STIX
+variables:
+  cve: CVE-2024-3094
+
+steps:
+  # 1. CVE lookup: CVE Program record, NVD metrics, CISA KEV status.
+  - lookup:
+      kind: cve
+      target: $cve
+  # 2. Escalation gate #1: KEV membership leads the patch queue.
+  - assert:
+      field: kev_known_exploited
+      op: '=='
+      value: true
+      message: CVE is on the CISA known-exploited list
+  # 3. Escalation gate #2: EPSS above 0.5 within 30 days.
+  - assert:
+      field: epss
+      op: '>'
+      value: 0.5
+      message: EPSS probability above 50%
+  # 4. v6.0 part 4 export: a STIX bundle - for a CVE the subject is a
+  #    Vulnerability SDO instead of an indicator.
+  - export:
+      format: stix
+      path: vuln-$cve-stix.json
+  # 5. v6.0 part 4 notify: high severity - same-day patch decision.
+  - notify:
+      title: 'Exploitation risk: $cve'
+      body: >
+        $cve crossed the patch-priority gates (CISA KEV / EPSS).
+        The STIX bundle is in the report directory - import it.
+      severity: high
+      event_type: vuln
+  # 6. Markdown trail for the patch queue folder.
+  - output:
+      format: markdown
+      path: vuln-$cve.md

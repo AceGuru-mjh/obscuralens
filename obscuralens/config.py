@@ -46,7 +46,31 @@ SERVICES = (
     # v6.0 additions -------------------------------------------------------
     'aviationstack',    # aviationstack.com live flight status (flight kind)
     'wigle',            # wigle.net WiFi network search (bssid kind)
+    # v6.0 Part 4 additions -------------------------------------------------
+    'telegram',         # Telegram bot notifications (bot_token:chat_id)
+    'slack_webhook',    # Slack incoming webhook notifications
+    'discord_webhook',  # Discord incoming webhook notifications
+    'smtp',             # SMTP notification relay credentials
 )
+
+#: Notification services whose credential field breaks the
+#: ``<service>_api_key`` naming convention because the value is a URL or
+#: a composite credential string rather than a bearer key. The
+#: ``get_api_key`` / ``set_api_key`` / environment machinery resolves
+#: every service through :func:`_service_field`, so these services stay
+#: first-class citizens of ``configured_services()`` and
+#: ``save_secrets()`` like all the rest.
+_SERVICE_FIELD_OVERRIDES = {
+    'slack_webhook': 'slack_webhook_url',
+    'discord_webhook': 'discord_webhook_url',
+    'smtp': 'smtp_credentials',
+}
+
+
+def _service_field(service: str) -> str:
+    """APIConfig attribute name that stores one service's credential."""
+    return _SERVICE_FIELD_OVERRIDES.get(service, f'{service}_api_key')
+
 
 ENV_PREFIX = 'OBSCURALENS_'
 
@@ -75,6 +99,11 @@ class APIConfig:
     # v6.0 additions
     aviationstack_api_key: str = ""
     wigle_api_key: str = ""
+    # v6.0 Part 4 additions (notification channels, see automation/notifications)
+    telegram_api_key: str = ""      # composite "bot_token:chat_id"
+    slack_webhook_url: str = ""     # https://hooks.slack.com/services/...
+    discord_webhook_url: str = ""   # https://discord.com/api/webhooks/...
+    smtp_credentials: str = ""      # "host:port:from:to[:user:pass]"
 
 
 @dataclass
@@ -240,24 +269,25 @@ class ConfigManager:
                     setattr(target, key, self._coerce(current, raw))
 
         for service in SERVICES:
-            raw = os.getenv(ENV_PREFIX + service.upper() + '_API_KEY')
+            field = _service_field(service)
+            raw = os.getenv(ENV_PREFIX + field.upper())
             if raw:
-                setattr(self.api_config, f'{service}_api_key', raw)
+                setattr(self.api_config, field, raw)
 
     # -- accessors --------------------------------------------------------
 
     def get_api_key(self, service: str) -> Optional[str]:
-        """Get the configured API key for a service, or None."""
+        """Get the configured credential for a service, or None."""
         service = service.lower()
         if service not in SERVICES:
             return None
-        return getattr(self.api_config, f'{service}_api_key', '') or None
+        return getattr(self.api_config, _service_field(service), '') or None
 
     def set_api_key(self, service: str, value: str) -> None:
-        """Store an API key in memory (persisted by save_secrets)."""
+        """Store a service credential in memory (persisted by save_secrets)."""
         service = service.lower()
         if service in SERVICES:
-            setattr(self.api_config, f'{service}_api_key', value or '')
+            setattr(self.api_config, _service_field(service), value or '')
 
     def is_configured(self, service: str) -> bool:
         return bool(self.get_api_key(service))

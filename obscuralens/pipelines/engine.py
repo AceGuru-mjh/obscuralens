@@ -20,6 +20,13 @@ A pipeline is a YAML document of the shape::
           op: '>='
           value: 50
           message: address flagged by AbuseIPDB
+      - notify:                    # v6.0 part 4: fan out to channels
+          title: escalation
+          body: 3 sources flagged the address
+          severity: high
+      - export:                    # v6.0 part 4: STIX/MISP from the run
+          format: stix
+          path: case-$target.json
       - output:
           format: table            # table | json | markdown
           path: ''                 # optional file (relative -> report_dir)
@@ -36,6 +43,13 @@ Execution rules:
     is skipped instead of crashing the run.
   * ``assert`` evaluates a condition against the first result that carries
     the field (dotted paths supported); passing assertions become findings.
+  * ``notify`` (v6.0 part 4) broadcasts a message through the automation
+    notification centre; the bare shorthand ``- notify: true`` summarises
+    the run itself. The step record carries a machine-readable ``output``
+    dict (``sent`` / ``failed`` / ``skipped`` / ``total``).
+  * ``export`` (v6.0 part 4) turns the run's last lookup result into a
+    STIX 2.1 bundle or a MISP core-format event - returned in the step
+    ``output`` and optionally dumped under ``report_dir``.
   * ``output`` renders table/json/markdown text, optionally writes it to a
     file (relative paths land under ``app_config.report_dir``) and never
     raises on I/O errors - they are recorded in ``report['errors']``.
@@ -54,11 +68,16 @@ import yaml
 
 from ..config import config
 
-# Actions a pipeline step may declare (exactly one per step).
-ACTIONS = ('lookup', 'risk', 'timeline', 'correlate', 'assert', 'output')
+# Actions a pipeline step may declare (exactly one per step). v6.0 part 4
+# added the notify/export sharing steps.
+ACTIONS = ('lookup', 'risk', 'timeline', 'correlate', 'assert', 'notify',
+           'export', 'output')
 
 # Output formats understood by the `output` step.
 PIPELINE_FORMATS = ('table', 'json', 'markdown')
+
+# Export formats understood by the v6.0 `export` step.
+EXPORT_FORMATS = ('stix', 'misp')
 
 # Assertion operators. Ordering operators compare numerically when both
 # sides parse as numbers, otherwise as strings.
@@ -67,6 +86,7 @@ ASSERT_OPS = ('==', '!=', '>', '>=', '<', '<=', 'in', 'contains', 'exists')
 # kind -> (importable module, tracker class). The five core kinds live in
 # the trackers package; v4 kinds are separate modules owned by other agents
 # and are imported defensively (a missing module simply disables the kind).
+# v6.0 part 4 added bssid so the shipped geofence example pipeline runs.
 TRACKER_MAP: Dict[str, Tuple[str, str]] = {
     'ip': ('obscuralens.trackers', 'IPTracker'),
     'phone': ('obscuralens.trackers', 'PhoneTracker'),
@@ -78,6 +98,7 @@ TRACKER_MAP: Dict[str, Tuple[str, str]] = {
     'url': ('obscuralens.trackers.url_tracker', 'URLTracker'),
     'cve': ('obscuralens.trackers.cve_tracker', 'CVETracker'),
     'asn': ('obscuralens.trackers.asn_tracker', 'ASNTracker'),
+    'bssid': ('obscuralens.trackers.bssid_tracker', 'BSSIDTracker'),
 }
 
 # $var and ${var} tokens. Variable names follow Python identifier rules.
@@ -717,6 +738,193 @@ def _action_of(step: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+# --------------------------------------------------------------------------- #
+# v6.0 part 4: notify / export steps (each mutates the report and returns
+# (ok, detail, output) - the output dict is attached to the step record)
+# --------------------------------------------------------------------------- #
+
+def _run_summary_lines(report: Dict[str, Any]) -> Tuple[str, str]:
+    """A (title, body) pair summarising the run so far."""
+    name = str(report.get('name') or 'pipeline')
+    steps = report.get('steps') or []
+    results = report.get('results') or {}
+    findings = report.get('findings') or []
+    errors = report.get('errors') or []
+    title = f'ObscuraLens pipeline {name} finished'
+    body = (f"{len(steps)} step(s) executed, {len(results)} lookup result(s), "
+            f"{len(findings)} finding(s), {len(errors)} error(s).")
+    if findings:
+        headlines = '; '.join(
+            str(item.get('message') or item.get('field') or '')
+            for item in findings[:5])
+        if headlines:
+            body += f' Findings: {headlines}.'
+    return title, body
+
+
+def _step_notify(report: Dict[str, Any],
+                 spec: Any) -> Tuple[bool, str, Dict[str, Any]]:
+    """
+    Broadcast one message through the automation notification centre.
+
+    ``spec`` is either ``true`` (the shorthand: the run's own summary
+    becomes the message) or a mapping with ``title`` / ``body`` and the
+    optional ``severity`` (default ``info``) and ``event_type`` (default
+    ``pipeline``). Per-channel filters - event subscriptions, severity
+    floors, quiet hours, dedup - decide what actually leaves the machine.
+
+    Returns:
+        ``(ok, detail, output)`` where ``output`` is ``{'sent', 'failed',
+        'skipped', 'total'}``; a total delivery failure (every contacted
+        channel failed) is recorded in ``report['errors']``, while
+        filter-based skips and an empty channel list are successes.
+    """
+    try:
+        from ..automation import notifications
+    except ImportError:
+        report['warnings'].append(
+            'automation.notifications is unavailable - skipping notify step')
+        return False, 'notify module unavailable', {'sent': 0, 'failed': 0,
+                                                    'skipped': 0, 'total': 0}
+    if spec is True or spec is None:
+        title, body = _run_summary_lines(report)
+        severity, event_type = 'info', 'pipeline'
+    elif isinstance(spec, dict):
+        title = str(spec.get('title') or '').strip()
+        body = str(spec.get('body') or '')
+        if not title:
+            title, body = _run_summary_lines(report)
+        severity = str(spec.get('severity') or 'info').strip().lower() \
+            or 'info'
+        event_type = str(spec.get('event_type') or 'pipeline').strip().lower() \
+            or 'pipeline'
+    else:  # tolerate `- notify: <text>` - the text is the title
+        title, body = str(spec), ''
+        severity, event_type = 'info', 'pipeline'
+    try:
+        result = notifications.broadcast(event_type, title, body,
+                                         severity=severity)
+    except Exception as e:  # a broken notify layer never kills the run
+        detail = f'notify failed ({type(e).__name__})'
+        report['errors'].append(detail)
+        return False, detail, {'sent': 0, 'failed': 1, 'skipped': 0,
+                               'total': 1}
+    sent = int(result.get('sent') or 0)
+    failed = len(result.get('failed') or [])
+    skipped = int(result.get('skipped') or 0)
+    total = int(result.get('total') or 0)
+    output = {'sent': sent, 'failed': failed, 'skipped': skipped,
+              'total': total}
+    if total == 0:
+        return True, 'no channels configured - notification skipped', output
+    if sent == 0 and failed > 0:
+        reasons = '; '.join(
+            f"{item.get('channel')}: {item.get('error')}"
+            for item in (result.get('failed') or [])[:3])
+        detail = f'notify failed on all {total} channel(s): {reasons}'
+        report['errors'].append(detail)
+        return False, detail, output
+    detail = f'notified {sent}/{total} channel(s), {skipped} skipped'
+    if failed:
+        detail += f', {failed} failed'
+    return True, detail, output
+
+
+def _last_lookup(report: Dict[str, Any]) -> Optional[Tuple[str, str,
+                                                           Dict[str, Any]]]:
+    """
+    The run's most recent lookup as ``(kind, target, payload)``.
+
+    ``results`` is an insertion-ordered dict, so the newest lookup is the
+    last key; a re-lookup of the same kind overwrites in place and stays
+    "last" - exactly the result an export should describe.
+    """
+    results = report.get('results') or {}
+    for kind in reversed(list(results)):
+        payload = results[kind]
+        if isinstance(payload, dict):
+            return str(kind), _target_of(str(kind), payload), payload
+    return None
+
+
+def _step_export(report: Dict[str, Any],
+                 spec: Any) -> Tuple[bool, str, Dict[str, Any]]:
+    """
+    Turn the run's last lookup result into a STIX bundle or MISP event.
+
+    ``spec`` is a mapping with ``format`` (``stix`` or ``misp``; the only
+    required key), optional ``kind`` / ``target`` overrides (default: the
+    last lookup's kind and target) and an optional ``path`` - relative
+    paths land under ``app_config.report_dir`` exactly like ``output``
+    steps. Without ``path`` the document is only returned inside the
+    step's ``output`` dict (``document`` key) for the caller to consume.
+
+    Returns:
+        ``(ok, detail, output)`` with ``{'format', 'kind', 'target',
+        'objects', 'path', 'bytes', 'document'}``; a missing lookup, an
+        unknown format or a failed write lands in ``report['errors']``.
+    """
+    if not isinstance(spec, dict):
+        spec = {'format': str(spec or '').strip().lower()}
+    fmt = str(spec.get('format') or '').strip().lower()
+    if fmt not in EXPORT_FORMATS:
+        detail = (f'unknown export format {fmt!r} '
+                  f'(expected one of {EXPORT_FORMATS})')
+        report['errors'].append(detail)
+        return False, detail, {}
+    last = _last_lookup(report)
+    if last is None:
+        detail = 'no lookup result to export - run a lookup step first'
+        report['errors'].append(detail)
+        return False, detail, {}
+    kind, target, payload = last
+    kind = str(spec.get('kind') or kind).strip().lower() or kind
+    target = str(spec.get('target') or target).strip() or target
+    try:
+        if fmt == 'stix':
+            from ..export.stix import build_bundle, dump_bundle
+            document = build_bundle(kind, target, payload)
+            objects = len(document.get('objects') or [])
+            writer: Callable[[Dict[str, Any], Any], Dict[str, Any]] = \
+                dump_bundle
+        else:
+            from ..export.misp import build_misp_event, dump_event
+            document = build_misp_event(kind, target, payload)
+            objects = len((document.get('Event') or {}).get('Attribute')
+                          or [])
+            writer = dump_event
+    except ImportError as e:
+        detail = f'export.{fmt} module unavailable ({e})'
+        report['warnings'].append(detail)
+        return False, detail, {}
+    except Exception as e:  # a hostile envelope never kills the run
+        detail = f'{fmt} export failed ({type(e).__name__})'
+        report['errors'].append(detail)
+        return False, detail, {}
+    output: Dict[str, Any] = {'format': fmt, 'kind': kind, 'target': target,
+                              'objects': objects, 'path': '', 'bytes': 0,
+                              'document': document}
+    prefix = ''
+    ok = True
+    path = str(spec.get('path') or '').strip()
+    if path:
+        target_path = _resolve_output_path(path)
+        try:
+            written = writer(document, target_path)
+            if not written.get('ok'):
+                raise OSError(str(written.get('error') or 'write failed'))
+            output['path'] = str(written.get('path') or target_path)
+            output['bytes'] = int(written.get('bytes') or 0)
+            prefix = f"written to {output['path']}; "
+        except OSError as e:
+            detail = f'cannot write export file {target_path}: {e}'
+            report['errors'].append(detail)
+            return False, detail, output
+    detail = (prefix + f'{fmt} export for {kind} {target}: '
+              f'{objects} object(s)')
+    return ok, detail, output
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -788,12 +996,16 @@ def run_pipeline(path_or_dict: Union[str, Path, Dict[str, Any]],
                 f'step {number}: multiple action keys {sorted(step.keys())}; '
                 f"using {action!r}")
         spec_value = step[action]
-        if action in ('risk', 'timeline', 'correlate') and not spec_value:
+        if action in ('risk', 'timeline', 'correlate', 'notify',
+                      'export') and not spec_value:
             # `risk: false` etc. disables the step instead of running it.
             report['steps'].append(
                 {'step': number, 'action': action, 'ok': True,
                  'detail': 'skipped (disabled)'})
             continue
+        # v6.0 part 4: notify/export handlers also return a machine-
+        # readable output dict that is attached to the step record.
+        output: Optional[Dict[str, Any]] = None
         if action == 'lookup':
             ok, detail = _step_lookup(report, runners, spec_value)
         elif action == 'risk':
@@ -804,10 +1016,16 @@ def run_pipeline(path_or_dict: Union[str, Path, Dict[str, Any]],
             ok, detail = _step_correlate(report)
         elif action == 'assert':
             ok, detail = _step_assert(report, spec_value)
+        elif action == 'notify':
+            ok, detail, output = _step_notify(report, spec_value)
+        elif action == 'export':
+            ok, detail, output = _step_export(report, spec_value)
         else:  # action == 'output'
             ok, detail = _step_output(report, spec_value)
-        report['steps'].append(
-            {'step': number, 'action': action, 'ok': ok, 'detail': detail})
+        entry = {'step': number, 'action': action, 'ok': ok, 'detail': detail}
+        if output is not None:
+            entry['output'] = output
+        report['steps'].append(entry)
 
     report['finished'] = _now_iso()
     report['duration_ms'] = round((time.time() - started) * 1000, 1)
