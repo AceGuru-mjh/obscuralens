@@ -26,6 +26,7 @@ import csv
 import io
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -714,6 +715,98 @@ def build_parser() -> argparse.ArgumentParser:
     p_stego = tools_sub.add_parser('stego', help='steganography analysis')
     p_stego.add_argument('path', help='path to an image file')
     add_tools_common(p_stego)
+
+    # -- v6.0 part 2: analytics package --------------------------------------
+
+    p_analytics = sub.add_parser(
+        'analytics', help='offline analytics package (stats, anomalies, '
+                          'clusters, text, graphs, history)')
+    analytics_sub = p_analytics.add_subparsers(dest='action', metavar='<analysis>')
+
+    def add_analytics_common(p: argparse.ArgumentParser) -> None:
+        p.add_argument('-f', '--format', choices=('table', 'json'), default=None,
+                       help='output format (default: table)')
+        p.add_argument('-o', '--output', metavar='FILE',
+                       help='write output to FILE instead of stdout')
+        p.add_argument('--no-color', action='store_true',
+                       help='disable ANSI colours')
+
+    p_a_stats = analytics_sub.add_parser(
+        'stats', help='descriptive statistics for a numeric list')
+    p_a_stats.add_argument('--values', metavar='CSV',
+                           help='comma-separated numbers, e.g. 1,2,3,4,100')
+    p_a_stats.add_argument('--bins', type=int, default=10, metavar='N',
+                           help='histogram bin count (default: 10)')
+    add_analytics_common(p_a_stats)
+
+    p_a_anom = analytics_sub.add_parser(
+        'anomalies', help='outlier detection over a numeric list')
+    p_a_anom.add_argument('--values', metavar='CSV',
+                          help='comma-separated numbers, e.g. 1,2,3,4,100')
+    p_a_anom.add_argument('--method',
+                          choices=('ensemble', 'zscore', 'iqr', 'mad',
+                                   'grubbs', 'threshold'),
+                          default='ensemble',
+                          help='detector (default: ensemble)')
+    p_a_anom.add_argument('--threshold', type=float, default=None,
+                          metavar='X',
+                          help='z-score alarm level (default: 3.0; ignored '
+                               'for non-zscore methods)')
+    add_analytics_common(p_a_anom)
+
+    p_a_ts = analytics_sub.add_parser(
+        'timeseries', help='trend/changepoint summary for a value sequence')
+    p_a_ts.add_argument('--values', metavar='CSV',
+                        help='comma-separated values treated as a day-ordered '
+                             'series, e.g. 5,6,5,6,20,21')
+    add_analytics_common(p_a_ts)
+
+    p_a_clu = analytics_sub.add_parser(
+        'clusters', help='km-space clustering of lat,lon coordinate pairs')
+    p_a_clu.add_argument('--points', metavar='PAIRS',
+                         help='semicolon-separated "lat,lon" pairs, e.g. '
+                              '"52.0,13.0;52.1,13.1;52.2,13.2"')
+    p_a_clu.add_argument('--eps', type=float, default=25.0, metavar='KM',
+                         help='cluster radius in kilometres (default: 25)')
+    p_a_clu.add_argument('--min-points', type=int, default=3, metavar='N',
+                         help='minimum points per cluster (default: 3)')
+    add_analytics_common(p_a_clu)
+
+    p_a_kw = analytics_sub.add_parser(
+        'keywords', help='stopword-filtered keyword mining for a text')
+    p_a_kw.add_argument('--text', metavar='TEXT', help='text to mine')
+    p_a_kw.add_argument('--top', type=int, default=10, metavar='N',
+                        help='how many keywords to show (default: 10)')
+    add_analytics_common(p_a_kw)
+
+    p_a_lang = analytics_sub.add_parser(
+        'language', help='script and language fingerprint for a text')
+    p_a_lang.add_argument('--text', metavar='TEXT', help='text to fingerprint')
+    add_analytics_common(p_a_lang)
+
+    p_a_sim = analytics_sub.add_parser(
+        'similarity', help='four-metric text similarity between two strings')
+    p_a_sim.add_argument('--a', metavar='TEXT', help='first string')
+    p_a_sim.add_argument('--b', metavar='TEXT', help='second string')
+    add_analytics_common(p_a_sim)
+
+    p_a_graph = analytics_sub.add_parser(
+        'graph', help='investigation graph metrics (centrality, bridges)')
+    p_a_graph.add_argument('--entities', metavar='CSV',
+                           help='comma-separated entity ids, e.g. "a,b,c"')
+    p_a_graph.add_argument('--links', metavar='LIST',
+                           help='comma-separated "a-b" pairs, e.g. "a-b,b-c"')
+    p_a_graph.add_argument('--target', metavar='TARGET',
+                           help='run a live investigate() and analyse its '
+                                'entity graph instead')
+    add_analytics_common(p_a_graph)
+
+    p_a_hist = analytics_sub.add_parser(
+        'history', help='enrichment report over stored query history')
+    p_a_hist.add_argument('--limit', type=int, default=500, metavar='N',
+                          help='how many newest history rows to consider '
+                               '(default: 500)')
+    add_analytics_common(p_a_hist)
 
     # -- v5.0 analysis commands ----------------------------------------------------
 
@@ -3508,6 +3601,370 @@ def _cmd_data(args: argparse.Namespace) -> int:
     return 2
 
 
+# ---------------------------------------------------------------------------
+# v6.0 part 2: analytics commands
+# ---------------------------------------------------------------------------
+
+def _parse_value_csv(raw: Optional[str]) -> Optional[List[float]]:
+    """Split a ``--values`` CSV argument into floats (None on bad input)."""
+    if raw is None or not raw.strip():
+        return None
+    values: List[float] = []
+    for chunk in raw.split(','):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            values.append(float(chunk))
+        except ValueError:
+            return None
+    return values if values else None
+
+
+def _parse_point_pairs(raw: Optional[str]) -> Optional[List[List[float]]]:
+    """Split ``"lat,lon;lat,lon"`` into ``[[lat, lon], ...]`` (None on bad)."""
+    if raw is None or not raw.strip():
+        return None
+    points: List[List[float]] = []
+    for pair in raw.split(';'):
+        pair = pair.strip()
+        if not pair:
+            continue
+        parts = [part.strip() for part in pair.split(',')]
+        if len(parts) != 2:
+            return None
+        try:
+            points.append([float(parts[0]), float(parts[1])])
+        except ValueError:
+            return None
+    return points if points else None
+
+
+def _emit_analytics(args: argparse.Namespace, payload: Dict[str, Any],
+                    sections: List[Dict[str, Any]]) -> int:
+    """Emit an analytics result (JSON or rendered tables); always exit 0."""
+    fmt = getattr(args, 'format', None) or 'table'
+    if fmt == 'json':
+        _emit(json.dumps(payload, indent=2, ensure_ascii=False, default=str),
+              getattr(args, 'output', None))
+    else:
+        _emit(_render_sections_text(sections), getattr(args, 'output', None))
+    return 0
+
+
+def _cmd_analytics(args: argparse.Namespace) -> int:
+    action = getattr(args, 'action', None)
+    handlers: Dict[str, Any] = {
+        'stats': _cmd_analytics_stats,
+        'anomalies': _cmd_analytics_anomalies,
+        'timeseries': _cmd_analytics_timeseries,
+        'clusters': _cmd_analytics_clusters,
+        'keywords': _cmd_analytics_keywords,
+        'language': _cmd_analytics_language,
+        'similarity': _cmd_analytics_similarity,
+        'graph': _cmd_analytics_graph,
+        'history': _cmd_analytics_history,
+    }
+    handler = handlers.get(action)
+    if handler is None:
+        _err('usage: obscuralens analytics stats|anomalies|timeseries|'
+             'clusters|keywords|language|similarity|graph|history')
+        return 2
+    return handler(args)
+
+
+def _cmd_analytics_stats(args: argparse.Namespace) -> int:
+    """Descriptive statistics plus a histogram for --values."""
+    from .analytics.stats import histogram, summarize
+
+    values = _parse_value_csv(getattr(args, 'values', None))
+    if values is None:
+        _err('--values requires a comma-separated numeric list, '
+             'e.g. --values 1,2,3,4,100')
+        return 2
+    summary = summarize(values)
+    hist = histogram(values, bins=getattr(args, 'bins', 10) or 10)
+    payload: Dict[str, Any] = {
+        'values': values, 'summary': summary, 'histogram': hist,
+    }
+    sections = [
+        {'title': 'Descriptive Statistics', 'type': 'table',
+         'columns': ['Metric', 'Value'],
+         'rows': [[key, value] for key, value in summary.items()]},
+        {'title': 'Histogram', 'type': 'table',
+         'columns': ['Bin', 'Count'],
+         'rows': [[label, count]
+                  for label, count in zip(hist['bin_labels'],
+                                          hist['bin_counts'])]},
+    ]
+    return _emit_analytics(args, payload, sections)
+
+
+def _cmd_analytics_anomalies(args: argparse.Namespace) -> int:
+    """Anomaly detection for --values with --method / --threshold."""
+    from .analytics.anomaly import detect_anomalies
+
+    values = _parse_value_csv(getattr(args, 'values', None))
+    if values is None:
+        _err('--values requires a comma-separated numeric list, '
+             'e.g. --values 1,2,3,4,100')
+        return 2
+    method = getattr(args, 'method', 'ensemble') or 'ensemble'
+    kwargs: Dict[str, Any] = {}
+    threshold = getattr(args, 'threshold', None)
+    if threshold is not None and method == 'zscore':
+        kwargs['threshold'] = threshold
+    hits = detect_anomalies(values, method=method, **kwargs)
+    payload: Dict[str, Any] = {
+        'values': values, 'method': method, 'anomaly_count': len(hits),
+        'anomalies': [asdict(hit) for hit in hits],
+    }
+    sections = [
+        {'title': f"Anomalies ({method}) - {len(hits)} found", 'type': 'table',
+         'columns': ['Index', 'Value', 'Score', 'Method', 'Detail'],
+         'rows': [[hit.detail.get('index', ''), hit.value, round(hit.score, 4),
+                   hit.method,
+                   ', '.join(f'{key}={value}' for key, value in hit.detail.items()
+                             if key != 'index')]
+                  for hit in hits]},
+    ]
+    if not hits:
+        _info('no anomalies detected')
+    return _emit_analytics(args, payload, sections)
+
+
+def _cmd_analytics_timeseries(args: argparse.Namespace) -> int:
+    """Trend / changepoint summary treating --values as a day series."""
+    from .analytics.timeseries import series_summary, to_points
+
+    values = _parse_value_csv(getattr(args, 'values', None))
+    if values is None:
+        _err('--values requires a comma-separated numeric list, '
+             'e.g. --values 5,6,5,6,20,21')
+        return 2
+    points = to_points([(index * 86400, value)
+                        for index, value in enumerate(values)])
+    summary = series_summary(points)
+    payload: Dict[str, Any] = {'values': values, 'summary': summary}
+    sections = [
+        {'title': 'Time Series Summary', 'type': 'table',
+         'columns': ['Metric', 'Value'],
+         'rows': [[key, value] for key, value in summary.items()]},
+    ]
+    return _emit_analytics(args, payload, sections)
+
+
+def _cmd_analytics_clusters(args: argparse.Namespace) -> int:
+    """Kilometre-space clustering for --points "lat,lon;..." pairs."""
+    from .analytics.geoanalytics import cluster_points
+
+    points = _parse_point_pairs(getattr(args, 'points', None))
+    if points is None:
+        _err('--points requires semicolon-separated "lat,lon" pairs, e.g. '
+             '"52.0,13.0;52.1,13.1;52.2,13.2"')
+        return 2
+    eps = getattr(args, 'eps', 25.0)
+    eps = eps if eps is not None and eps > 0 else 25.0
+    min_points = getattr(args, 'min_points', 3) or 3
+    clusters = cluster_points(points, eps_km=eps, min_points=min_points)
+    payload: Dict[str, Any] = {
+        'point_count': len(points), 'eps_km': eps,
+        'min_points': min_points, 'cluster_count': len(clusters),
+        'clusters': clusters,
+    }
+    sections = [
+        {'title': f"Clusters ({len(clusters)} found, eps {eps} km)",
+         'type': 'table',
+         'columns': ['Centroid (lat, lon)', 'Size', 'Radius km', 'Members'],
+         'rows': [[f"{c['centroid'][0]:.4f}, {c['centroid'][1]:.4f}",
+                   c['size'], c['radius_km'],
+                   ', '.join(c['members'])] for c in clusters]},
+    ]
+    if not clusters:
+        _info('no clusters at this eps; try --eps larger')
+    return _emit_analytics(args, payload, sections)
+
+
+def _cmd_analytics_keywords(args: argparse.Namespace) -> int:
+    """Keyword mining for --text."""
+    from .analytics.textmetrics import extract_keywords
+
+    text = getattr(args, 'text', None)
+    if not text or not text.strip():
+        _err('--text requires the text to mine')
+        return 2
+    top = getattr(args, 'top', 10)
+    keywords = extract_keywords(text, top=top if top and top > 0 else 10)
+    payload: Dict[str, Any] = {
+        'text': text, 'keyword_count': len(keywords), 'keywords': keywords,
+    }
+    sections = [
+        {'title': f"Keywords (top {len(keywords)})", 'type': 'table',
+         'columns': ['Keyword', 'Frequency', 'Weight'],
+         'rows': [[entry.get('term', ''), entry.get('count', ''),
+                   round(float(entry.get('weight', 0.0)), 4)]
+                  for entry in keywords]},
+    ]
+    if not keywords:
+        _info('no keywords extracted (stopwords only?)')
+    return _emit_analytics(args, payload, sections)
+
+
+def _cmd_analytics_language(args: argparse.Namespace) -> int:
+    """Script / language fingerprint for --text."""
+    from .analytics.textmetrics import detect_language_script
+
+    text = getattr(args, 'text', None)
+    if not text or not text.strip():
+        _err('--text requires the text to fingerprint')
+        return 2
+    profile = detect_language_script(text)
+    payload: Dict[str, Any] = {'text': text, 'profile': profile}
+    script_rows = [[script, count]
+                   for script, count in sorted(
+                       profile.get('script_counts', {}).items(),
+                       key=lambda item: item[1], reverse=True)
+                   if count]
+    sections = [
+        {'title': 'Language / Script', 'type': 'table',
+         'columns': ['Field', 'Value'],
+         'rows': [
+             ['dominant_script', profile.get('dominant_script')],
+             ['language_guess', profile.get('language_guess')],
+             ['confidence', profile.get('confidence')],
+             ['hint', profile.get('hint')],
+         ]},
+        {'title': 'Script Counts', 'type': 'table',
+         'columns': ['Script', 'Characters'],
+         'rows': script_rows},
+    ]
+    return _emit_analytics(args, payload, sections)
+
+
+def _cmd_analytics_similarity(args: argparse.Namespace) -> int:
+    """Four-metric similarity between --a and --b."""
+    from .analytics.textmetrics import text_similarity_report
+
+    a = getattr(args, 'a', None)
+    b = getattr(args, 'b', None)
+    if not a or not a.strip() or not b or not b.strip():
+        _err('--a and --b both require text')
+        return 2
+    report = text_similarity_report(a, b)
+    payload: Dict[str, Any] = {'a': a, 'b': b, 'report': report}
+    sections = [
+        {'title': 'Text Similarity', 'type': 'table',
+         'columns': ['Metric', 'Score'],
+         'rows': [[key, round(value, 4) if isinstance(value, float) else value]
+                  for key, value in report.items()]},
+    ]
+    return _emit_analytics(args, payload, sections)
+
+
+def _cmd_analytics_graph(args: argparse.Namespace) -> int:
+    """Graph metrics for --entities/--links, or a live investigate graph."""
+    from .analytics.graphmetrics import graph_summary
+
+    entities_arg = getattr(args, 'entities', None)
+    links_arg = getattr(args, 'links', None)
+    target = getattr(args, 'target', None)
+    if target:
+        try:
+            investigation = investigate(target)
+        except ValueError as e:
+            _err(str(e))
+            return 2
+        entities = investigation.get('entities') or []
+        links = investigation.get('links') or []
+    elif entities_arg or links_arg:
+        entity_ids = [item.strip() for item in (entities_arg or '').split(',')
+                      if item.strip()]
+        entities = [{'id': identifier} for identifier in entity_ids]
+        links = []
+        for pair in (links_arg or '').split(','):
+            pair = pair.strip()
+            if not pair or '-' not in pair:
+                continue
+            source, _, dest = pair.partition('-')
+            links.append({'source': source.strip(), 'target': dest.strip()})
+    else:
+        _err('provide --entities/--links (e.g. --entities "a,b,c" '
+             '--links "a-b,b-c") or --target for a live investigation graph')
+        return 2
+    if not entities and not links:
+        _err('no usable entities or links in the input')
+        return 2
+    summary = graph_summary(entities, links)
+    payload: Dict[str, Any] = {
+        'entity_count': len(entities), 'link_count': len(links),
+        'summary': summary,
+    }
+    sections = [
+        {'title': 'Graph Summary', 'type': 'table',
+         'columns': ['Metric', 'Value'],
+         'rows': [[key, value] for key, value in summary.items()
+                  if key not in ('top_entities', 'bridges')]},
+        {'title': 'Top Entities', 'type': 'table',
+         'columns': ['Entity', 'Degree', 'Degree Centrality', 'PageRank',
+                     'Betweenness'],
+         'rows': [[entry.get('id', ''), entry.get('degree', ''),
+                   round(float(entry.get('degree_centrality', 0.0)), 4),
+                   round(float(entry.get('pagerank', 0.0)), 4),
+                   round(float(entry.get('betweenness', 0.0)), 4)]
+                  for entry in summary.get('top_entities', [])]},
+        {'title': 'Bridges', 'type': 'table',
+         'columns': ['Source', 'Target'],
+         'rows': [[bridge.get('source', ''), bridge.get('target', '')]
+                  for bridge in summary.get('bridges', [])]},
+    ]
+    return _emit_analytics(args, payload, sections)
+
+
+def _cmd_analytics_history(args: argparse.Namespace) -> int:
+    """Enrichment report over the stored query history."""
+    from .analytics.enrich import enrichment_report
+
+    limit = getattr(args, 'limit', 500)
+    report = enrichment_report(limit=limit if limit and limit > 0 else 500)
+    payload: Dict[str, Any] = {'limit': limit, 'report': report}
+    top_kinds = (report.get('kind_frequency') or [])[:10]
+    hours = report.get('hour_profile') or []
+    busy_hours = sorted(
+        (entry for entry in hours if entry.get('count')),
+        key=lambda entry: entry.get('count', 0), reverse=True)[:5]
+    sections = [
+        {'title': 'History Enrichment', 'type': 'table',
+         'columns': ['Metric', 'Value'],
+         'rows': [
+             ['total_queries', report.get('total_queries', 0)],
+             ['span_days', report.get('span_days')],
+             ['source_count', len(report.get('source_reliability') or [])],
+         ]},
+        {'title': 'Kind Frequency (top 10)', 'type': 'table',
+         'columns': ['Kind', 'Count', 'Share %'],
+         'rows': [[entry.get('kind', ''), entry.get('count', ''),
+                   entry.get('percentage', '')] for entry in top_kinds]},
+        {'title': 'Busiest Hours (UTC)', 'type': 'table',
+         'columns': ['Hour', 'Count', 'Share %'],
+         'rows': [[entry.get('hour', ''), entry.get('count', ''),
+                   entry.get('percentage', '')] for entry in busy_hours]},
+        {'title': 'Success Rates by Kind', 'type': 'table',
+         'columns': ['Kind', 'Total', 'Succeeded', 'Failed', 'Rate %'],
+         'rows': [[entry.get('kind', ''), entry.get('total', ''),
+                   entry.get('succeeded', ''), entry.get('failed', ''),
+                   entry.get('success_rate', '')]
+                  for entry in report.get('success_rates', [])]},
+        {'title': 'Day-Volume Anomalies', 'type': 'table',
+         'columns': ['Value', 'Score', 'Detail'],
+         'rows': [[hit.get('value', ''), round(float(hit.get('score', 0.0)), 4),
+                   hit.get('detail', '')]
+                  for hit in report.get('anomalies', [])]},
+    ]
+    if not report.get('total_queries'):
+        _info('history is empty - run some lookups first')
+    return _emit_analytics(args, payload, sections)
+
+
 _HANDLERS = {
     'ip': _cmd_ip,
     'phone': _cmd_phone,
@@ -3567,6 +4024,8 @@ _HANDLERS = {
     'update': _cmd_update,
     'i18n': _cmd_i18n,
     'data': _cmd_data,
+    # v6.0 part 2: analytics
+    'analytics': _cmd_analytics,
 }
 
 

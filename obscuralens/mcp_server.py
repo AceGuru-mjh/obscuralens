@@ -753,6 +753,159 @@ TOOLS: List[Dict[str, Any]] = [
             'additionalProperties': False,
         },
     },
+    # v6.0 part 2: analytics tools
+    {
+        'name': 'analytics_stats',
+        'description': 'Descriptive statistics and a histogram for a list of '
+                       'numbers: count, mean/median, sample stdev, min/max, '
+                       'quartiles, IQR, bias-corrected skewness and excess '
+                       'kurtosis, plus an equal-width histogram. Non-numeric '
+                       'items are dropped defensively. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'values': {
+                    'type': 'array',
+                    'items': {'type': 'number'},
+                    'description': 'Numbers to summarise.',
+                },
+                'bins': {'type': 'integer',
+                         'description': 'Histogram bin count (default: 10).'},
+            },
+            'required': ['values'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'analytics_anomalies',
+        'description': 'Outlier detection over a list of numbers with a '
+                       'shared anomaly record: z-score, Tukey IQR fences, '
+                       'MAD robust z, the Grubbs single-outlier test, a '
+                       'voting ensemble (default) or hard threshold bounds. '
+                       'Each hit reports value, score, method and a detail '
+                       'dict with its index. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'values': {
+                    'type': 'array',
+                    'items': {'type': 'number'},
+                    'description': 'Numbers to screen for outliers.',
+                },
+                'method': {'type': 'string',
+                           'description': 'Detector: ensemble (default), '
+                                          'zscore, iqr, mad, grubbs or '
+                                          'threshold.'},
+                'threshold': {'type': 'number',
+                              'description': 'z-score alarm level for the '
+                                             'zscore method (default: 3.0).'},
+            },
+            'required': ['values'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'analytics_keywords',
+        'description': 'Stopword-filtered keyword mining for a text: term '
+                       'frequency, share-of-corpus weight and rank, most '
+                       'significant first. Works for paste dumps, advisories '
+                       ' and message triage. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'text': {'type': 'string',
+                         'description': 'Text to mine for keywords.'},
+                'top': {'type': 'integer',
+                        'description': 'How many keywords to return '
+                                       '(default: 10).'},
+            },
+            'required': ['text'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'analytics_language',
+        'description': 'Script and language fingerprint for a text: dominant '
+                       'script (Latin, Cyrillic, Han, Hiragana, Katakana, '
+                       'Hangul, Arabic, Hebrew, Devanagari, Thai), '
+                       'per-script character counts, a language guess with '
+                       'confidence and a human-readable hint. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'text': {'type': 'string',
+                         'description': 'Text to fingerprint.'},
+            },
+            'required': ['text'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'analytics_similarity',
+        'description': 'Four-metric similarity between two strings: '
+                       'Jaro-Winkler, Levenshtein ratio, bigram similarity '
+                       'and sparse-vector cosine, plus their mean and both '
+                       'lengths - identity resolution and typo/squat '
+                       'screening in one call. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'a': {'type': 'string',
+                      'description': 'First string.'},
+                'b': {'type': 'string',
+                      'description': 'Second string.'},
+            },
+            'required': ['a', 'b'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'analytics_graph',
+        'description': 'Graph metrics over an entities/links payload (the '
+                       'investigate/correlation shape): degree and PageRank '
+                       'centrality, Brandes betweenness, connected '
+                       'components, label-propagation communities, Tarjan '
+                       'bridges and a one-shot summary dossier with the top '
+                       'entities. Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'entities': {
+                    'type': 'array',
+                    'items': {'type': 'object'},
+                    'description': 'Entity dicts with an id (or kind/type '
+                                   'plus value).',
+                },
+                'links': {
+                    'type': 'array',
+                    'items': {'type': 'object'},
+                    'description': 'Link dicts with source/target (or '
+                                   'from/to).',
+                },
+            },
+            'required': ['entities', 'links'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'analytics_history',
+        'description': 'Enrichment report over the stored query history: kind '
+                       'frequency, hour/weekday activity profiles, per-kind '
+                       'success rates, field-count statistics, source '
+                       'reliability, day-volume anomalies and the most '
+                       're-queried targets. Reads the local SQLite history '
+                       'read-only; an empty history yields an empty report. '
+                       'Purely offline.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'limit': {'type': 'integer',
+                          'description': 'How many newest history rows to '
+                                         'consider (default: 500).'},
+            },
+            'additionalProperties': False,
+        },
+    },
 ]
 
 
@@ -1218,6 +1371,189 @@ def _tool_plate_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
     from .trackers import PlateTracker
     result = PlateTracker().track(_required_str(arguments, 'plate'))
     return _compact_tracker_result(result, 'plate')
+
+
+# ---------------------------------------------------------------------------
+# v6.0 part 2: analytics handlers
+# ---------------------------------------------------------------------------
+
+def _required_numbers(arguments: Dict[str, Any],
+                      key: str = 'values') -> List[float]:
+    """Return a required non-empty list of numbers or raise ValueError."""
+    raw = arguments.get(key)
+    if not isinstance(raw, list) or not raw:
+        raise ValueError(f'{key} is required')
+    cleaned = [float(item) for item in raw
+               if isinstance(item, (int, float))
+               and not isinstance(item, bool)]
+    if not cleaned:
+        raise ValueError(f'{key} must contain at least one number')
+    return cleaned
+
+
+def _opt_int(arguments: Dict[str, Any], key: str,
+             default: int, minimum: int = 1) -> int:
+    """Optional integer argument clamped to a sane minimum."""
+    raw = arguments.get(key)
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return default
+    return raw if raw >= minimum else default
+
+
+def _tool_analytics_stats(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Descriptive statistics and a histogram for a list of numbers.
+
+    Input: ``values`` - list of numbers (non-numeric items are dropped
+    defensively); ``bins`` - optional histogram bin count (default 10).
+
+    Output: ``{'count': usable numbers, 'summary': {count, mean, median,
+    stdev, min, max, q1, q3, iqr, skew, kurt}, 'histogram': {bin_edges,
+    bin_counts, bin_labels}}``. Always well-formed; never an exception.
+
+    Sources: purely offline (analytics.stats module).
+    """
+    from .analytics.stats import histogram, summarize
+    values = _required_numbers(arguments)
+    bins = _opt_int(arguments, 'bins', 10)
+    return {'count': len(values), 'summary': summarize(values),
+            'histogram': histogram(values, bins=bins)}
+
+
+def _tool_analytics_anomalies(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Outlier detection over a list of numbers.
+
+    Input: ``values`` - list of numbers; ``method`` - one of ensemble
+    (default), zscore, iqr, mad, grubbs, threshold; ``threshold`` - z-score
+    alarm level, applied to the zscore method only (default 3.0).
+
+    Output: ``{'count': usable numbers, 'method': echo, 'anomaly_count':
+    n, 'anomalies': [{value, score, method, detail: {index, ...}}]}``.
+    Each hit's ``detail`` always carries the value's index; ensemble hits
+    add the per-method vote breakdown.
+
+    Sources: purely offline (analytics.anomaly module).
+    """
+    from dataclasses import asdict
+
+    from .analytics.anomaly import detect_anomalies
+    values = _required_numbers(arguments)
+    method = arguments.get('method')
+    method = method if isinstance(method, str) and method.strip() \
+        else 'ensemble'
+    kwargs: Dict[str, Any] = {}
+    threshold = arguments.get('threshold')
+    if isinstance(threshold, (int, float)) and not isinstance(threshold, bool) \
+            and method == 'zscore':
+        kwargs['threshold'] = float(threshold)
+    hits = detect_anomalies(values, method=method, **kwargs)
+    return {'count': len(values), 'method': method,
+            'anomaly_count': len(hits),
+            'anomalies': [asdict(hit) for hit in hits]}
+
+
+def _tool_analytics_keywords(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Stopword-filtered keyword mining for a text.
+
+    Input: ``text`` - the text to mine; ``top`` - how many keywords to
+    return (default 10).
+
+    Output: ``{'keyword_count': n, 'keywords': [{term, count, weight}]}``
+    sorted by weight (share of the keyword corpus) descending.
+
+    Sources: purely offline (analytics.textmetrics module).
+    """
+    from .analytics.textmetrics import extract_keywords
+    text = _required_str(arguments, 'text')
+    top = _opt_int(arguments, 'top', 10)
+    keywords = extract_keywords(text, top=top)
+    return {'keyword_count': len(keywords), 'keywords': keywords}
+
+
+def _tool_analytics_language(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Script and language fingerprint for a text.
+
+    Input: ``text`` - the text to fingerprint.
+
+    Output: ``{'dominant_script', 'script_counts': {script: chars},
+    'hint', 'language_guess', 'confidence'}`` covering Latin, Cyrillic,
+    Greek, Han, Hiragana, Katakana, Hangul, Arabic, Hebrew, Devanagari
+    and Thai scripts.
+
+    Sources: purely offline (analytics.textmetrics module).
+    """
+    from .analytics.textmetrics import detect_language_script
+    return detect_language_script(_required_str(arguments, 'text'))
+
+
+def _tool_analytics_similarity(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Four-metric similarity between two strings.
+
+    Input: ``a`` and ``b`` - the strings to compare.
+
+    Output: ``{'jaro_winkler', 'levenshtein_ratio', 'ngram', 'cosine',
+    'mean', 'length_a', 'length_b'}`` - every metric 0.0-1.0, with the
+    mean of the four as a single screening number.
+
+    Sources: purely offline (analytics.textmetrics module).
+    """
+    from .analytics.textmetrics import text_similarity_report
+    return text_similarity_report(_required_str(arguments, 'a'),
+                                  _required_str(arguments, 'b'))
+
+
+def _tool_analytics_graph(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Graph metrics over an entities/links payload.
+
+    Input: ``entities`` - list of entity dicts (``'id'``, or ``'kind'``/
+    ``'type'`` plus ``'value'``); ``links`` - list of link dicts
+    (``'source'``/``'target'`` or ``'from'``/``'to'``) - the same shapes
+    the investigate and correlation engines emit.
+
+    Output: ``{'entity_count', 'link_count', 'summary': {node_count,
+    edge_count, density, avg_degree, component_count,
+    largest_component_size, community_count, top_entities: [{id, degree,
+    degree_centrality, pagerank, betweenness}], bridge_count, bridges:
+    [{source, target}], isolated_nodes}}``. Betweenness is skipped above
+    200 nodes for runtime safety.
+
+    Sources: purely offline (analytics.graphmetrics module).
+    """
+    from .analytics.graphmetrics import graph_summary
+    entities = arguments.get('entities')
+    links = arguments.get('links')
+    if not isinstance(entities, list):
+        entities = []
+    if not isinstance(links, list):
+        links = []
+    summary = graph_summary(entities, links)
+    return {'entity_count': len(entities), 'link_count': len(links),
+            'summary': summary}
+
+
+def _tool_analytics_history(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Enrichment report over the stored query history.
+
+    Input: ``limit`` - optional newest-rows window (default 500).
+
+    Output: ``{'total_queries', 'span_days', 'kind_frequency', 'hour_
+    profile', 'weekday_profile', 'success_rates', 'field_stats',
+    'source_reliability', 'anomalies', 'top_targets', 'generated_at'}`` -
+    the analyst's workload census over their own local history. An empty
+    history yields a well-formed empty report, never an exception.
+
+    Sources: purely offline (the local SQLite history, read-only, via
+    analytics.enrich).
+    """
+    from .analytics.enrich import enrichment_report
+    limit = _opt_int(arguments, 'limit', 500, minimum=0)
+    return enrichment_report(limit=limit)
 
 
 def _tool_encode(arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -1727,6 +2063,14 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     'tools_geo_profile': _tool_geo_profile,
     'tools_patterns': _tool_patterns,
     'tools_batch': _tool_batch,
+    # v6.0 part 2: analytics tools
+    'analytics_stats': _tool_analytics_stats,
+    'analytics_anomalies': _tool_analytics_anomalies,
+    'analytics_keywords': _tool_analytics_keywords,
+    'analytics_language': _tool_analytics_language,
+    'analytics_similarity': _tool_analytics_similarity,
+    'analytics_graph': _tool_analytics_graph,
+    'analytics_history': _tool_analytics_history,
 }
 
 
