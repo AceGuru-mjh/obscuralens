@@ -71,3 +71,8 @@ data/alerts.json
 
 # Launcher virtualenv
 /.venv-start/
+
+# The TypeScript SDK ships its compiled output in-repo (tests import
+# from sdk-js/dist; there is no CI build step), so it opts back in
+# despite the Python-build `dist/` pattern above.
+!sdk-js/dist/

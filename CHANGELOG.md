@@ -2,6 +2,75 @@
 
 ## Changelog
 
+## 6.0-part5 — Ecosystem
+
+Part 5 of the v6.0 series: everything that makes ObscuraLens embeddable
+in someone else's program. Python SDK to full v6 coverage, a second SDK
+in TypeScript, the MCP surface at 63 tools, plugins that extend more
+than sources, and shell completions. See [docs/ecosystem.md](docs/ecosystem.md).
+
+### Added — Python SDK v6
+
+- Six new kind conveniences on both clients: `vin`, `flight`, `mmsi`,
+  `app` (+ friendly `package` alias), `bssid`, `plate` — the SDK now
+  models all 20 kinds.
+- `dorks(target, kind=None)` with a `DorkReport` model (`.links()`).
+- Nine `analytics_*` methods (stats, anomalies, timeseries, clusters,
+  keywords, language, similarity, graph, history) returning a tagged
+  `AnalyticsEnvelope`.
+- Six `notify_*` and six `automation_*` methods with
+  `NotifyChannel`/`NotifyChannels`/`NotifyDelivery` and
+  `AutomationTask`/`AutomationTasks` models.
+- `export_stix` / `export_misp` with `StixBundle` and `MispEvent`
+  models; `set_stream_topics(topics)` (list or comma-string).
+- New fluent workflow API `InvestigationSession`
+  (`obscuralens.sdk.session`): step log with durations, error capture
+  (strict mode optional), notes, sorted target collection,
+  `to_case()` fan-out, `summary()` reports and dump/load JSON receipts
+  that replay without a client.
+- 142 new offline tests (`tests/test_sdk_v6.py`) asserting the exact
+  wire contract of every new method via `StaticTransport`.
+
+### Added — TypeScript/JavaScript SDK (`sdk-js/`)
+
+- A dependency-free ESM SDK for Node 18+/browsers: `FetchTransport`
+  (injectable fetch, `AbortSignal.timeout`), retry/backoff with
+  `Retry-After`, the Python-parity typed error hierarchy, 80+ typed
+  client methods covering the entire v6.1 REST surface, a TypeScript
+  `InvestigationSession`, and `StaticTransport` for offline tests.
+- TypeScript 5 strict-mode clean; compiled `dist/` + `.d.ts` ship in
+  the repo. 78 node:test cases including two real `node:http`
+  end-to-end smokes.
+
+### Added — MCP server 53 → 63 tools
+
+- `export_misp` (MISP core-format event from stored history),
+  `analytics_clusters` (great-circle DBSCAN), `analytics_trend`
+  (least-squares + CUSUM), `analytics_forecast` (linear-trend
+  forecast, horizon 1-24), `history_search` (substring search over
+  stored lookups), `watch_add`/`watch_remove`, `case_list`/
+  `case_create` (with optional first target), and `data_pack_lookup`
+  (offline country/port/language/currency/http_status/cwe/airline/
+  wmi/mid lookups).
+
+### Added — Plugin SDK v2
+
+- Plugins may now define `PLUGIN_META` manifests, `COMMANDS` (dispatched
+  via `obscuralens plugins run <name> [<args>...]`), `REPORT_SECTIONS`,
+  `TOOLS` (MCP surface) and `ANALYTICS` hooks alongside the v1 `SOURCES`
+  contract; v1 plugins load unchanged, `requires_api` gating protects
+  forward compatibility, and every piece is validated in isolation.
+- New CLI: `obscuralens plugins check <file>` (isolated plugin linter)
+  and `plugins run`; `plugins list` reports the v2 surface per plugin.
+- Three documented example plugins ship in `plugins-examples/`.
+
+### Added — Shell completions
+
+- `obscuralens completion bash|zsh|fish` generates self-contained,
+  deterministic completion scripts from the live argparse parser —
+  every subcommand, nested group, option string and `-f/--format`
+  choice.
+
 ## 6.1.0 — Corroboration & Coverage
 
 ObscuraLens 6.1 is a trust-and-reach release. It adds **evidence

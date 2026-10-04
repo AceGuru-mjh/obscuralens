@@ -29,7 +29,8 @@ Multi-source OSINT console and investigation platform for **20 target kinds**: I
 - **Part 2 — analytics package**: a new `obscuralens.analytics` layer (10 modules, pure stdlib, ~7,500 lines) for statistics, time-series trend/changepoint workups, anomaly detection (z-score / IQR / MAD / Grubbs / ensemble), clustering (DBSCAN / k-means / hierarchical), string similarity, text metrics with language/script fingerprinting, investigation-graph metrics, spatial analytics, screening models and query-history enrichment — wired into a new `obscuralens analytics` CLI group, nine `/api/analytics/*` REST endpoints and seven `analytics_*` MCP tools (47 total). See [docs/analytics.md](docs/analytics.md).
 - **Part 3 — web UI expansion**: five new single-page views (analytics, map, compare, profile, monitor), an offline world map, nine advanced canvas chart types and live server-sent-events updates.
 - **Part 4 — automation & sharing**: a multi-channel notification centre (webhook / Telegram / Discord / Slack / SMTP, each with event subscriptions, severity floors, local quiet hours and a 5-minute dedup window), a cron-shaped task scheduler (interval/daily/weekly; watchlist re-checks, YAML pipelines, history reports, feed refreshes, channel probes; daemon tick loop), deterministic STIX 2.1 bundle and MISP core-format event exports built from stored lookups, and new `notify`/`export` pipeline steps — wired into the `notify`/`automation` CLI groups, 14 REST endpoints and five MCP tools. See [docs/automation.md](docs/automation.md).
-- Parts 5-6 (SDK v6 + 60-tool MCP, quality/benchmarks/docs) follow.
+- **Part 5 — ecosystem**: the Python SDK grows to full v6 coverage (all 20 kind lookups, nine analytics methods, six notification and six automation methods, STIX/MISP exports, the dork builder and a fluent `InvestigationSession` workflow API, mirrored across sync and async clients, +5,500 lines with 142 offline tests); a brand-new **TypeScript/JavaScript SDK** (`sdk-js/`, zero npm dependencies, strict-mode clean, 78 node:test cases, ships compiled `dist/` + `.d.ts`); the **MCP server grows 53 → 63 tools** (MISP export, geo-clustering, trend + forecast, history search, watch and case management, offline data-pack lookups); a **Plugin SDK v2** (commands, report sections, MCP tools and analytics hooks beyond data sources, with `PLUGIN_META` manifests, an isolated `plugins check` linter, `plugins run` dispatch and three shipped example plugins); and **bash/zsh/fish shell completions** generated from the live CLI parser (`obscuralens completion bash|zsh|fish`). See [docs/ecosystem.md](docs/ecosystem.md).
+- Part 6 (quality/benchmarks/docs) follows.
 
 ## What's new in v5.2 (Sources & Speed)
 
@@ -161,7 +162,7 @@ Optional extras: `pip install -e ".[web]"` (web UI/API), `".[tui]"` (terminal UI
 | **pipx / uv (no clone)** | `pipx install obscuralens` · `uvx obscuralens ip 8.8.8.8` | once published to PyPI |
 | **Web UI + REST API** | `pip install -e ".[web]"` then `obscuralens serve` | http://127.0.0.1:8000 (OpenAPI at `/docs`) |
 | **Terminal UI (TUI)** | `pip install -e ".[tui]"` then `obscuralens tui` | Textual rich interface |
-| **MCP server (AI agents)** | `obscuralens mcp` | JSON-RPC over stdio; 34 tools |
+| **MCP server (AI agents)** | `obscuralens mcp` | JSON-RPC over stdio; 63 tools |
 | **Docker** | `docker run --rm ghcr.io/aceguru-mjh/obscuralens ip 8.8.8.8` | published to GHCR on `main` |
 | **Docker Compose (web)** | `docker compose up` | serves the web UI on :8000 |
 | **Standalone executable** | `pyinstaller scripts/obscuralens.spec --noconfirm` | self-contained `.exe` (console + web UI + TUI inside); CI uploads `obscuralens-windows-exe` |

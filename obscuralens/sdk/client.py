@@ -1,11 +1,16 @@
 """
 ObscuraLensClient — the synchronous Python SDK for the ObscuraLens REST API.
 
-One class, every endpoint exposed by ``obscuralens/web/app.py`` (v5.1):
-the 14 tracker kinds, investigations, risk scoring, timelines,
-correlation, threat intel, cases, the watchlist, exports, history,
-settings/keys, the analyst toolbox, HTML reports, pattern-of-life,
-webhook alerts and batch lookups.
+One class, every endpoint exposed by ``obscuralens/web/app.py``: the 20
+tracker kinds (14 classic + the six v6.0 sensor kinds ``vin`` / ``flight``
+/ ``mmsi`` / ``app`` / ``bssid`` / ``plate``), investigations, risk
+scoring, timelines, correlation, threat intel, cases, the watchlist,
+graph exports, history, settings/keys, the analyst toolbox (including
+the dork builder), HTML reports, pattern-of-life, webhook alerts, batch
+lookups — and the v6.0 surface: the nine analytics endpoints,
+notification channels and broadcasts, the automation scheduler and the
+STIX 2.1 / MISP intelligence-sharing exports, plus the live-stream topic
+declaration.
 
 Quickstart::
 
@@ -21,12 +26,20 @@ Quickstart::
         if report.is_high_or_worse():
             print(report.explain())        # weighted signal lines
 
+        dorks = client.dorks("example.com")
+        print(dorks.links()[0])            # ready-to-open search URL
+
+        envelope = client.analytics_stats([1, 2, 3, 4, 100])
+        print(envelope.get("summary"))     # mean/median/quartiles block
+
 The client is transport-agnostic: pass any
 :class:`~obscuralens.sdk.transport.Transport` (e.g. the bundled
 :class:`~obscuralens.sdk.transport.StaticTransport`) to fake the server in
 tests. Retries with exponential backoff, ``Retry-After`` handling and the
 full exception mapping are built in — see
-:mod:`obscuralens.sdk.exceptions`.
+:mod:`obscuralens.sdk.exceptions`. For guided multi-step investigations
+on top of this client see
+:class:`~obscuralens.sdk.session.InvestigationSession`.
 """
 
 import time
@@ -51,23 +64,32 @@ from .exceptions import (
 from .models import (
     KINDS,
     AlertConfig,
+    AnalyticsEnvelope,
+    AutomationTasks,
+    AutomationTaskView,
     BatchProgress,
     Case,
     CaseItem,
     CaseNote,
     CorrelationResult,
     DiffReport,
+    DorkReport,
     HistoryResult,
     IntelVerdict,
     InvestigationReport,
     KindInfo,
     LookupResult,
+    MispEvent,
+    NotifyChannel,
+    NotifyChannels,
+    NotifyDelivery,
     PairComparison,
     PatternReport,
     RiskReport,
     ServiceKey,
     SourceHealthEntry,
     StatsSummary,
+    StixBundle,
     Timeline,
     ToolboxResult,
     WatchDiff,
@@ -793,6 +815,165 @@ class ObscuraLensClient:
             >>> res = client.coords("48.8584, 2.2945")   # doctest: +SKIP
         """
         return self.lookup('coords', target)
+
+    def vin(self, target: str) -> LookupResult:
+        """
+        Look up a vehicle identification number (WMI manufacturer, region,
+        model-year decode, offline VIN pack).
+
+        ``GET /api/lookup/vin/{target}``
+
+        Args:
+            target: 17-character VIN, e.g. ``"1HGCM82633A004352"``.
+
+        Returns:
+            :class:`~obscuralens.sdk.models.LookupResult` with fields
+            such as ``manufacturer``, ``country``, ``model_year``.
+
+        Raises:
+            BadRequestError: invalid VIN shape.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> res = client.vin("1HGCM82633A004352")   # doctest: +SKIP
+        """
+        return self.lookup('vin', target)
+
+    def flight(self, target: str) -> LookupResult:
+        """
+        Look up a flight (IATA number, route airports, scheduled and
+        actual times, live position when airborne).
+
+        ``GET /api/lookup/flight/{target}``
+
+        Args:
+            target: flight designator, e.g. ``"BA117"``.
+
+        Returns:
+            :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: invalid flight designator.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> res = client.flight("BA117")   # doctest: +SKIP
+        """
+        return self.lookup('flight', target)
+
+    def mmsi(self, target: str) -> LookupResult:
+        """
+        Look up a vessel's MMSI (flag state, MID decode, name, course,
+        live AIS position when in range).
+
+        ``GET /api/lookup/mmsi/{target}``
+
+        Args:
+            target: 9-digit MMSI, e.g. ``"366982610"``.
+
+        Returns:
+            :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: invalid MMSI shape.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> res = client.mmsi("366982610")   # doctest: +SKIP
+        """
+        return self.lookup('mmsi', target)
+
+    def app(self, target: str) -> LookupResult:
+        """
+        Look up a software package / app identifier (registry probes for
+        npm, PyPI, crates.io, Docker Hub and friends).
+
+        ``GET /api/lookup/app/{target}``
+
+        Args:
+            target: package identifier, e.g. ``"left-pad@1.3.0"`` or a
+                plain name.
+
+        Returns:
+            :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: invalid package identifier.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> res = client.app("requests")   # doctest: +SKIP
+        """
+        return self.lookup('app', target)
+
+    def package(self, target: str) -> LookupResult:
+        """
+        Alias for :meth:`app` — the software-package sensor.
+
+        The web API's kind name is ``app``; this spelling exists for
+        callers who find ``package`` more natural.
+
+        ``GET /api/lookup/app/{target}``
+
+        Args:
+            target: package identifier (see :meth:`app`).
+
+        Returns:
+            :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: invalid package identifier.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> res = client.package("left-pad")   # doctest: +SKIP
+        """
+        return self.lookup('app', target)
+
+    def bssid(self, target: str) -> LookupResult:
+        """
+        Look up a wireless access point BSSID (OUI vendor, observed
+        location hints from crowd-sourced databases).
+
+        ``GET /api/lookup/bssid/{target}``
+
+        Args:
+            target: BSSID in colon notation, e.g.
+            ``"b8:27:eb:aa:bb:cc"`` — the AP MAC, not a client MAC.
+
+        Returns:
+            :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: invalid BSSID.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> res = client.bssid("b8:27:eb:aa:bb:cc")   # doctest: +SKIP
+        """
+        return self.lookup('bssid', target)
+
+    def plate(self, target: str) -> LookupResult:
+        """
+        Look up a licence plate (country/state format detection from the
+        offline plate-formats pack, region context).
+
+        ``GET /api/lookup/plate/{target}``
+
+        Args:
+            target: plate value, e.g. ``"B-AB 1234"``.
+
+        Returns:
+            :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: unrecognised plate format.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> res = client.plate("B-AB 1234")   # doctest: +SKIP
+        """
+        return self.lookup('plate', target)
 
     # ------------------------------------------------------------------
     # Investigation / risk / analysis
@@ -1962,6 +2143,43 @@ class ObscuraLensClient:
                                 json_body={'domain': domain})
         return ToolboxResult.from_dict(payload, tool='squat')
 
+    def dorks(self, target: str, kind: Optional[str] = None) -> DorkReport:
+        """
+        Ready-to-open search-engine dorks for a target (v6.1).
+
+        ``GET /api/tools/dorks?target=...&kind=...`` — the kind is
+        auto-detected unless overridden, and every link is generated
+        locally: the analyst stays in control of each active query
+        (passive-first). Engines cover Google, Bing, DuckDuckGo, Yandex
+        and GitHub code search.
+
+        Args:
+            target: the value to build dorks for (any supported kind).
+            kind: optional kind override (e.g. ``'domain'`` to force the
+                domain template set); ``None`` lets the server detect.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.DorkReport` — the link
+            dicts (engine/label/query/url), the detected kind and the
+            kinds that carry templates; ``.links()`` extracts the URLs.
+
+        Raises:
+            BadRequestError: blank target.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> report = client.dorks("example.com")        # doctest: +SKIP
+            >>> report.detected_kind                        # doctest: +SKIP
+            'domain'
+            >>> report.links()[0]                            # doctest: +SKIP
+            'https://www.google.com/search?q=site%3Aexample.com'
+        """
+        params: Dict[str, Any] = {'target': target}
+        if kind is not None:
+            params['kind'] = kind
+        payload = self._request('GET', '/api/tools/dorks', params=params)
+        return DorkReport.from_dict(payload)
+
     def toolbox(self, tool: str, value: str) -> ToolboxResult:
         """
         Generic dispatcher for the analyst toolbox endpoints.
@@ -2164,6 +2382,844 @@ class ObscuraLensClient:
         return BatchProgress.from_dict(payload)
 
     # ------------------------------------------------------------------
+    # v6.0 part 2 — analytics
+    # ------------------------------------------------------------------
+
+    def analytics_stats(self, values: Sequence[float],
+                        bins: int = 10) -> AnalyticsEnvelope:
+        """
+        Descriptive statistics plus a histogram for a numeric list.
+
+        ``POST /api/analytics/stats`` with body
+        ``{"values": [...], "bins": n}`` — non-numeric items are dropped
+        server-side, then ``summarize`` (count/mean/median/stdev/
+        quartiles/skew/kurtosis) and ``histogram`` run over the
+        survivors.
+
+        Args:
+            values: the numbers to profile (a scalar inside the list is
+                fine; the server cleans the rest).
+            bins: histogram bin count (server clamps to 1..100).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope` with
+            ``kind='stats'`` — ``.payload['summary']`` carries the
+            descriptive block, ``.payload['histogram']`` the bins.
+
+        Raises:
+            BadRequestError: ``values`` missing, not a list, or with no
+                usable numbers left after cleaning.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> envelope = client.analytics_stats(   # doctest: +SKIP
+            ...     [1, 2, 3, 4, 100], bins=4)
+            >>> envelope.get("count")                    # doctest: +SKIP
+            5
+        """
+        payload = self._request('POST', '/api/analytics/stats',
+                                json_body={'values': list(values or []),
+                                           'bins': int(bins)})
+        return AnalyticsEnvelope.from_dict(payload, kind='stats')
+
+    def analytics_anomalies(self, values: Sequence[float],
+                            method: str = 'ensemble',
+                            threshold: Optional[float] = None
+                            ) -> AnalyticsEnvelope:
+        """
+        Outlier detection over a numeric list.
+
+        ``POST /api/analytics/anomalies`` with body
+        ``{"values": [...], "method": ..., "threshold": ...}`` —
+        ``method`` is one of ``zscore`` / ``iqr`` / ``mad`` / ``grubbs`` /
+        ``ensemble`` / ``threshold`` (default ``ensemble``). The
+        ``threshold`` key is only sent when a threshold was given *and*
+        the method is ``zscore`` (the only detector that honours it).
+
+        Args:
+            values: the numbers to screen.
+            method: detector name (default ``ensemble``).
+            threshold: z-score cutoff for the ``zscore`` detector
+                (default 3.0 server-side); ignored for other methods.
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope` with
+            ``kind='anomalies'`` — ``.payload['anomalies']`` carries the
+            ``value``/``score``/``method``/``detail`` records.
+
+        Raises:
+            BadRequestError: no usable numbers in ``values``.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> envelope = client.analytics_anomalies(   # doctest: +SKIP
+            ...     [1, 2, 3, 4, 10000], method='mad')
+            >>> envelope.get("anomaly_count")                 # doctest: +SKIP
+            1
+        """
+        body: Dict[str, Any] = {'values': list(values or []),
+                                'method': method}
+        if threshold is not None and method == 'zscore':
+            body['threshold'] = threshold
+        payload = self._request('POST', '/api/analytics/anomalies',
+                                json_body=body)
+        return AnalyticsEnvelope.from_dict(payload, kind='anomalies')
+
+    def analytics_timeseries(self, values: Sequence[float]
+                             ) -> AnalyticsEnvelope:
+        """
+        Trend / changepoint summary for a value sequence.
+
+        ``POST /api/analytics/timeseries`` with body
+        ``{"values": [...]}`` — values are indexed as consecutive days,
+        then ``series_summary`` reports count, span, least-squares trend
+        with direction verdict, mean/variance and CUSUM changepoint
+        count.
+
+        Args:
+            values: the sequence to profile (oldest first).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope` with
+            ``kind='timeseries'`` — ``.payload['summary']`` carries the
+            trend dossier.
+
+        Raises:
+            BadRequestError: no usable numbers in ``values``.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> envelope = client.analytics_timeseries(   # doctest: +SKIP
+            ...     [5, 6, 5, 6, 20, 21])
+            >>> envelope.get("summary")["trend"]           # doctest: +SKIP
+            'rising'
+        """
+        payload = self._request('POST', '/api/analytics/timeseries',
+                                json_body={'values': list(values or [])})
+        return AnalyticsEnvelope.from_dict(payload, kind='timeseries')
+
+    def analytics_clusters(self, points: Sequence[Sequence[float]],
+                           eps_km: float = 25.0,
+                           min_points: int = 3) -> AnalyticsEnvelope:
+        """
+        Kilometre-space clustering of ``[lat, lon]`` coordinate pairs.
+
+        ``POST /api/analytics/clusters`` with body
+        ``{"points": [[lat, lon], ...], "eps_km": ..., "min_points":
+        ...}`` — great-circle DBSCAN via ``cluster_points``; noise
+        points stay unclustered.
+
+        Args:
+            points: ``[lat, lon]`` rows (lists or tuples).
+            eps_km: cluster radius in kilometres (default 25).
+            min_points: DBSCAN density threshold (default 3).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope` with
+            ``kind='clusters'`` — ``.payload['clusters']`` carries the
+            cluster records, ``.payload['point_count']`` the usable rows.
+
+        Raises:
+            BadRequestError: ``points`` missing, not a list, or with no
+                usable two-number rows.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> envelope = client.analytics_clusters(   # doctest: +SKIP
+            ...     [[52.0, 13.0], [52.1, 13.1]], eps_km=10)
+            >>> envelope.get("cluster_count")             # doctest: +SKIP
+            0
+        """
+        rows = [list(point) for point in points or []]
+        payload = self._request('POST', '/api/analytics/clusters',
+                                json_body={'points': rows,
+                                           'eps_km': float(eps_km),
+                                           'min_points': int(min_points)})
+        return AnalyticsEnvelope.from_dict(payload, kind='clusters')
+
+    def analytics_keywords(self, text: str,
+                           top: int = 10) -> AnalyticsEnvelope:
+        """
+        Stopword-filtered keyword mining for a text.
+
+        ``POST /api/analytics/keywords`` with body
+        ``{"text": ..., "top": n}`` — returns ``term``/``count``/
+        ``weight`` records sorted by weight.
+
+        Args:
+            text: the free-form text to mine.
+            top: how many terms to keep (default 10).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope` with
+            ``kind='keywords'`` — ``.payload['keywords']`` carries the
+            ranked terms.
+
+        Raises:
+            BadRequestError: blank text.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> envelope = client.analytics_keywords(   # doctest: +SKIP
+            ...     "the quick brown fox", top=2)
+            >>> envelope.get("keywords")[0]["term"]      # doctest: +SKIP
+            'quick'
+        """
+        payload = self._request('POST', '/api/analytics/keywords',
+                                json_body={'text': text, 'top': int(top)})
+        return AnalyticsEnvelope.from_dict(payload, kind='keywords')
+
+    def analytics_language(self, text: str) -> AnalyticsEnvelope:
+        """
+        Script and language fingerprint for a text.
+
+        ``POST /api/analytics/language`` with body ``{"text": ...}`` —
+        dominant script, per-script character counts, a language guess
+        with confidence and a human-readable hint.
+
+        Args:
+            text: the text to fingerprint.
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope` with
+            ``kind='language'`` — ``.payload`` carries ``scripts``,
+            ``guess`` and ``hint``.
+
+        Raises:
+            BadRequestError: blank text.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> envelope = client.analytics_language(   # doctest: +SKIP
+            ...     "Le renard brun rapide")
+            >>> envelope.get("guess")["language"]        # doctest: +SKIP
+            'fr'
+        """
+        payload = self._request('POST', '/api/analytics/language',
+                                json_body={'text': text})
+        return AnalyticsEnvelope.from_dict(payload, kind='language')
+
+    def analytics_similarity(self, a: str, b: str) -> AnalyticsEnvelope:
+        """
+        Four-metric similarity between two texts.
+
+        ``POST /api/analytics/similarity`` with body
+        ``{"a": ..., "b": ...}`` — Jaro-Winkler, Levenshtein ratio,
+        bigram similarity, sparse cosine, their mean and both lengths.
+
+        Args:
+            a: first text (e.g. ``"paypal.com"``).
+            b: second text (e.g. ``"paypa1.com"``).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope` with
+            ``kind='similarity'`` — the four metrics plus ``mean``.
+
+        Raises:
+            BadRequestError: either text blank.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> envelope = client.analytics_similarity(   # doctest: +SKIP
+            ...     "paypal.com", "paypa1.com")
+            >>> envelope.get("mean") > 0.8                 # doctest: +SKIP
+            True
+        """
+        payload = self._request('POST', '/api/analytics/similarity',
+                                json_body={'a': a, 'b': b})
+        return AnalyticsEnvelope.from_dict(payload, kind='similarity')
+
+    def analytics_graph(self, entities: Sequence[Any],
+                        links: Sequence[Any]) -> AnalyticsEnvelope:
+        """
+        Graph metrics over an ``entities``/``links`` payload.
+
+        ``POST /api/analytics/graph`` with body
+        ``{"entities": [...], "links": [...]}`` — the investigate/
+        correlation payload shape (``from``/``to`` link keys are
+        accepted server-side too). Returns the one-shot
+        ``graph_summary`` dossier: node/edge counts, density, components,
+        communities, top entities by degree/PageRank/betweenness,
+        bridges and isolated nodes.
+
+        Args:
+            entities: entity dicts (``[{'id': 'a'}, ...]``).
+            links: link dicts (``[{'source': 'a', 'target': 'b'}, ...]``).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope` with
+            ``kind='graph'`` — ``.payload['summary']`` carries the
+            dossier.
+
+        Raises:
+            BadRequestError: neither list is present.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> envelope = client.analytics_graph(   # doctest: +SKIP
+            ...     [{'id': 'a'}, {'id': 'b'}], [{'source': 'a',
+            ...      'target': 'b'}])
+            >>> envelope.get("summary")["nodes"]     # doctest: +SKIP
+            2
+        """
+        payload = self._request('POST', '/api/analytics/graph',
+                                json_body={'entities': list(entities or []),
+                                           'links': list(links or [])})
+        return AnalyticsEnvelope.from_dict(payload, kind='graph')
+
+    def analytics_history(self, limit: int = 500) -> AnalyticsEnvelope:
+        """
+        Enrichment report over stored query history.
+
+        ``GET /api/analytics/history?limit=500`` (newest rows
+        considered) — kind frequency, hour/weekday activity profiles,
+        per-kind success rates, field-count statistics, source
+        reliability, day-volume anomalies and the most re-queried
+        targets. An empty history yields a well-formed empty report,
+        not an error.
+
+        Args:
+            limit: how many newest history rows to consider (default
+                500).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope` with
+            ``kind='history'`` — the full dossier (``total_queries``,
+            ``kind_frequency``, ``hour_profile``...).
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> envelope = client.analytics_history(limit=100)   # doctest: +SKIP
+            >>> envelope.get("total_queries")                    # doctest: +SKIP
+            42
+        """
+        payload = self._request('GET', '/api/analytics/history',
+                                params={'limit': int(limit)})
+        return AnalyticsEnvelope.from_dict(payload, kind='history')
+
+    # ------------------------------------------------------------------
+    # v6.0 part 4 — notifications
+    # ------------------------------------------------------------------
+
+    def notify_channels(self) -> NotifyChannels:
+        """
+        Every configured notification channel plus the protocol
+        vocabularies.
+
+        ``GET /api/notify/channels``
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.NotifyChannels` — the
+            parsed channels, the valid ``channel_types`` (webhook,
+            telegram, discord, slack, smtp) and the ``severities``
+            ladder a UI needs to render pickers.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> channels = client.notify_channels()    # doctest: +SKIP
+            >>> channels.by_name("team-chat")           # doctest: +SKIP
+            NotifyChannel(name='team-chat', ...)
+        """
+        payload = self._request('GET', '/api/notify/channels')
+        return NotifyChannels.from_dict(payload)
+
+    def add_notify_channel(self, name: str, channel_type: str,
+                           target: str = '',
+                           events: Optional[Sequence[str]] = None,
+                           min_severity: Optional[str] = None,
+                           quiet_hours: Optional[Sequence[int]] = None
+                           ) -> NotifyChannel:
+        """
+        Register one notification channel.
+
+        ``POST /api/notify/channels`` — the body always carries
+        ``name`` / ``type`` / ``target`` (the API field is ``type``; the
+        Python argument avoids shadowing the builtin as
+        ``channel_type``), and ``events`` / ``min_severity`` /
+        ``quiet_hours`` are only included when not ``None`` (the server
+        applies its own defaults), so a minimal registration is just
+        ``name`` + ``channel_type``.
+
+        Args:
+            name: unique human label (e.g. ``'team-chat'``).
+            channel_type: one of the channel types (webhook/telegram/
+                discord/slack/smtp) — validated server-side, so
+                newly added types work without an SDK release.
+            target: where messages go (URL, ``bot_token:chat_id``, SMTP
+                spec); may be empty when the matching global config key
+                is set.
+            events: event types to subscribe to (``None`` =
+                everything).
+            min_severity: weakest severity rung worth waking this
+                channel (info/low/medium/high/critical).
+            quiet_hours: optional ``(start, end)`` local-hour pair —
+                the window wraps past midnight, so ``(22, 6)`` silences
+                22:00 to 06:00.
+
+        Returns:
+            The created :class:`~obscuralens.sdk.models.NotifyChannel`.
+
+        Raises:
+            BadRequestError: unknown type, missing target, duplicate
+                name — the module's reason is the ``detail``.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> channel = client.add_notify_channel(   # doctest: +SKIP
+            ...     "team-chat", channel_type="telegram",
+            ...     target="bot:chat", events=["risk_high"],
+            ...     min_severity="low")
+            >>> channel.name                              # doctest: +SKIP
+            'team-chat'
+        """
+        body: Dict[str, Any] = {'name': name, 'type': channel_type,
+                                'target': target}
+        if events is not None:
+            body['events'] = list(events)
+        if min_severity is not None:
+            body['min_severity'] = min_severity
+        if quiet_hours is not None:
+            body['quiet_hours'] = list(quiet_hours)
+        payload = self._request('POST', '/api/notify/channels',
+                                json_body=body)
+        return NotifyChannel.from_dict(payload)
+
+    def remove_notify_channel(self, name: str) -> Dict[str, Any]:
+        """
+        Delete one notification channel by name.
+
+        ``DELETE /api/notify/channels/{name}`` — delivery history stays
+        behind (the log is the audit trail of everything that *was*
+        sent).
+
+        Args:
+            name: channel name (case-insensitive).
+
+        Returns:
+            ``{'ok': True, 'removed': <name>}``.
+
+        Raises:
+            NotFoundError: unknown channel name.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> client.remove_notify_channel("team-chat")   # doctest: +SKIP
+            {'ok': True, 'removed': 'team-chat'}
+        """
+        path = self._path('/api/notify/channels/{0}', name)
+        payload = self._request('DELETE', path)
+        return payload if isinstance(payload, dict) else {}
+
+    def test_notify_channel(self, name: str) -> NotifyDelivery:
+        """
+        Probe one channel with a one-off test message.
+
+        ``POST /api/notify/channels/{name}/test`` — the subscription/
+        severity/quiet-hours/dedup filters are bypassed: the question
+        answered is "does the pipe work?". A delivery failure is a
+        ``200`` with ``ok: False`` (data, not an HTTP error); an
+        unknown channel name is a ``404``.
+
+        Args:
+            name: the channel to probe (case-insensitive).
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.NotifyDelivery` —
+            ``ok``, ``error`` and the probed ``channel``.
+
+        Raises:
+            NotFoundError: unknown channel name.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> delivery = client.test_notify_channel(   # doctest: +SKIP
+            ...     "team-chat")
+            >>> delivery.ok                                 # doctest: +SKIP
+            True
+        """
+        path = self._path('/api/notify/channels/{0}/test', name)
+        payload = self._request('POST', path)
+        return NotifyDelivery.from_dict(payload)
+
+    def notify_recent(self, limit: int = 20) -> Dict[str, Any]:
+        """
+        Recent notification history, newest first.
+
+        ``GET /api/notify/recent?limit=20`` — sends, failures and skips
+        alike (the log is the account of everything the module wanted
+        to say). The server caps the window at 200 entries.
+
+        Args:
+            limit: how many entries to return (default 20).
+
+        Returns:
+            The raw payload as a plain dict —
+            ``{'count': n, 'recent': [{'ts', 'event', 'channel',
+            'title', 'severity', 'delivery'}, ...]}``. No model wraps
+            this endpoint: the log rows are already flat and
+            self-describing.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> log = client.notify_recent(limit=5)   # doctest: +SKIP
+            >>> log["count"]                            # doctest: +SKIP
+            3
+        """
+        payload = self._request('GET', '/api/notify/recent',
+                                params={'limit': int(limit)})
+        return payload if isinstance(payload, dict) else {}
+
+    def notify_broadcast(self, title: str, body: str,
+                         severity: str = 'info',
+                         event_type: str = 'manual') -> NotifyDelivery:
+        """
+        Fan one event out to every configured channel.
+
+        ``POST /api/notify/broadcast`` — per-channel filters (event
+        subscriptions, severity floors, quiet hours, dedup) apply
+        server-side inside the broadcast; failures never abort the
+        loop.
+
+        Args:
+            title: headline shown in every chat payload (non-empty).
+            body: message body (non-empty).
+            severity: one of info/low/medium/high/critical.
+            event_type: free-form event label (default ``manual``).
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.NotifyDelivery` — the
+            ``sent``/``skipped``/``failed``/``total`` aggregate plus the
+            per-channel results in ``.raw``.
+
+        Raises:
+            BadRequestError: blank ``title`` or ``body``.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> delivery = client.notify_broadcast(   # doctest: +SKIP
+            ...     "watch diff", "example.com changed NS",
+            ...     severity="high", event_type="watch_diff")
+            >>> delivery.sent                             # doctest: +SKIP
+            2
+        """
+        payload = self._request('POST', '/api/notify/broadcast',
+                                json_body={'title': title, 'body': body,
+                                           'severity': severity,
+                                           'event_type': event_type})
+        return NotifyDelivery.from_dict(payload)
+
+    # ------------------------------------------------------------------
+    # v6.0 part 4 — automation
+    # ------------------------------------------------------------------
+
+    def automation_tasks(self) -> AutomationTasks:
+        """
+        Every scheduled task (schedules, bookkeeping fields, health).
+
+        ``GET /api/automation/tasks``
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AutomationTasks` — the
+            parsed tasks (``last_run``/``next_run``/``run_count``/
+            ``error_count`` included) plus the ``actions`` and
+            ``schedule_types`` vocabularies.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> tasks = client.automation_tasks()      # doctest: +SKIP
+            >>> tasks.by_name("daily-watch").summary()  # doctest: +SKIP
+            'daily-watch [watch_check, daily 09:00]: 12 run(s)'
+        """
+        payload = self._request('GET', '/api/automation/tasks')
+        return AutomationTasks.from_dict(payload)
+
+    def add_automation_task(self, name: str, action: str,
+                            schedule: str = 'interval',
+                            interval_seconds: int = 3600,
+                            at_time: Optional[str] = None,
+                            weekday: Optional[int] = None,
+                            params: Optional[Dict[str, Any]] = None,
+                            enabled: bool = True) -> AutomationTaskView:
+        """
+        Register one scheduled task.
+
+        ``POST /api/automation/tasks`` — the body always carries
+        ``name`` / ``action`` / ``schedule`` / ``enabled``;
+        ``interval_seconds`` is only included for the ``interval``
+        schedule, and ``at_time`` / ``weekday`` / ``params`` only when
+        not ``None``. The stored task comes back with a freshly
+        computed ``next_run``.
+
+        Args:
+            name: unique human label (max 80 chars).
+            action: one of ``watch_check`` / ``pipeline`` / ``report`` /
+                ``feed_refresh`` / ``notify_test``.
+            schedule: ``interval`` (every ``interval_seconds``),
+                ``daily`` (at ``at_time``) or ``weekly`` (at ``at_time``
+                on ``weekday``).
+            interval_seconds: period for the interval schedule (default
+                3600).
+            at_time: ``'HH:MM'`` local time for daily/weekly schedules.
+            weekday: 0 = Monday ... 6 = Sunday (weekly schedule).
+            params: the executor's payload, e.g.
+                ``{'path': 'pipelines/daily.yaml'}``.
+            enabled: master switch — disabled tasks are never due.
+
+        Returns:
+            The created
+            :class:`~obscuralens.sdk.models.AutomationTaskView`.
+
+        Raises:
+            BadRequestError: rejected spec (unknown action/schedule,
+                bad ``at_time``, duplicate name...) — the module's
+                reason is the ``detail``.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> task = client.add_automation_task(   # doctest: +SKIP
+            ...     "daily-watch", "watch_check", schedule="daily",
+            ...     at_time="09:00")
+            >>> task.next_run                          # doctest: +SKIP
+            '2024-06-02T09:00:00'
+        """
+        body: Dict[str, Any] = {'name': name, 'action': action,
+                                'schedule': schedule, 'enabled': enabled}
+        if schedule == 'interval':
+            body['interval_seconds'] = int(interval_seconds)
+        if at_time is not None:
+            body['at_time'] = at_time
+        if weekday is not None:
+            body['weekday'] = int(weekday)
+        if params is not None:
+            body['params'] = dict(params)
+        payload = self._request('POST', '/api/automation/tasks',
+                                json_body=body)
+        return AutomationTaskView.from_dict(payload)
+
+    def remove_automation_task(self, name: str) -> Dict[str, Any]:
+        """
+        Delete one scheduled task by name.
+
+        ``DELETE /api/automation/tasks/{name}``
+
+        Args:
+            name: task name (case-insensitive).
+
+        Returns:
+            ``{'ok': True, 'removed': <name>}``.
+
+        Raises:
+            NotFoundError: unknown task name.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> client.remove_automation_task("daily-watch")   # doctest: +SKIP
+            {'ok': True, 'removed': 'daily-watch'}
+        """
+        path = self._path('/api/automation/tasks/{0}', name)
+        payload = self._request('DELETE', path)
+        return payload if isinstance(payload, dict) else {}
+
+    def run_automation_task(self, name: str) -> Dict[str, Any]:
+        """
+        Execute one task now, regardless of its schedule.
+
+        ``POST /api/automation/tasks/{name}/run`` — a failing executor
+        is a ``200`` with ``ok: False`` (the run outcome, not an HTTP
+        error). The persisted bookkeeping (``run_count``, ``next_run``)
+        is left to ``run-due`` so manual runs cannot corrupt the cron
+        state.
+
+        Args:
+            name: task name (case-insensitive).
+
+        Returns:
+            ``{'ok': bool, 'started': iso, 'finished': iso, 'error':
+            str, 'summary': str}`` — the executor's one-line human
+            report included.
+
+        Raises:
+            NotFoundError: unknown task name.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> client.run_automation_task("daily-watch")   # doctest: +SKIP
+            {'ok': True, 'started': '...', 'finished': '...',
+             'error': '', 'summary': 'checked 4 watch(es)'}
+        """
+        path = self._path('/api/automation/tasks/{0}/run', name)
+        payload = self._request('POST', path)
+        return payload if isinstance(payload, dict) else {}
+
+    def run_due_automation(self) -> Dict[str, Any]:
+        """
+        Run every task whose schedule has arrived, then persist the
+        bookkeeping.
+
+        ``POST /api/automation/run-due`` — exactly what the background
+        tick loop does every 30 seconds: ``last_run``, ``run_count``,
+        ``error_count``, ``last_error`` and a fresh ``next_run`` anchored
+        to the due moment.
+
+        Returns:
+            ``{'ran': n, 'results': [{'task', 'action', 'ok',
+            'started', 'finished', 'error', 'summary'}, ...]}``.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> client.run_due_automation()        # doctest: +SKIP
+            {'ran': 1, 'results': [{'task': 'daily-watch', ...}]}
+        """
+        payload = self._request('POST', '/api/automation/run-due')
+        return payload if isinstance(payload, dict) else {}
+
+    def automation_next(self) -> Dict[str, Any]:
+        """
+        When every task runs next.
+
+        ``GET /api/automation/next`` — the stored ``next_run`` plus a
+        fresh recomputation from *now* (the two differ while a due task
+        waits for the next tick). An empty schedule yields an empty
+        list.
+
+        Returns:
+            ``{'count': n, 'tasks': [{'name', 'action', 'schedule',
+            'enabled', 'stored_next_run', 'recomputed_next_run'}, ...]}``.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> snapshot = client.automation_next()   # doctest: +SKIP
+            >>> snapshot["tasks"][0]["name"]           # doctest: +SKIP
+            'daily-watch'
+        """
+        payload = self._request('GET', '/api/automation/next')
+        return payload if isinstance(payload, dict) else {}
+
+    # ------------------------------------------------------------------
+    # v6.0 part 4 — intelligence-sharing exports
+    # ------------------------------------------------------------------
+
+    def export_stix(self, kind: str, target: str) -> StixBundle:
+        """
+        A STIX 2.1 bundle for the newest stored lookup of one target.
+
+        ``GET /api/export/stix/{kind}/{target}`` — identity + indicator
+        (or vulnerability for CVEs) + observed data + provenance note,
+        deterministic UUIDv5 ids throughout so re-imports merge. The
+        exports describe what was *observed*: run the lookup first, then
+        export.
+
+        Args:
+            kind: tracker kind (see :meth:`lookup`).
+            target: the indicator value.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.StixBundle` —
+            ``.objects``, ``.object_types()``, ``.indicator_count()``
+            and ``.to_json()`` for the file-ready document.
+
+        Raises:
+            ValueError: unknown kind.
+            BadRequestError: unknown kind (server-side check).
+            NotFoundError: no stored lookup for the target.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> bundle = client.export_stix(   # doctest: +SKIP
+            ...     "domain", "example.com")
+            >>> dict(bundle.object_types())    # doctest: +SKIP
+            {'identity': 1, 'indicator': 1, 'observed-data': 1, 'relationship': 1, 'note': 1}
+        """
+        kind = str(kind or '').strip().lower()
+        if kind not in KINDS:
+            raise ValueError(
+                f'unknown kind {kind!r} — expected one of {", ".join(KINDS)}')
+        path = self._path('/api/export/stix/{0}/{1}', kind, target)
+        payload = self._request('GET', path)
+        return StixBundle.from_dict(payload)
+
+    def export_misp(self, kind: str, target: str) -> MispEvent:
+        """
+        A MISP core-format event for the newest stored lookup of one
+        target.
+
+        ``GET /api/export/misp/{kind}/{target}`` — fixed ObscuraLens
+        ``orgc``, the target attribute, one text attribute per ``info``
+        field and a threat level derived from source health. Run the
+        lookup first, then export.
+
+        Args:
+            kind: tracker kind (see :meth:`lookup`).
+            target: the indicator value.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.MispEvent` — the Event
+            block, ``.attributes``, ``.attribute_count()`` and
+            ``.to_json()`` for the file-ready document.
+
+        Raises:
+            ValueError: unknown kind.
+            BadRequestError: unknown kind (server-side check).
+            NotFoundError: no stored lookup for the target.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> event = client.export_misp(   # doctest: +SKIP
+            ...     "domain", "example.com")
+            >>> event.attribute_count()       # doctest: +SKIP
+            7
+        """
+        kind = str(kind or '').strip().lower()
+        if kind not in KINDS:
+            raise ValueError(
+                f'unknown kind {kind!r} — expected one of {", ".join(KINDS)}')
+        path = self._path('/api/export/misp/{0}/{1}', kind, target)
+        payload = self._request('GET', path)
+        return MispEvent.from_dict(payload)
+
+    # ------------------------------------------------------------------
+    # v6.0 part 3 — live stream
+    # ------------------------------------------------------------------
+
+    def set_stream_topics(self, topics: Union[Sequence[str], str]
+                          ) -> Dict[str, Any]:
+        """
+        Declare the event topics the live stream should carry.
+
+        ``POST /api/stream/subscribe`` with body
+        ``{"topics": [...]}`` — the set is module-level server-side:
+        every ``GET /api/stream`` connection without its own
+        ``?topics=`` parameter filters through it, and an empty
+        declaration clears the filter (all topics again).
+
+        Args:
+            topics: topic names — a list/tuple (``['lookup', 'watch']``)
+                or a single comma-separated string
+                (``'lookup, watch'``). Blank names are dropped.
+
+        Returns:
+            ``{'topics': [...], 'count': n, 'subscriber_count': n}`` —
+            the normalised, sorted topic list.
+
+        Raises:
+            BadRequestError: missing/empty topics or non-string items.
+
+        Example:
+            >>> client = ObscuraLensClient()
+            >>> client.set_stream_topics("lookup, watch")   # doctest: +SKIP
+            {'topics': ['lookup', 'watch'], 'count': 2, 'subscriber_count': 0}
+        """
+        if isinstance(topics, str):
+            names = [item.strip() for item in topics.split(',')
+                     if item.strip()]
+        else:
+            names = [str(item).strip() for item in topics or []
+                     if str(item).strip()]
+        payload = self._request('POST', '/api/stream/subscribe',
+                                json_body={'topics': names})
+        return payload if isinstance(payload, dict) else {}
+
+    # ------------------------------------------------------------------
     # Escape hatches
     # ------------------------------------------------------------------
 
@@ -2265,7 +3321,7 @@ def _multipart_body(field: str, filename: str, data: bytes,
         ``multipart/form-data; boundary=<boundary>``.
 
     Example:
-        >>> body, boundary = _multipart_body('file', 'a.png', b'\x89PNG')
+        >>> body, boundary = _multipart_body('file', 'a.png', b'PNG')
         >>> body[:40].decode('ascii', errors='replace').startswith('--')
         True
     """

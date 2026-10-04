@@ -41,7 +41,14 @@ from .investigate import (
     investigate_sections,
     to_mermaid,
 )
-from .plugins import loaded_plugins, reload_plugins
+from .plugins import (
+    PluginContext,
+    build_plugin_argument_parser,
+    loaded_plugins,
+    plugin_commands,
+    reload_plugins,
+    validate_plugin_file,
+)
 from .reporting import ReportGenerator, batch_sections, sections_for
 from .utils import render_table, set_colors
 from .utils.formatting import fmt_value, rows_from_fields
@@ -337,10 +344,30 @@ def build_parser() -> argparse.ArgumentParser:
                                help='watch id or target (default: all)')
     add_common(p_watch_check)
 
-    p_plugins = sub.add_parser('plugins', help='list or reload data-source plugins')
+    p_plugins = sub.add_parser('plugins', help='list, check or run data-source plugins')
     plugins_sub = p_plugins.add_subparsers(dest='action', metavar='<action>')
     add_common(plugins_sub.add_parser('list', help='show loaded plugins'))
     add_common(plugins_sub.add_parser('reload', help='rescan plugin directories'))
+    p_plugins_check = plugins_sub.add_parser(
+        'check', help='validate one plugin file (the plugin authoring linter)')
+    p_plugins_check.add_argument('file', help='path of the plugin .py file to check')
+    add_common(p_plugins_check)
+    p_plugins_run = plugins_sub.add_parser(
+        'run', help='run a plugin command with its own arguments')
+    p_plugins_run.add_argument('plugin_command', metavar='command',
+                               help='plugin command name (see `plugins list`)')
+    p_plugins_run.add_argument('plugin_args', nargs=argparse.REMAINDER,
+                               metavar='ARG',
+                               help='arguments forwarded to the plugin command')
+    add_common(p_plugins_run)
+
+    p_completion = sub.add_parser(
+        'completion', help='print a shell completion script (bash/zsh/fish)')
+    p_completion.add_argument('shell',
+                              help='target shell: bash, zsh or fish')
+    p_completion.add_argument('--stdout', action='store_true',
+                              help='print only the script (no install hint)')
+    add_common(p_completion)
 
     p_serve = sub.add_parser('serve', help='web UI + REST API (needs [web] extra)')
     p_serve.add_argument('--host', default='127.0.0.1')
@@ -1972,10 +1999,14 @@ def _cmd_plugins(args: argparse.Namespace) -> int:
     action = getattr(args, 'action', None)
     if action == 'reload':
         infos = reload_plugins()
+    elif action == 'check':
+        return _plugins_check(args)
+    elif action == 'run':
+        return _plugins_run(args)
     elif action in (None, 'list'):
         infos = loaded_plugins()
     else:
-        _err('usage: obscuralens plugins list|reload')
+        _err('usage: obscuralens plugins list|reload|check|run')
         return 2
 
     rows = [{
@@ -1984,16 +2015,201 @@ def _cmd_plugins(args: argparse.Namespace) -> int:
         'sources': '; '.join(
             f"{kind}: {', '.join(names)}"
             for kind, names in info.sources.items()),
+        'version': _plugin_version(info),
+        'v2': _plugin_v2_summary(info),
         'error': info.error or '',
         'path': info.path,
     } for info in infos]
 
     if (args.format or 'table') == 'json':
-        _emit(json.dumps(rows, indent=2, ensure_ascii=False), args.output)
+        payload = [dict(row, meta=_plugin_meta_dict(info),
+                        surface=_plugin_surface_dict(info))
+                   for row, info in zip(rows, infos)]
+        _emit(json.dumps(payload, indent=2, ensure_ascii=False), args.output)
     elif rows:
         _emit(render_table(rows), args.output)
     else:
         _emit('No plugins loaded.', args.output)
+
+    for info in infos:  # surface problems go to stderr, never the data stream
+        if info.surface and info.surface.errors:
+            joined = '; '.join(f'{piece}: {reason}'
+                               for piece, reason in info.surface.errors)
+            _info(f"plugin '{info.name}' surface errors: {joined}")
+    commands = plugin_commands()
+    if commands:
+        _info(f"{len(commands)} plugin command(s) available: "
+              f"{', '.join(sorted(commands))} "
+              '(run with `obscuralens plugins run <command>`)')
+    return 0
+
+
+def _plugin_version(info) -> str:
+    """The manifest version of one plugin ('' for bare v1 plugins)."""
+    if info.surface is None:
+        return ''
+    meta = info.surface.meta
+    return '' if meta.requires_api < 2 and not meta.author and not meta.description \
+        else meta.version
+
+
+def _plugin_v2_summary(info) -> str:
+    """Compact 'v2' column: manifest api + counts of each pluginable piece."""
+    surface = info.surface
+    if surface is None or not (surface.commands or surface.report_sections
+                               or surface.tools or surface.analytics
+                               or surface.meta.requires_api >= 2):
+        return ''
+    return (f'api {surface.meta.requires_api}: {surface.summary()}'
+            + (f', {len(surface.errors)} errors' if surface.errors else ''))
+
+
+def _plugin_meta_dict(info) -> Dict[str, Any]:
+    """JSON-safe manifest of one plugin (empty dict for import failures)."""
+    return info.surface.meta.to_dict() if info.surface else {}
+
+
+def _plugin_surface_dict(info) -> Dict[str, Any]:
+    """JSON-safe v2 surface summary of one plugin for `plugins list -f json`."""
+    if info.surface is None:
+        return {'commands': [], 'report_sections': [], 'tools': [],
+                'analytics': [], 'errors': []}
+    surface = info.surface
+    return {
+        'commands': sorted(surface.commands),
+        'report_sections': sorted(surface.report_sections),
+        'tools': sorted(surface.tools),
+        'analytics': sorted(surface.analytics),
+        'errors': [[piece, reason] for piece, reason in surface.errors],
+    }
+
+
+def _plugins_check(args: argparse.Namespace) -> int:
+    """`obscuralens plugins check <file>`: validate one plugin file."""
+    target = getattr(args, 'file', None)
+    if not target:
+        _err('plugins check requires a plugin file path')
+        return 2
+
+    report = validate_plugin_file(target)
+    if (args.format or 'table') == 'json':
+        _emit(json.dumps(report, indent=2, ensure_ascii=False, default=repr),
+              args.output)
+    else:
+        _emit(_format_plugin_check(report, target), args.output)
+
+    for piece, reason in report.get('errors', []):
+        _info(f'{piece}: {reason}')
+    return 0 if report.get('ok') else 1
+
+
+def _format_plugin_check(report: Dict[str, Any], target: str) -> str:
+    """Render the validate_plugin_file report as human-readable text."""
+    meta = report.get('meta', {})
+    lines = [
+        f'plugin file: {target}',
+        f"ok: {'yes' if report.get('ok') else 'no'}",
+        f"meta: {meta.get('name', '?')} {meta.get('version', '?')} "
+        f"(api {meta.get('requires_api', '?')})"
+        f"{' by ' + meta['author'] if meta.get('author') else ''}",
+    ]
+    if meta.get('description'):
+        lines.append(f"      {meta['description']}")
+    if meta.get('license'):
+        lines.append(f"      license: {meta['license']}")
+    if meta.get('url'):
+        lines.append(f"      url: {meta['url']}")
+
+    sources = report.get('sources', {})
+    lines.append('sources: ' + (
+        '; '.join(f'{kind}: {", ".join(names)}'
+                  for kind, names in sources.items()) or '(none)'))
+
+    commands = report.get('commands', {})
+    if commands:
+        described = ', '.join(
+            f"{name} ({spec.get('description', '') or 'no description'})"
+            for name, spec in commands.items())
+        lines.append(f'commands: {described}')
+
+    sections = report.get('report_sections', [])
+    if sections:
+        described = ', '.join(
+            f"{section['name']} [{section['title']}] kinds="
+            f"{section['kinds'] if section['kinds'] == 'all' else '/'.join(section['kinds'])}"
+            for section in sections)
+        lines.append(f'report sections: {described}')
+
+    tools = report.get('tools', {})
+    if tools:
+        lines.append('tools: ' + ', '.join(
+            f'{name} ({description})' for name, description in tools.items()))
+
+    analytics = report.get('analytics', {})
+    if analytics:
+        lines.append('analytics: ' + ', '.join(
+            f'{name} ({description})' for name, description in analytics.items()))
+
+    errors = report.get('errors', [])
+    if errors:
+        lines.append('errors:')
+        lines.extend(f'  - {piece}: {reason}' for piece, reason in errors)
+    else:
+        lines.append('errors: (none)')
+    return '\n'.join(lines)
+
+
+def _plugins_run(args: argparse.Namespace) -> int:
+    """`obscuralens plugins run <command> [args...]`: dispatch a plugin command."""
+    name = getattr(args, 'plugin_command', None)
+    if not name:
+        _err('plugins run requires a plugin command name')
+        return 2
+
+    specs = plugin_commands()
+    if name not in specs:
+        _err(f"unknown plugin command: {name}")
+        known = ', '.join(sorted(specs)) or '(none loaded)'
+        _info(f'known plugin commands: {known}')
+        return 2
+
+    spec = specs[name]
+    parser = build_plugin_argument_parser(name, spec, spec.get('plugin', ''))
+    forwarded = list(getattr(args, 'plugin_args', None) or [])
+    parsed, extra = parser.parse_known_args(forwarded)
+    if extra:
+        _info(f"ignored unrecognised plugin arguments: {' '.join(extra)}")
+
+    context = PluginContext()
+    code = spec['handler'](parsed, context)
+    if code is None:
+        return 0
+    if isinstance(code, bool):
+        return 0 if code else 1
+    if isinstance(code, int):
+        return code
+    _info(f"plugin command '{name}' returned {type(code).__name__}, "
+          'expected an int exit code')
+    return 1
+
+
+def _cmd_completion(args: argparse.Namespace) -> int:
+    """`obscuralens completion <shell>`: print (or write) a completion script."""
+    from .completion import install_hint, write_completion
+
+    shell = getattr(args, 'shell', '') or ''
+    try:
+        script = write_completion(shell, args.output or None)
+    except ValueError as e:
+        _err(str(e))
+        return 1
+
+    if args.output:
+        _info(f'Saved: {args.output}')
+    else:
+        print(script)
+    if not getattr(args, 'stdout', False):
+        _info(install_hint(shell))
     return 0
 
 
@@ -4625,6 +4841,7 @@ _HANDLERS = {
     'investigate': _cmd_investigate,
     'watch': _cmd_watch,
     'plugins': _cmd_plugins,
+    'completion': _cmd_completion,
     'serve': _cmd_serve,
     'tui': _cmd_tui,
     'mcp': _cmd_mcp,

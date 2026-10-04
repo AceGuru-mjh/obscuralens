@@ -9,10 +9,13 @@ loop is captured inside each coroutine, and a private
 deterministically). No third-party event-loop or HTTP libraries are
 imported.
 
-The async surface mirrors the most-used sync methods — every lookup kind,
-investigations, risk, timelines, correlation, stats, sources and the
-liveness probe. Anything missing can still be awaited through the escape
-hatch::
+The async surface mirrors the sync client: every lookup kind (the 20
+kinds including the six v6.0 sensors), investigations, risk, timelines,
+correlation, stats, sources and the liveness probe — plus the v6.0
+coverage: the dork builder, the nine analytics endpoints, notification
+channels and broadcasts, the automation scheduler, the STIX/MISP
+exports and the live-stream topic declaration. Anything missing can
+still be awaited through the escape hatch::
 
     result = await async_client._run(sync_client.ip, "8.8.8.8")
 
@@ -34,20 +37,29 @@ Example:
 import asyncio
 import concurrent.futures
 import functools
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 from .client import DEFAULT_BACKOFF, DEFAULT_BASE_URL, DEFAULT_RETRIES, DEFAULT_TIMEOUT, ObscuraLensClient
 from .models import (
+    AnalyticsEnvelope,
+    AutomationTasks,
+    AutomationTaskView,
     CorrelationResult,
+    DorkReport,
     HistoryResult,
     IntelVerdict,
     InvestigationReport,
     KindInfo,
     LookupResult,
+    MispEvent,
+    NotifyChannel,
+    NotifyChannels,
+    NotifyDelivery,
     PairComparison,
     RiskReport,
     SourceHealthEntry,
     StatsSummary,
+    StixBundle,
     Timeline,
 )
 from .transport import Transport
@@ -489,6 +501,129 @@ class AsyncObscuraLensClient:
         """
         return await self._run(self._client.coords, target)
 
+    async def vin(self, target: str) -> LookupResult:
+        """
+        Look up a vehicle identification number (WMI, region, model year).
+
+        Args:
+            target: 17-character VIN, e.g. ``"1HGCM82633A004352"``.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: invalid VIN shape.
+
+        Example:
+            >>> res = await client.vin("1HGCM82633A004352")   # doctest: +SKIP
+        """
+        return await self._run(self._client.vin, target)
+
+    async def flight(self, target: str) -> LookupResult:
+        """
+        Look up a flight (route, times, live position when airborne).
+
+        Args:
+            target: flight designator, e.g. ``"BA117"``.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: invalid flight designator.
+
+        Example:
+            >>> res = await client.flight("BA117")   # doctest: +SKIP
+        """
+        return await self._run(self._client.flight, target)
+
+    async def mmsi(self, target: str) -> LookupResult:
+        """
+        Look up a vessel's MMSI (flag state, name, AIS position).
+
+        Args:
+            target: 9-digit MMSI, e.g. ``"366982610"``.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: invalid MMSI shape.
+
+        Example:
+            >>> res = await client.mmsi("366982610")   # doctest: +SKIP
+        """
+        return await self._run(self._client.mmsi, target)
+
+    async def app(self, target: str) -> LookupResult:
+        """
+        Look up a software package / app identifier (registry probes).
+
+        Args:
+            target: package identifier, e.g. ``"left-pad@1.3.0"``.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: invalid package identifier.
+
+        Example:
+            >>> res = await client.app("requests")   # doctest: +SKIP
+        """
+        return await self._run(self._client.app, target)
+
+    async def package(self, target: str) -> LookupResult:
+        """
+        Alias for :meth:`app` — the software-package sensor.
+
+        Args:
+            target: package identifier (see :meth:`app`).
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Example:
+            >>> res = await client.package("left-pad")   # doctest: +SKIP
+        """
+        return await self._run(self._client.package, target)
+
+    async def bssid(self, target: str) -> LookupResult:
+        """
+        Look up a wireless access point BSSID (OUI vendor, location hints).
+
+        Args:
+            target: BSSID in colon notation.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: invalid BSSID.
+
+        Example:
+            >>> res = await client.bssid("b8:27:eb:aa:bb:cc")   # doctest: +SKIP
+        """
+        return await self._run(self._client.bssid, target)
+
+    async def plate(self, target: str) -> LookupResult:
+        """
+        Look up a licence plate (format detection, region context).
+
+        Args:
+            target: plate value, e.g. ``"B-AB 1234"``.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.LookupResult`.
+
+        Raises:
+            BadRequestError: unrecognised plate format.
+
+        Example:
+            >>> res = await client.plate("B-AB 1234")   # doctest: +SKIP
+        """
+        return await self._run(self._client.plate, target)
+
     # ------------------------------------------------------------------
     # Analysis
     # ------------------------------------------------------------------
@@ -696,6 +831,507 @@ class AsyncObscuraLensClient:
             >>> entries = await client.watch()   # doctest: +SKIP
         """
         return await self._run(self._client.watch)
+
+    # ------------------------------------------------------------------
+    # v6.0 — dorks, analytics, notifications, automation, exports, stream
+    # ------------------------------------------------------------------
+
+    async def dorks(self, target: str,
+                    kind: Optional[str] = None) -> DorkReport:
+        """
+        Ready-to-open search-engine dorks for a target.
+
+        Args:
+            target: the value to build dorks for.
+            kind: optional kind override; ``None`` auto-detects.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.DorkReport`.
+
+        Raises:
+            BadRequestError: blank target.
+
+        Example:
+            >>> report = await client.dorks("example.com")   # doctest: +SKIP
+        """
+        return await self._run(self._client.dorks, target, kind=kind)
+
+    async def analytics_stats(self, values: Sequence[float],
+                              bins: int = 10) -> AnalyticsEnvelope:
+        """
+        Descriptive statistics plus a histogram for a numeric list.
+
+        Args:
+            values: the numbers to profile.
+            bins: histogram bin count (server clamps to 1..100).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope`
+            (``kind='stats'``).
+
+        Example:
+            >>> envelope = await client.analytics_stats(   # doctest: +SKIP
+            ...     [1, 2, 3, 4, 100])
+        """
+        return await self._run(self._client.analytics_stats, values,
+                               bins=bins)
+
+    async def analytics_anomalies(self, values: Sequence[float],
+                                  method: str = 'ensemble',
+                                  threshold: Optional[float] = None
+                                  ) -> AnalyticsEnvelope:
+        """
+        Outlier detection over a numeric list.
+
+        Args:
+            values: the numbers to screen.
+            method: detector name (default ``ensemble``).
+            threshold: z-score cutoff — only sent for ``method='zscore'``.
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope`
+            (``kind='anomalies'``).
+
+        Example:
+            >>> envelope = await client.analytics_anomalies(   # doctest: +SKIP
+            ...     [1, 2, 3, 4, 10000], method='mad')
+        """
+        return await self._run(self._client.analytics_anomalies, values,
+                               method=method, threshold=threshold)
+
+    async def analytics_timeseries(self, values: Sequence[float]
+                                   ) -> AnalyticsEnvelope:
+        """
+        Trend / changepoint summary for a value sequence.
+
+        Args:
+            values: the sequence to profile (oldest first).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope`
+            (``kind='timeseries'``).
+
+        Example:
+            >>> envelope = await client.analytics_timeseries(   # doctest: +SKIP
+            ...     [5, 6, 5, 6, 20, 21])
+        """
+        return await self._run(self._client.analytics_timeseries, values)
+
+    async def analytics_clusters(self, points: Sequence[Sequence[float]],
+                                 eps_km: float = 25.0,
+                                 min_points: int = 3) -> AnalyticsEnvelope:
+        """
+        Kilometre-space clustering of ``[lat, lon]`` pairs.
+
+        Args:
+            points: ``[lat, lon]`` rows.
+            eps_km: cluster radius in kilometres (default 25).
+            min_points: DBSCAN density threshold (default 3).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope`
+            (``kind='clusters'``).
+
+        Example:
+            >>> envelope = await client.analytics_clusters(   # doctest: +SKIP
+            ...     [[52.0, 13.0], [52.1, 13.1]])
+        """
+        return await self._run(self._client.analytics_clusters, points,
+                               eps_km=eps_km, min_points=min_points)
+
+    async def analytics_keywords(self, text: str,
+                                 top: int = 10) -> AnalyticsEnvelope:
+        """
+        Stopword-filtered keyword mining for a text.
+
+        Args:
+            text: the free-form text to mine.
+            top: how many terms to keep (default 10).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope`
+            (``kind='keywords'``).
+
+        Example:
+            >>> envelope = await client.analytics_keywords(   # doctest: +SKIP
+            ...     "the quick brown fox", top=2)
+        """
+        return await self._run(self._client.analytics_keywords, text,
+                               top=top)
+
+    async def analytics_language(self, text: str) -> AnalyticsEnvelope:
+        """
+        Script and language fingerprint for a text.
+
+        Args:
+            text: the text to fingerprint.
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope`
+            (``kind='language'``).
+
+        Example:
+            >>> envelope = await client.analytics_language(   # doctest: +SKIP
+            ...     "Le renard brun rapide")
+        """
+        return await self._run(self._client.analytics_language, text)
+
+    async def analytics_similarity(self, a: str,
+                                   b: str) -> AnalyticsEnvelope:
+        """
+        Four-metric similarity between two texts.
+
+        Args:
+            a: first text.
+            b: second text.
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope`
+            (``kind='similarity'``).
+
+        Example:
+            >>> envelope = await client.analytics_similarity(   # doctest: +SKIP
+            ...     "paypal.com", "paypa1.com")
+        """
+        return await self._run(self._client.analytics_similarity, a, b)
+
+    async def analytics_graph(self, entities: Sequence[Any],
+                              links: Sequence[Any]) -> AnalyticsEnvelope:
+        """
+        Graph metrics over an ``entities``/``links`` payload.
+
+        Args:
+            entities: entity dicts.
+            links: link dicts.
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope`
+            (``kind='graph'``).
+
+        Example:
+            >>> envelope = await client.analytics_graph(   # doctest: +SKIP
+            ...     [{'id': 'a'}], [{'source': 'a', 'target': 'b'}])
+        """
+        return await self._run(self._client.analytics_graph, entities, links)
+
+    async def analytics_history(self, limit: int = 500) -> AnalyticsEnvelope:
+        """
+        Enrichment report over stored query history.
+
+        Args:
+            limit: how many newest history rows to consider (default
+                500).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AnalyticsEnvelope`
+            (``kind='history'``).
+
+        Example:
+            >>> envelope = await client.analytics_history()   # doctest: +SKIP
+        """
+        return await self._run(self._client.analytics_history, limit=limit)
+
+    async def notify_channels(self) -> NotifyChannels:
+        """
+        Every configured notification channel plus vocabularies.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.NotifyChannels`.
+
+        Example:
+            >>> channels = await client.notify_channels()   # doctest: +SKIP
+        """
+        return await self._run(self._client.notify_channels)
+
+    async def add_notify_channel(self, name: str, channel_type: str,
+                                 target: str = '',
+                                 events: Optional[Sequence[str]] = None,
+                                 min_severity: Optional[str] = None,
+                                 quiet_hours: Optional[Sequence[int]] = None
+                                 ) -> NotifyChannel:
+        """
+        Register one notification channel.
+
+        Args:
+            name: unique human label.
+            channel_type: channel type (webhook/telegram/discord/
+                slack/smtp) — validated server-side.
+            target: delivery target; may be empty when a global config
+                key covers it.
+            events: event types to subscribe to (``None`` =
+                everything).
+            min_severity: weakest severity worth waking this channel.
+            quiet_hours: optional ``(start, end)`` local-hour pair.
+
+        Returns:
+            The created :class:`~obscuralens.sdk.models.NotifyChannel`.
+
+        Raises:
+            BadRequestError: rejected spec.
+
+        Example:
+            >>> channel = await client.add_notify_channel(   # doctest: +SKIP
+            ...     "team-chat", channel_type="telegram",
+            ...     target="bot:chat")
+        """
+        return await self._run(self._client.add_notify_channel, name,
+                               channel_type,
+                               target=target, events=events,
+                               min_severity=min_severity,
+                               quiet_hours=quiet_hours)
+
+    async def remove_notify_channel(self, name: str) -> Dict[str, Any]:
+        """
+        Delete one notification channel by name.
+
+        Args:
+            name: channel name (case-insensitive).
+
+        Returns:
+            ``{'ok': True, 'removed': <name>}``.
+
+        Raises:
+            NotFoundError: unknown channel name.
+
+        Example:
+            >>> await client.remove_notify_channel("team-chat")   # doctest: +SKIP
+        """
+        return await self._run(self._client.remove_notify_channel, name)
+
+    async def test_notify_channel(self, name: str) -> NotifyDelivery:
+        """
+        Probe one channel with a one-off test message.
+
+        Args:
+            name: the channel to probe.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.NotifyDelivery`.
+
+        Raises:
+            NotFoundError: unknown channel name.
+
+        Example:
+            >>> delivery = await client.test_notify_channel(   # doctest: +SKIP
+            ...     "team-chat")
+        """
+        return await self._run(self._client.test_notify_channel, name)
+
+    async def notify_recent(self, limit: int = 20) -> Dict[str, Any]:
+        """
+        Recent notification history, newest first (plain dict).
+
+        Args:
+            limit: how many entries to return (default 20).
+
+        Returns:
+            ``{'count': n, 'recent': [...]}`` as a plain dict.
+
+        Example:
+            >>> log = await client.notify_recent(limit=5)   # doctest: +SKIP
+        """
+        return await self._run(self._client.notify_recent, limit=limit)
+
+    async def notify_broadcast(self, title: str, body: str,
+                               severity: str = 'info',
+                               event_type: str = 'manual') -> NotifyDelivery:
+        """
+        Fan one event out to every configured channel.
+
+        Args:
+            title: headline (non-empty).
+            body: message body (non-empty).
+            severity: one of info/low/medium/high/critical.
+            event_type: free-form event label.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.NotifyDelivery`.
+
+        Raises:
+            BadRequestError: blank ``title`` or ``body``.
+
+        Example:
+            >>> delivery = await client.notify_broadcast(   # doctest: +SKIP
+            ...     "watch diff", "example.com changed NS",
+            ...     severity="high")
+        """
+        return await self._run(self._client.notify_broadcast, title, body,
+                               severity=severity, event_type=event_type)
+
+    async def automation_tasks(self) -> AutomationTasks:
+        """
+        Every scheduled task (schedules, bookkeeping, health).
+
+        Returns:
+            An :class:`~obscuralens.sdk.models.AutomationTasks`.
+
+        Example:
+            >>> tasks = await client.automation_tasks()   # doctest: +SKIP
+        """
+        return await self._run(self._client.automation_tasks)
+
+    async def add_automation_task(self, name: str, action: str,
+                                  schedule: str = 'interval',
+                                  interval_seconds: int = 3600,
+                                  at_time: Optional[str] = None,
+                                  weekday: Optional[int] = None,
+                                  params: Optional[Dict[str, Any]] = None,
+                                  enabled: bool = True
+                                  ) -> AutomationTaskView:
+        """
+        Register one scheduled task.
+
+        Args:
+            name: unique human label.
+            action: executor action (watch_check/pipeline/report/
+                feed_refresh/notify_test).
+            schedule: interval/daily/weekly (default interval).
+            interval_seconds: period for the interval schedule.
+            at_time: ``'HH:MM'`` for daily/weekly schedules.
+            weekday: 0 = Monday ... 6 = Sunday (weekly).
+            params: executor payload.
+            enabled: master switch.
+
+        Returns:
+            The created
+            :class:`~obscuralens.sdk.models.AutomationTaskView`.
+
+        Raises:
+            BadRequestError: rejected spec.
+
+        Example:
+            >>> task = await client.add_automation_task(   # doctest: +SKIP
+            ...     "daily-watch", "watch_check", schedule="daily",
+            ...     at_time="09:00")
+        """
+        return await self._run(self._client.add_automation_task, name,
+                               action, schedule=schedule,
+                               interval_seconds=interval_seconds,
+                               at_time=at_time, weekday=weekday,
+                               params=params, enabled=enabled)
+
+    async def remove_automation_task(self, name: str) -> Dict[str, Any]:
+        """
+        Delete one scheduled task by name.
+
+        Args:
+            name: task name (case-insensitive).
+
+        Returns:
+            ``{'ok': True, 'removed': <name>}``.
+
+        Raises:
+            NotFoundError: unknown task name.
+
+        Example:
+            >>> await client.remove_automation_task("daily-watch")   # doctest: +SKIP
+        """
+        return await self._run(self._client.remove_automation_task, name)
+
+    async def run_automation_task(self, name: str) -> Dict[str, Any]:
+        """
+        Execute one task now, regardless of its schedule.
+
+        Args:
+            name: task name.
+
+        Returns:
+            The run outcome dict (``ok``/``started``/``finished``/
+            ``error``/``summary``).
+
+        Raises:
+            NotFoundError: unknown task name.
+
+        Example:
+            >>> await client.run_automation_task("daily-watch")   # doctest: +SKIP
+        """
+        return await self._run(self._client.run_automation_task, name)
+
+    async def run_due_automation(self) -> Dict[str, Any]:
+        """
+        Run every due task and persist the bookkeeping.
+
+        Returns:
+            ``{'ran': n, 'results': [...]}``.
+
+        Example:
+            >>> await client.run_due_automation()   # doctest: +SKIP
+        """
+        return await self._run(self._client.run_due_automation)
+
+    async def automation_next(self) -> Dict[str, Any]:
+        """
+        When every task runs next (stored + recomputed).
+
+        Returns:
+            ``{'count': n, 'tasks': [...]}``.
+
+        Example:
+            >>> snapshot = await client.automation_next()   # doctest: +SKIP
+        """
+        return await self._run(self._client.automation_next)
+
+    async def export_stix(self, kind: str, target: str) -> StixBundle:
+        """
+        A STIX 2.1 bundle for the newest stored lookup of one target.
+
+        Args:
+            kind: tracker kind.
+            target: the indicator value.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.StixBundle`.
+
+        Raises:
+            ValueError: unknown kind.
+            NotFoundError: no stored lookup for the target.
+
+        Example:
+            >>> bundle = await client.export_stix(   # doctest: +SKIP
+            ...     "domain", "example.com")
+        """
+        return await self._run(self._client.export_stix, kind, target)
+
+    async def export_misp(self, kind: str, target: str) -> MispEvent:
+        """
+        A MISP core-format event for the newest stored lookup.
+
+        Args:
+            kind: tracker kind.
+            target: the indicator value.
+
+        Returns:
+            A :class:`~obscuralens.sdk.models.MispEvent`.
+
+        Raises:
+            ValueError: unknown kind.
+            NotFoundError: no stored lookup for the target.
+
+        Example:
+            >>> event = await client.export_misp(   # doctest: +SKIP
+            ...     "domain", "example.com")
+        """
+        return await self._run(self._client.export_misp, kind, target)
+
+    async def set_stream_topics(self, topics: Union[Sequence[str], str]
+                                ) -> Dict[str, Any]:
+        """
+        Declare the event topics the live stream should carry.
+
+        Args:
+            topics: topic names — a list/tuple or one comma-separated
+                string.
+
+        Returns:
+            ``{'topics': [...], 'count': n, 'subscriber_count': n}``.
+
+        Raises:
+            BadRequestError: missing/empty topics.
+
+        Example:
+            >>> await client.set_stream_topics("lookup, watch")   # doctest: +SKIP
+        """
+        return await self._run(self._client.set_stream_topics, topics)
 
     async def gather(self, calls: Sequence[Any]) -> List[Any]:
         """
