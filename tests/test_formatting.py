@@ -46,3 +46,24 @@ def test_print_table_accepts_row_lists(capsys):
     print_table([['Country', 'US'], ['City', 'NY']], headers=['Field', 'Value'])
     out = capsys.readouterr().out
     assert 'Country' in out and 'NY' in out
+
+
+def test_sanitize_secrets():
+    from obscuralens.utils.helpers import sanitize_secrets
+
+    assert sanitize_secrets('ghp_' + 'A' * 20) == '[REDACTED:GITHUB_TOKEN]'
+    assert sanitize_secrets('github_pat_' + 'B' * 22) == '[REDACTED:GITHUB_TOKEN]'
+    assert sanitize_secrets('sk-' + 'C' * 20) == '[REDACTED:API_KEY]'
+    assert sanitize_secrets('AKIA' + 'D' * 16) == '[REDACTED:AWS_KEY]'
+    assert sanitize_secrets('-----BEGIN RSA PRIVATE KEY-----') == \
+        '[REDACTED:PRIVATE_KEY]'
+    # Ordinary targets are never altered.
+    assert sanitize_secrets('8.8.8.8') == '8.8.8.8'
+    assert sanitize_secrets('user@example.com') == 'user@example.com'
+    assert sanitize_secrets('some_username') == 'some_username'
+    assert sanitize_secrets('prefix ghp_' + 'E' * 20 + ' suffix') == \
+        'prefix [REDACTED:GITHUB_TOKEN] suffix'
+    # Non-strings pass through untouched.
+    assert sanitize_secrets(None) is None
+    assert sanitize_secrets(42) == 42
+    assert sanitize_secrets('') == ''
