@@ -6,6 +6,7 @@ every successful check, and diffs successive runs so the CLI can report what
 appeared, disappeared or changed since the previous lookup.
 """
 
+import contextlib
 import json
 import sqlite3
 from contextlib import contextmanager
@@ -47,6 +48,25 @@ VOLATILE_KEYS = {
     'timezone_utc',
     'elapsed_ms',
 }
+
+#: Optional observer invoked after every watch check (see
+#: :func:`set_check_hook`). The web layer registers it to publish ``watch``
+#: events on its live event bus; the core package never sets it.
+_CHECK_HOOK: Optional[Callable[[str, str, bool, int], Any]] = None
+
+
+def set_check_hook(fn: Optional[Callable[[str, str, bool, int], Any]]) -> None:
+    """
+    Register (or clear, with ``None``) the post-check observer.
+
+    The hook receives ``(kind, target, success, changes)`` where ``changes``
+    is the number of added/removed/changed fields the check produced. It is
+    invoked defensively: an observer that raises is silently ignored so a
+    broken live-feed listener can never break a watchlist run.
+    """
+    global _CHECK_HOOK  # module-level observer slot
+    _CHECK_HOOK = fn
+
 
 _ENTRY_SELECT = '''
     SELECT w.id, w.target, w.kind, w.label, w.created_at, w.last_checked,
@@ -428,10 +448,18 @@ class WatchlistManager:
             is_first = False
 
         self._store_snapshot(entry.id, flat, checked_at)
-        return WatchDiff(
+        diff = WatchDiff(
             watch_id=entry.id, target=entry.target, kind=entry.kind,
             checked_at=checked_at, is_first=is_first, added=added,
             removed=removed, changed=changed, success=True)
+
+        # v6.0 part 3: post-check observer (used by the web SSE event bus).
+        # Defensive by design — a raising observer must never break a check.
+        if _CHECK_HOOK is not None:
+            with contextlib.suppress(Exception):
+                _CHECK_HOOK(entry.kind, entry.target, diff.success,
+                            len(added) + len(removed) + len(changed))
+        return diff
 
     def _latest_snapshot(self, watch_id: int) -> Optional[Dict[str, str]]:
         with self._get_connection() as conn:

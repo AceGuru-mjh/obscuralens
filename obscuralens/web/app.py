@@ -26,8 +26,12 @@ All endpoints return JSON unless documented otherwise; errors are plain
 ``{'detail': ...}`` responses with matching HTTP status codes.
 """
 
+import asyncio
+import contextlib
 import json
+import threading
 from dataclasses import fields as dataclass_fields
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -35,7 +39,7 @@ from .. import __version__
 from .. import investigate as investigate_module
 from ..core.cache import cache
 from ..core.metrics import metrics
-from ..database import db
+from ..database import db, set_save_hook
 from ..trackers import (
     AppTracker,
     ASNTracker,
@@ -80,7 +84,7 @@ from ..utils.validators import (
     validate_username,
     validate_vin,
 )
-from ..watchlist import watchlist
+from ..watchlist import set_check_hook, watchlist
 
 KINDS = ('ip', 'phone', 'username', 'email', 'domain', 'url', 'crypto',
          'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords',
@@ -237,6 +241,236 @@ MAX_UPLOAD_BYTES = 16 * 1024 * 1024
 #: Hard cap for /api/tools/batch targets.
 MAX_BATCH_TARGETS = 25
 
+#: Heartbeat interval for the SSE stream (seconds).
+STREAM_HEARTBEAT_S = 15.0
+
+#: Topics a client declared via POST /api/stream/subscribe (empty = all).
+_STREAM_TOPICS: frozenset = frozenset()
+
+
+class _EventBus:
+    """
+    In-process publish/subscribe bus feeding ``GET /api/stream``.
+
+    Lookups run in the FastAPI threadpool (sync endpoints) and
+    ``db.save_query`` fires its hook from whichever thread called it, so
+    ``publish`` must be callable from *any* thread. Each subscriber records
+    the event loop its ``asyncio.Queue`` belongs to; cross-thread deliveries
+    hop through ``loop.call_soon_threadsafe`` so the loop (not the publisher)
+    touches the queue. Queues are capped — a slow client drops its oldest
+    buffered events instead of growing without bound.
+    """
+
+    def __init__(self, max_queue: int = 100):
+        self._max_queue = max_queue
+        self._lock = threading.Lock()
+        self._subscribers: List[Dict[str, Any]] = []
+
+    def subscribe(self) -> 'asyncio.Queue':
+        """
+        Register a queue bound to the caller's running event loop.
+
+        Called from inside the async stream endpoint, so the loop is live;
+        a headless caller (unit tests) gets ``loop=None`` and synchronous
+        best-effort delivery.
+        """
+        queue: asyncio.Queue = asyncio.Queue(maxsize=self._max_queue)
+        try:
+            loop: Optional[asyncio.AbstractEventLoop] = \
+                asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        with self._lock:
+            self._subscribers.append({'queue': queue, 'loop': loop})
+        return queue
+
+    def unsubscribe(self, queue: 'asyncio.Queue') -> bool:
+        """Drop one subscriber; returns True when it was actually found."""
+        with self._lock:
+            before = len(self._subscribers)
+            self._subscribers = [sub for sub in self._subscribers
+                                 if sub['queue'] is not queue]
+            return len(self._subscribers) < before
+
+    def subscriber_count(self) -> int:
+        """Number of live stream subscribers (for status frames/tests)."""
+        with self._lock:
+            return len(self._subscribers)
+
+    @staticmethod
+    def _offer(queue: 'asyncio.Queue', payload: Any) -> None:
+        """Non-blocking enqueue; a full queue drops its oldest event."""
+        try:
+            queue.put_nowait(payload)
+        except asyncio.QueueFull:
+            with contextlib.suppress(asyncio.QueueEmpty):
+                queue.get_nowait()
+            with contextlib.suppress(asyncio.QueueFull):
+                queue.put_nowait(payload)
+
+    def publish(self, topic: str, data: Any) -> int:
+        """
+        Fan one event out to every subscriber; returns delivery attempts.
+
+        Never raises: a closed/stopped loop simply means that client is gone.
+        """
+        payload = (str(topic), data)
+        with self._lock:
+            subscribers = list(self._subscribers)
+        delivered = 0
+        for sub in subscribers:
+            loop = sub['loop']
+            try:
+                if loop is None:
+                    # headless subscriber — deliver synchronously
+                    self._offer(sub['queue'], payload)
+                elif not loop.is_closed():
+                    loop.call_soon_threadsafe(self._offer, sub['queue'],
+                                              payload)
+                else:
+                    continue
+                delivered += 1
+            except RuntimeError:
+                continue  # loop died between snapshot and hop
+        return delivered
+
+
+#: Module-level bus shared by every app instance and the save/check hooks.
+event_bus = _EventBus()
+
+
+def _wire_event_bus() -> None:
+    """
+    Publish lookups and watchlist checks onto :data:`event_bus`.
+
+    Registered at import time (idempotent, defensive — the hooks themselves
+    are wrapped in try/except inside the observers' callers, and
+    ``_EventBus.publish`` never raises).
+    """
+    def _on_save(query_type: str, query_value: str, success: bool) -> None:
+        event_bus.publish('lookup', {
+            'kind': query_type,
+            'value': query_value,
+            'success': bool(success),
+            'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+        })
+
+    def _on_check(kind: str, target: str, success: bool,
+                  changes: int) -> None:
+        event_bus.publish('watch', {
+            'kind': kind,
+            'target': target,
+            'success': bool(success),
+            'changes': int(changes),
+            'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+        })
+
+    set_save_hook(_on_save)
+    set_check_hook(_on_check)
+
+
+_wire_event_bus()
+
+
+def _sse_frame(event: str, data: Any) -> str:
+    """Format one server-sent-event frame (event line + JSON data)."""
+    payload = json.dumps(data, ensure_ascii=False, default=str)
+    return f'event: {event}\ndata: {payload}\n\n'
+
+
+def _stream_topic_filter(topics: Optional[str]) -> frozenset:
+    """
+    Resolve the topic filter for one stream connection.
+
+    An explicit ``?topics=a,b`` wins; otherwise the set declared via
+    ``POST /api/stream/subscribe`` applies; an empty set means "everything".
+    """
+    if topics is None or not str(topics).strip():
+        return _STREAM_TOPICS
+    parts = {part.strip().lower()
+             for part in str(topics).split(',') if part.strip()}
+    return frozenset(parts) or frozenset({'*'})
+
+
+def _parse_result_info(result_data: str) -> Dict[str, Any]:
+    """Best-effort ``info`` dict from one stored JSON result (never raises)."""
+    if not result_data:
+        return {}
+    try:
+        data = json.loads(result_data)
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    info = data.get('info')
+    return info if isinstance(info, dict) else {}
+
+
+def _result_sources(result_data: str) -> Dict[str, int]:
+    """``sources_ok`` / ``sources_failed`` counts of a stored result."""
+    if not result_data:
+        return {'sources_ok': 0, 'sources_failed': 0}
+    try:
+        data = json.loads(result_data)
+    except (TypeError, ValueError):
+        return {'sources_ok': 0, 'sources_failed': 0}
+    if not isinstance(data, dict):
+        return {'sources_ok': 0, 'sources_failed': 0}
+    ok = data.get('sources_ok')
+    failed = data.get('sources_failed')
+    return {
+        'sources_ok': len(ok) if isinstance(ok, (list, tuple)) else 0,
+        'sources_failed': len(failed) if isinstance(failed, dict) else 0,
+    }
+
+
+def _geo_point_of(kind: str, info: Dict[str, Any]) -> Optional[Dict[str, float]]:
+    """
+    Extract ``{'lat', 'lon'}`` from a stored ``info`` block, if present.
+
+    Coords and IP results carry ``latitude``/``longitude``; BSSID results
+    carry ``lat``/``lon``. Values are range-checked so a string or a null
+    never reaches the map.
+    """
+    candidates = (
+        (info.get('latitude'), info.get('longitude')),
+        (info.get('lat'), info.get('lon')),
+    ) if kind in ('coords', 'ip', 'bssid') else ()
+    for raw_lat, raw_lon in candidates:
+        try:
+            lat = float(raw_lat)
+            lon = float(raw_lon)
+        except (TypeError, ValueError):
+            continue
+        if -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0:
+            return {'lat': lat, 'lon': lon}
+    return None
+
+
+def _compare_value(value: Any) -> str:
+    """Stringify one tracker field for comparison (80-char cap)."""
+    if value is None:
+        text = 'null'
+    elif isinstance(value, bool):
+        text = 'true' if value else 'false'
+    elif isinstance(value, (int, float)):
+        text = str(value)
+    elif isinstance(value, str):
+        text = value
+    else:
+        text = json.dumps(value, ensure_ascii=False, default=str,
+                          sort_keys=True)
+    return text if len(text) <= 80 else text[:77] + '...'
+
+
+def _flat_fields(result: Dict[str, Any]) -> Dict[str, str]:
+    """Comparable ``field -> stringified value`` view of one tracker result."""
+    info = result.get('info') if isinstance(result, dict) else None
+    if not isinstance(info, dict):
+        return {}
+    return {str(key): _compare_value(value)
+            for key, value in info.items() if key is not None}
+
 
 def _failure_payload(kind: str, target: str, message: str) -> Dict[str, Any]:
     """Uniform tracker-failure dict (never leaks a traceback)."""
@@ -320,7 +554,7 @@ def create_app():
     """
     try:
         from fastapi import FastAPI, HTTPException, UploadFile
-        from fastapi.responses import FileResponse, HTMLResponse
+        from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
         from fastapi.staticfiles import StaticFiles
     except ImportError as exc:  # pragma: no cover - depends on environment
         raise ImportError(
@@ -1342,6 +1576,286 @@ def create_app():
         from ..analytics.enrich import enrichment_report
         safe_limit = limit if isinstance(limit, int) and limit > 0 else 500
         return enrichment_report(limit=safe_limit)
+
+    # ------------------------------------------------------------------
+    # Live stream + aggregation views (v6.0 part 3)
+    # ------------------------------------------------------------------
+
+    @app.get('/api/stream')
+    async def api_stream(max_events: Optional[int] = None,
+                         heartbeat_ms: Optional[int] = None,
+                         topics: Optional[str] = None) -> Any:
+        """
+        Server-sent events feed: live lookups, watch checks and heartbeats.
+
+        An endless ``text/event-stream``: a ``connected`` frame on open, then
+        one ``event: <topic>`` frame per published event (``lookup`` from the
+        database save hook, ``watch`` from the watchlist check hook) and an
+        ``event: heartbeat`` frame whenever the feed has been idle for the
+        heartbeat interval (15 s by default). Client disconnects are cleaned
+        up quietly (the subscriber's queue is dropped in a ``finally``).
+
+        Query:
+
+        * ``topics`` — comma-separated whitelist (else the set declared via
+          ``POST /api/stream/subscribe``; empty = every topic),
+        * ``max_events`` — *test hook*: end the stream cleanly after N
+          events (also switches the heartbeat to 50 ms so tests finish fast;
+          production never sends it),
+        * ``heartbeat_ms`` — override the heartbeat interval (10 ms…10 min).
+        """
+        queue = event_bus.subscribe()
+        topic_filter = _stream_topic_filter(topics)
+        heartbeat = STREAM_HEARTBEAT_S
+        if max_events is not None:
+            max_events = max(1, min(1000, int(max_events)))
+            heartbeat = 0.05  # test mode — finish quickly
+        if heartbeat_ms is not None:
+            heartbeat = max(0.01, min(600.0, heartbeat_ms / 1000.0))
+
+        async def event_stream():
+            sent = 0
+            try:
+                yield _sse_frame('connected', {
+                    'subscribers': event_bus.subscriber_count(),
+                    'topics': sorted(topic_filter) if topic_filter else ['*'],
+                })
+                while max_events is None or sent < max_events:
+                    try:
+                        topic, data = await asyncio.wait_for(
+                            queue.get(), timeout=heartbeat)
+                    except asyncio.TimeoutError:
+                        yield _sse_frame('heartbeat', {
+                            'ts': datetime.now(timezone.utc).isoformat(
+                                timespec='seconds'),
+                        })
+                        sent += 1
+                        continue
+                    if topic_filter and topic not in topic_filter:
+                        continue
+                    yield _sse_frame(topic, data)
+                    sent += 1
+            finally:
+                # runs on clean end, client disconnect and cancellation —
+                # never yields, so it is safe inside an async generator
+                event_bus.unsubscribe(queue)
+
+        return StreamingResponse(
+            event_stream(),
+            media_type='text/event-stream',
+            headers={'Cache-Control': 'no-cache',
+                     'X-Accel-Buffering': 'no'},
+        )
+
+    @app.post('/api/stream/subscribe')
+    def api_stream_subscribe(body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Declare the event topics this deployment's stream should carry.
+
+        Body: ``{"topics": ["lookup", "watch"]}`` (a single comma-separated
+        string works too). The set is module-level: every ``GET /api/stream``
+        connection without its own ``?topics=`` parameter filters through
+        it, and an empty declaration clears the filter (all topics again).
+        ``400`` when ``topics`` is missing, not a list of names, or empty.
+        """
+        global _STREAM_TOPICS
+        raw = (body or {}).get('topics')
+        if raw is None:
+            raise HTTPException(status_code=400,
+                                detail='topics is required')
+        if isinstance(raw, str):
+            raw = raw.split(',')
+        if not isinstance(raw, list) or not all(
+                isinstance(item, str) and item.strip() for item in raw):
+            raise HTTPException(status_code=400,
+                                detail='topics must be a list of event names')
+        names = sorted({item.strip().lower() for item in raw if item.strip()})
+        if not names:
+            raise HTTPException(status_code=400,
+                                detail='topics must contain at least one name')
+        _STREAM_TOPICS = frozenset(names)
+        return {'topics': names, 'count': len(names),
+                'subscriber_count': event_bus.subscriber_count()}
+
+    @app.get('/api/profile/{kind}/{target}')
+    def api_profile(kind: str, target: str,
+                    limit: int = 200) -> Dict[str, Any]:
+        """
+        Aggregated activity profile for one target across stored history.
+
+        Combines ``get_history`` (kind rows) with ``search_history`` (target
+        substring matches) and keeps rows whose stored value equals the
+        target case-insensitively. The dossier carries first/last seen
+        timestamps, success counts, the ten most recent lookups, a field
+        frequency census over every stored ``info`` block, and a source-count
+        trend (one point per successful lookup) for risk sparklines.
+        ``{'found': False}`` for a target with no history; ``400`` for an
+        unknown kind.
+        """
+        from ..database import DatabaseManager
+        if kind not in KINDS:
+            raise HTTPException(status_code=400, detail='unknown kind')
+        safe_limit = max(1, min(500, limit if isinstance(limit, int) else 200))
+        needle = str(target or '').strip().lower()
+
+        seen_ids = set()
+        rows = []
+        for record in db.get_history(query_type=kind, limit=safe_limit):
+            seen_ids.add(record.id)
+            if record.query_value.strip().lower() == needle:
+                rows.append(record)
+        for record in db.search_history(str(target or ''), limit=safe_limit):
+            if record.id in seen_ids or record.query_type != kind:
+                continue
+            if record.query_value.strip().lower() == needle:
+                rows.append(record)
+
+        if not rows:
+            return {'found': False, 'kind': kind, 'target': target,
+                    'query_count': 0}
+
+        # newest first (both history calls sort that way); flip for trends
+        rows.sort(key=lambda r: (str(r.created_at or ''), r.id or 0))
+        success_count = sum(1 for r in rows if r.success)
+
+        field_counts: Dict[str, int] = {}
+        trend = []
+        for record in rows:
+            info = _parse_result_info(record.result_data)
+            for key, value in info.items():
+                if value is None or value == '' or value == [] or value == {}:
+                    continue
+                field_counts[str(key)] = field_counts.get(str(key), 0) + 1
+            sources = _result_sources(record.result_data)
+            if record.success and (sources['sources_ok']
+                                   or sources['sources_failed']):
+                trend.append({'timestamp': record.created_at, **sources})
+
+        frequency = [{'field': key, 'count': count}
+                     for key, count in sorted(
+                         field_counts.items(),
+                         key=lambda item: (-item[1], item[0]))[:30]]
+
+        recent = [{
+            'id': record.id,
+            'timestamp': record.created_at,
+            'success': bool(record.success),
+            'field_count': DatabaseManager.count_fields(record.result_data),
+            'error': record.error_message or '',
+        } for record in reversed(rows[-10:])]
+
+        return {
+            'found': True,
+            'kind': kind,
+            'target': target,
+            'query_count': len(rows),
+            'first_seen': rows[0].created_at,
+            'last_seen': rows[-1].created_at,
+            'success_count': success_count,
+            'failure_count': len(rows) - success_count,
+            'success_rate': round(success_count / len(rows) * 100, 1),
+            'recent': recent,
+            'field_frequency': frequency,
+            'risk_trend': trend,
+        }
+
+    @app.get('/api/compare')
+    def api_compare(kind_a: str, target_a: str,
+                    kind_b: str, target_b: str) -> Dict[str, Any]:
+        """
+        Field-level diff between two live lookups (A versus B).
+
+        Runs both trackers now (synchronously in the threadpool — this is a
+        plain ``def`` endpoint on purpose so FastAPI keeps the event loop
+        free), flattens each ``info`` block to ``field -> string`` and diffs
+        the union into ``added`` (B only), ``removed`` (A only) and
+        ``differing`` (both, unequal — carries both truncated values).
+        Values are capped at 80 characters; volatile fields are kept as-is,
+        so comparing a target against itself is the only empty-diff case.
+        ``400`` for unknown kinds or invalid targets.
+        """
+        for kind in (kind_a, kind_b):
+            if kind not in KINDS:
+                raise HTTPException(status_code=400, detail='unknown kind')
+        for kind, target in ((kind_a, target_a), (kind_b, target_b)):
+            ok, error = _VALIDATORS[kind](target)
+            if not ok:
+                raise HTTPException(status_code=400, detail=error)
+
+        def run(kind: str, target: str) -> Dict[str, Any]:
+            try:
+                return _TRACKERS[kind]().track(target)
+            except Exception as exc:  # never leak a tracker traceback
+                return _failure_payload(kind, target,
+                                        f"{type(exc).__name__}: {exc}")
+
+        result_a = run(kind_a, target_a)
+        result_b = run(kind_b, target_b)
+        fields_a = _flat_fields(result_a)
+        fields_b = _flat_fields(result_b)
+
+        added = [{'field': key, 'value': fields_b[key]}
+                 for key in sorted(set(fields_b) - set(fields_a))]
+        removed = [{'field': key, 'value': fields_a[key]}
+                   for key in sorted(set(fields_a) - set(fields_b))]
+        differing = [{'field': key, 'a': fields_a[key], 'b': fields_b[key]}
+                     for key in sorted(set(fields_a) & set(fields_b))
+                     if fields_a[key] != fields_b[key]]
+
+        def side(kind: str, target: str, result: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                'kind': kind,
+                'target': target,
+                'success': bool(result.get('success')),
+                'field_count': int(result.get('field_count') or 0),
+                'error': str(result.get('error') or ''),
+            }
+
+        return {
+            'a': side(kind_a, target_a, result_a),
+            'b': side(kind_b, target_b, result_b),
+            'added': added,
+            'removed': removed,
+            'differing': differing,
+            'counts': {
+                'added': len(added),
+                'removed': len(removed),
+                'differing': len(differing),
+                'common': len(set(fields_a) & set(fields_b)),
+            },
+        }
+
+    @app.get('/api/map/points')
+    def api_map_points(limit: int = 500) -> Dict[str, Any]:
+        """
+        Geographic points distilled from stored lookup history.
+
+        Query: ``?limit=500`` (newest rows scanned) — coordinates lookups
+        (``info.latitude``/``longitude``), IP lookups (same keys) and BSSID
+        lookups (``info.lat``/``lon``) are turned into
+        ``{lat, lon, label, kind}`` points for the offline map view. Points
+        are de-duplicated per kind at ~100 m resolution and returned newest
+        first; kinds without coordinates (plate, cve, ...) never contribute.
+        An empty history yields an empty list, not an error.
+        """
+        safe_limit = max(1, min(2000, limit if isinstance(limit, int) else 500))
+        points: List[Dict[str, Any]] = []
+        seen = set()
+        for record in db.get_history(limit=safe_limit):
+            info = _parse_result_info(record.result_data)
+            if not info:
+                continue
+            geo = _geo_point_of(record.query_type, info)
+            if geo is None:
+                continue
+            key = (record.query_type, round(geo['lat'], 3), round(geo['lon'], 3))
+            if key in seen:
+                continue
+            seen.add(key)
+            points.append({'lat': geo['lat'], 'lon': geo['lon'],
+                           'label': record.query_value,
+                           'kind': record.query_type})
+        return {'points': points, 'count': len(points), 'limit': safe_limit}
 
     return app
 

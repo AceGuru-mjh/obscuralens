@@ -44,8 +44,8 @@ Views are grouped into three sections:
 
 | Section | Views |
 |---|---|
-| **Workspace** | Dashboard · Lookup · History |
-| **Investigation** | Investigate · Timeline · Cases · Watchlist |
+| **Workspace** | Dashboard · Monitor · Lookup · History · Analytics |
+| **Investigation** | Investigate · Timeline · Cases · Map · Compare · Watchlist · Profile |
 | **Platform** | Sources · Tools · Settings |
 
 Routing is hash-based and every view deep-links with query parameters, so
@@ -170,7 +170,7 @@ Three tabs (deep-linkable with `?tab=`):
 
 Press **⌘K / Ctrl-K** anywhere (or click *Commands* in the topbar):
 
-- **Navigation**: fuzzy-matched "Go to …" commands for all ten views.
+- **Navigation**: fuzzy-matched "Go to …" commands for all fifteen views.
 - **Theme / docs**: toggle light/dark, open the OpenAPI docs.
 - **Targets**: when the query looks like a target (≥ 2 characters), the
   palette offers *Investigate "…"* plus *Look up as <kind>* for all 14
@@ -233,6 +233,94 @@ Both are hand-written canvas modules with no dependencies:
 | Views show "module unavailable" | a static file failed to load; check the server logs and the `/static/` mount |
 | Lookups time out | the default client timeout is 90 s per request; slow sources surface as failed chips with the reason in the tooltip |
 | Nothing works after an upgrade | hard-refresh the page (the SPA is cached aggressively by browsers) |
+
+## v6.0 views
+
+Part 3 of the v6.0 program added five views and three new front-end
+engines. All of them follow the same rules as the rest of the SPA: plain
+ES modules, no build step, no external assets, every section loading and
+failing independently behind a retry callout.
+
+### Monitor — live event stream
+
+Route `#/monitor`. A live window onto `GET /api/stream`: connection state
+(open / reconnecting / polling fallback, with the last heartbeat time),
+per-topic counters and a reverse-chronological feed of lookup, watch and
+heartbeat events (capped at 100 rows, new rows fade in at the top). Filter
+toggles hide whole topics; a mute switch freezes the visible feed without
+dropping the connection. The shared `sse` singleton is never closed by
+this view — it only unsubscribes its own callbacks when you navigate away,
+so other views can keep listening.
+
+### Analytics — the analysis workbench
+
+Route `#/analytics`. Four sections over the `/api/analytics/*` endpoints:
+
+- **数值分析** — paste numbers (comma/space/newline separated) for the
+  descriptive-statistics card grid (mean/median/stdev/min/max/quartiles/
+  skew), a five-number box plot and the histogram as a labelled bins
+  table.
+- **异常检测** — the same numbers through the outlier detectors
+  (ensemble/z-score/IQR/MAD) as a scored table with per-hit detail.
+- **历史画像** — auto-loaded enrichment report over stored history:
+  kind-frequency treemap, 24-hour activity heatmap, per-source reliability
+  stacked bars (ok/failed) and day-volume anomaly table.
+- **文本洞察** — keyword mining table plus script census and
+  stopword-ratio language guess for a free-text blob.
+
+### Map — offline geographic view
+
+Route `#/map`. Every stored lookup that resolved to coordinates (coords,
+IP, BSSID history) becomes a kind-coloured marker on an SVG world map
+rendered entirely from a bundled 17-continent GeoJSON simplification — no
+tiles, no CDN. Projection toggle (equirectangular ⇄ mercator), fit-to-points
+zoom, a kind legend whose chips double as per-kind visibility filters, an
+SVG export of the current map, a lat/lon range stats bar, and a
+click-on-marker side panel that deep-links into the entity profile. With no
+geo-bearing history the continents still render beneath an empty-state
+overlay.
+
+### Compare — A/B entity diff
+
+Route `#/compare` (deep-linkable as
+`#/compare?kindA=ip&targetA=8.8.8.8&kindB=ip&targetB=1.1.1.1`). Both
+sides run live through the trackers, then the flattened field sets are
+diffed into **added** (B only, green), **removed** (A only, red) and
+**differing** (amber, `a → b`) groups between the two per-side field
+columns. Swap A ⇄ B in one click; validation blocks empty kinds/targets
+before any request fires.
+
+### Profile — entity dossier 360
+
+Route `#/profile?kind=ip&target=8.8.8.8`. One target's entire stored
+history aggregated by `GET /api/profile/{kind}/{target}`: first/last seen,
+query count, success rate, the field-frequency census (what the sources
+keep saying about it), a source-count trend sparkline and the ten most
+recent lookups. Side actions re-query the target live, add it to the
+watchlist, export the raw JSON dossier or jump into the workbench. A
+target with no history gets a guiding empty state instead of a blank
+page.
+
+### The v6.0 engines
+
+Three dependency-free front-end modules join `charts.js` and `graph.js`:
+
+| Module | What it provides |
+|---|---|
+| `js/maps.js` | `OlMap` class: `new OlMap(container, {projection, theme, padding})` then `render` / `addMarker` / `addMarkers` / `addCircle` / `addLine` / `fitBounds` / `onMarkerClick` / `export` / `mapSummary` / `destroy`; plus the `equirectangular` and `mercator` projection helpers, `destinationPoint` and `greatCirclePoints`. Built-in 17-continent world geometry, graticule, resize observer and kind-coloured markers. |
+| `js/charts2.js` | `charts2.boxplot / radar / heatmap / treemap / sparkline / gauge / stackedBar / scatter / violin` plus `colorFor(kind)` — same conventions as `charts.js` (DPR-crisp canvas, ResizeObserver redraw, theme-token colours, hover tooltips, `{update(spec)}` handles). |
+| `js/sse.js` | `SseClient` class and the pre-wired `sse` singleton (`/api/stream`): `connect()` / `on(topic, cb)` (returns an unsubscribe handle) / `off` / `close()` / `subscribeEvents(topics)`, exponential-backoff reconnection with a retry budget, and a `fallbackPoll` loop for browsers without `EventSource`. |
+
+### Live events
+
+`GET /api/stream` is an endless server-sent-events feed: a `connected`
+frame on open, then one `event: lookup` frame per stored lookup (published
+by the database save hook), `event: watch` frames from watchlist checks
+and `event: heartbeat` frames after idle intervals. `POST
+/api/stream/subscribe` declares a topic whitelist for the deployment. The
+Monitor view is the reference consumer; the hook mechanism is the same one
+that drives webhook alerts — events never leave your machine unless you
+configure that webhook yourself.
 
 ## Related
 

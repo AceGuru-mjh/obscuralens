@@ -30,8 +30,8 @@ const { el, icon, toast, toastErr } = ui;
 
 /** View ids in load order — each maps to /static/js/views/<id>.js. */
 const VIEW_IDS = [
-  'dashboard', 'lookup', 'history',
-  'investigate', 'timeline', 'cases', 'watchlist',
+  'dashboard', 'monitor', 'lookup', 'history', 'analytics',
+  'investigate', 'timeline', 'cases', 'map', 'compare', 'watchlist', 'profile',
   'sources', 'tools', 'settings',
 ];
 
