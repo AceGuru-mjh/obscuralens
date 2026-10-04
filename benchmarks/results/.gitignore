@@ -1,0 +1,4 @@
+# Per-run benchmark reports; the committed baseline.json is regenerated
+# deliberately (`python -m benchmarks.run --save benchmarks/results/baseline.json`)
+# and must stay tracked.
+latest.json

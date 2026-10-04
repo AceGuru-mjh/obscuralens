@@ -8,7 +8,7 @@ IMEIs, geographic coordinates, VINs, flight designators, maritime MMSIs,
 software packages, WiFi BSSIDs and license plates.
 """
 
-__version__ = "6.1.0"
+__version__ = "6.2.0"
 __author__ = "MJH"
 __license__ = "MIT"
 

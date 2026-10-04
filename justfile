@@ -17,6 +17,14 @@ test:
 integration:
     python scripts/smoke_live.py
 
+# Run the offline benchmark suite (full mode, ~2 min).
+bench:
+    python -m benchmarks.run
+
+# Run the benchmark suite in CI-quick mode (seconds).
+bench-quick:
+    python -m benchmarks.run --quick
+
 # Lint with ruff.
 lint:
     ruff check .

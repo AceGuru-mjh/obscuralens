@@ -1,6 +1,6 @@
 {
   "name": "obscuralens-sdk",
-  "version": "6.1.0",
+  "version": "6.2.0",
   "description": "Dependency-free TypeScript/JavaScript SDK for the ObscuraLens OSINT REST API (20 target kinds, analyst toolbox, analytics, notify, automation, STIX/MISP exports, investigation sessions).",
   "type": "module",
   "main": "./dist/index.js",
