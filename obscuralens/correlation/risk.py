@@ -27,6 +27,7 @@ signals about identifiers, never statements about people.
 """
 
 import contextlib
+import logging
 import math
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -36,6 +37,8 @@ from ..config import config
 from .timeline import _parse_date
 
 __all__ = ['attach_risk', 'risk_sections', 'score']
+
+_LOG = logging.getLogger(__name__)
 
 #: Verdict band edges (score -> verdict).
 _VERDICTS = ('clean', 'low', 'medium', 'high', 'critical', 'unknown')
@@ -772,7 +775,11 @@ def score(kind: str, payload: Any) -> Dict[str, Any]:
     handler = _SCORERS.get(kind)
     try:
         signals = handler(info, payload) if handler else []
-    except Exception:
+    except Exception as exc:
+        # A broken scorer must never break a lookup; the payload keeps a
+        # neutral verdict and the failure is left in the debug log for
+        # diagnosis instead of surfacing to the analyst.
+        _LOG.debug('risk scorer for %r failed: %s', kind, exc, exc_info=True)
         signals = []
 
     total = sum(signal['weight'] for signal in signals)

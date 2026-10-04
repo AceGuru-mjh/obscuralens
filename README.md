@@ -22,7 +22,9 @@ Multi-source OSINT console and investigation platform for **14 target kinds**: I
 - **Offline data catalog (10 new packs)**: IANA port registry (~2,600 entries), ISO 3166 countries, ISO 639 languages, ISO 4217 currencies, HTTP status codes, a MITRE CWE selection, the IANA root-zone TLD list (~1,400), file extensions, MIME types and a user-agent rotation pool — behind a typed, never-raising API with the new `obscuralens data` CLI. See [docs/data-packs.md](docs/data-packs.md).
 - **Python SDK**: sync + async REST API clients with retries, exponential backoff, Retry-After handling, a typed exception hierarchy and a `StaticTransport` test double for offline script testing. See [docs/sdk.md](docs/sdk.md).
 - **Explainable risk rule packs**: a YAML rule DSL (23 operators including `in_cidr`, `age_lt_days` and `known_pack`) with 15 packs covering every target kind — every hit explains itself. See [docs/rules.md](docs/rules.md).
-- **Report templates**: standalone HTML, Markdown and executive-summary Jinja2 templates with a renderer module (`esc`, `nl2br`, `fmt_pct` filters).
+- **Report templates**: standalone HTML, Markdown and executive-summary Jinja2 templates with a renderer
+  module (`esc`, `nl2br`, `fmt_pct` filters), wired into every lookup via `--template`
+  (`obscuralens ip 8.8.8.8 --template standalone_report --risk -o report.html`).
 - **8 new pipeline examples**: email triage, phishing URL review, CVE patch priority, crypto screening, malware hash response, brand username audit, network sweep and weekly exec brief.
 - **v5.0**: 4 new trackers (mac/iban/imei/coords), the experimental toolbox, the advanced-analysis package, the single-page web UI and the one-command launcher.
 - **v4.0**: 5 new trackers (URL/crypto/hash/CVE/ASN), correlation/timeline/risk, case management, YAML pipelines, threat-intel feeds, graph exports, source health + circuit breaker.
