@@ -606,3 +606,35 @@ class TestRenderReport:
         with pytest.raises(TemplateNotFound) as excinfo:
             tr.render_report('does-not-exist', sections=self.SECTIONS)
         assert 'available templates' in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------- #
+# escaping of public context values
+# --------------------------------------------------------------------------- #
+
+class TestContextEscaping:
+
+    def _hostile(self) -> dict:
+        payload = '<img src=x onerror=alert(1)>'
+        return {
+            'title': 'Report',
+            'target': 'evil.example',
+            'kind': 'ip',
+            'version': '1.0',
+            'generated': 'now',
+            'channel': 'cli',
+            'band': payload,
+            'score': payload,
+            'top_signals': [payload],
+        }
+
+    def test_standalone_escapes_score_and_band(self):
+        html = tr.render_standalone_html_report(SECTIONS, self._hostile())
+        assert '<img src=x onerror=alert(1)>' not in html
+        assert '&lt;img src=x onerror=alert(1)&gt;' in html
+
+    def test_summary_escapes_score_and_band(self):
+        html = tr.render_template('summary.html.j2', sections=SECTIONS,
+                                  meta=self._hostile())
+        assert '<img src=x onerror=alert(1)>' not in html
+        assert '&lt;img src=x onerror=alert(1)&gt;' in html

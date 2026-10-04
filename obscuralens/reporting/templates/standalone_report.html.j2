@@ -584,7 +584,7 @@ table.data-table th.num { text-align: right; font-variant-numeric: tabular-nums;
       ('critical', 'critical'),
   ] %}
   <div class="band-strip" role="img"
-       aria-label="Risk band {{ meta.band|esc }}{% if meta.score is not none %} (score {{ meta.score }}){% endif %}">
+       aria-label="Risk band {{ meta.band|esc }}{% if meta.score is not none %} (score {{ meta.score|esc }}){% endif %}">
     {% for value, label in bands %}
     <div class="band-seg{% if meta.band == value %} is-active active-{{ value }}{% endif %}">
       {{ label }}
@@ -592,7 +592,7 @@ table.data-table th.num { text-align: right; font-variant-numeric: tabular-nums;
     {% endfor %}
   </div>
   {% if meta.score is defined and meta.score is not none %}
-  <p class="band-score">Rule score: <strong>{{ meta.score }}</strong> / 100</p>
+  <p class="band-score">Rule score: <strong>{{ meta.score|esc }}</strong> / 100</p>
   {% endif %}
   {% endif %}
 

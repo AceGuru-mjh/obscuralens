@@ -266,17 +266,17 @@ body {
 
   {% if meta.band %}
   <div class="band-row">
-    <span class="band-chip {{ meta.band }}">
-      {{ meta.band }}{% if meta.score is not none %} &middot; {{ meta.score }}/100{% endif %}
+    <span class="band-chip {{ meta.band|esc }}">
+      {{ meta.band|esc }}{% if meta.score is not none %} &middot; {{ meta.score|esc }}/100{% endif %}
     </span>
     {% if meta.score is defined and meta.score is not none %}
     <div class="score-track"
          role="progressbar"
-         aria-valuenow="{{ meta.score }}"
+         aria-valuenow="{{ meta.score|esc }}"
          aria-valuemin="0"
          aria-valuemax="100"
          aria-label="Rule score">
-      <div class="score-fill" style="width: {{ [meta.score, 100]|min }}%;"></div>
+      <div class="score-fill" style="width: {{ [meta.score|float, 100]|min }}%;"></div>
     </div>
     <p class="score-caption">explainable rule score, capped at 100</p>
     {% endif %}

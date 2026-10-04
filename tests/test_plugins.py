@@ -198,3 +198,27 @@ def test_ip_tracker_runs_plugin_sources(plugin_dirs, monkeypatch):
     assert out['sources']['plugin:demo:Demo']['ok'] is True
     assert out['fields']['network_note'] == 'seen 1.2.3.4'
     assert out['provenance']['network_note'] == ['plugin:demo:Demo']
+
+
+def test_module_name_is_stable_and_distinct():
+    """_module_name must be deterministic per path and distinct across paths.
+
+    Uses a SHA-256 digest (not the old SHA-1) truncated to 12 hex chars so
+    equal stems in different directories never collide.
+    """
+    from pathlib import Path as _P
+
+    p1 = _P('/tmp/demo/plugins/alpha.py')
+    p2 = _P('/other/dir/plugins/alpha.py')
+    p3 = _P('/tmp/demo/plugins/beta.py')
+
+    n1 = plugins._module_name(p1)
+    n2 = plugins._module_name(p2)
+    n3 = plugins._module_name(p3)
+
+    assert n1.startswith('_obscuralens_plugin_alpha_')
+    assert n1 == plugins._module_name(p1)  # stable
+    assert n1 != n2  # same stem, different dir -> distinct
+    assert n1 != n3  # different stem -> distinct
+    assert len(n1.split('_')[-1]) == 12  # 12-hex SHA-256 digest
+    assert all(c in '0123456789abcdef' for c in n1.split('_')[-1])

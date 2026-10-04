@@ -95,7 +95,7 @@ class HttpClient:
     def _cache_key(url: str, headers: Optional[Dict[str, str]]) -> str:
         if not headers:
             return url
-        digest = hashlib.sha1(
+        digest = hashlib.sha256(
             repr(sorted(headers.items())).encode('utf-8')).hexdigest()[:12]
         return f"{url}#{digest}"
 
