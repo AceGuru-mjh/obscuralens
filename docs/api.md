@@ -28,7 +28,8 @@ Conventions used by every endpoint:
   CLI — anything you look up via HTTP is visible to `history`, `correlate`,
   `timeline` and the cases endpoints.
 - All v4 endpoints keep working unchanged; v5.0 endpoints are marked
-  *(v5.0)* below.
+  *(v5.0)* below; the v6.0 Part 2 [analytics endpoints](#analytics-endpoints-v60)
+  are pure offline computation.
 
 ## Service endpoints
 
@@ -321,6 +322,91 @@ curl -X POST http://127.0.0.1:8000/api/alerts/test
 Response shape: `{"ok": true, "status": 200, "detail": "…"}` — or
 `{"ok": false, …}` with the failure reason when the webhook is
 unreachable (not an HTTP error status itself).
+
+## Analytics endpoints (v6.0)
+
+Nine offline endpoints expose the [analytics package](analytics.md) over
+REST — pure computation, no sources queried, no network. Missing fields
+and lists with no usable numbers after cleaning return `400` with a
+`detail` message.
+
+### `POST /api/analytics/stats`
+
+Descriptive statistics plus a histogram for a numeric list. Body:
+`{"values": [1, 2, 3, 4, 100], "bins": 10}` (non-numeric items are
+dropped).
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/analytics/stats \
+     -H "Content-Type: application/json" \
+     -d '{"values": [1, 2, 3, 4, 100]}'
+```
+
+Response shape: `{"count", "summary": {count, mean, median, stdev, min,
+max, q1, q3, iqr, skew, kurt}, "histogram": {bin_edges, bin_counts,
+bin_labels}}`.
+
+### `POST /api/analytics/anomalies`
+
+Outlier detection. Body: `{"values": [...], "method": "ensemble",
+"threshold": 3.0}` — method is one of zscore/iqr/mad/grubbs/ensemble/
+threshold; `threshold` applies to the zscore detector.
+
+Response shape: `{"count", "method", "anomaly_count", "anomalies":
+[{"value", "score", "method", "detail": {"index", …}}]}`.
+
+### `POST /api/analytics/timeseries`
+
+Trend / changepoint summary for a value sequence indexed as consecutive
+days. Body: `{"values": [5, 6, 5, 6, 20, 21]}`.
+
+Response shape: `{"count", "summary": {count, span_days, trend, direction,
+mean, variance, changepoint_count, …}}`.
+
+### `POST /api/analytics/clusters`
+
+Kilometre-space clustering of coordinate pairs. Body: `{"points":
+[[52.0, 13.0], [52.1, 13.1]], "eps_km": 25, "min_points": 3}`.
+
+Response shape: `{"point_count", "eps_km", "min_points",
+"cluster_count", "clusters": [{centroid, members, size, radius_km,
+labels}]}`.
+
+### `POST /api/analytics/keywords`
+
+Stopword-filtered keyword mining. Body: `{"text": "…", "top": 10}`.
+Response shape: `{"keyword_count", "keywords": [{term, count, weight}]}`.
+
+### `POST /api/analytics/language`
+
+Script and language fingerprint. Body: `{"text": "…"}`. Response shape:
+`{"dominant_script", "script_counts", "hint", "language_guess",
+"confidence"}` — eleven tracked scripts, eight language guesses.
+
+### `POST /api/analytics/similarity`
+
+Four-metric similarity between two texts. Body: `{"a": "paypal", "b":
+"paypa1"}`. Response shape: `{"jaro_winkler", "levenshtein_ratio",
+"ngram", "cosine", "mean", "length_a", "length_b"}`.
+
+### `POST /api/analytics/graph`
+
+Graph metrics over an entities/links payload (the investigate/correlation
+shape; `from`/`to` link keys accepted). Body: `{"entities": [{"id": "a"},
+…], "links": [{"source": "a", "target": "b"}, …]}`.
+
+Response shape: `{"entity_count", "link_count", "summary": {node_count,
+edge_count, density, component_count, top_entities, bridges, …}}`.
+
+### `GET /api/analytics/history?limit=500`
+
+Enrichment report over stored query history: kind frequency, hour/weekday
+profiles, success rates, source reliability, day-volume anomalies and
+top targets. An empty history yields a well-formed empty report.
+
+```bash
+curl "http://127.0.0.1:8000/api/analytics/history?limit=500"
+```
 
 ## Threat intel (v4.0)
 
