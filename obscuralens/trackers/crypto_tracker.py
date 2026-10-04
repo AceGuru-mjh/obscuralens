@@ -4,10 +4,11 @@ Aggregates on-chain intelligence for cryptocurrency addresses (new v4.0
 target kind ``crypto``).
 
 Supported inputs are validated by :func:`validate_crypto_address` (btc, eth,
-xmr, doge, ltc, xrp, ada). Chains without any aggregated data source (xmr,
-xrp, ada) still produce a report - the detected chain and address are always
-recorded - but ``sources_ok`` will be empty and ``success`` False unless a
-keyless source applies.
+xmr, doge, ltc, xrp, ada, sol). Chains without any aggregated data source
+(xmr only, since v5.2 brought XRPScan, Koios and the Solana JSON-RPC) still
+produce a report - the detected chain and address are always recorded - but
+``sources_ok`` will be empty and ``success`` False unless a keyless source
+applies.
 
 Amount conversions (satoshi -> BTC, wei -> ETH) happen inside the source
 readers, with rounding applied there: 8 decimals for the BTC family, 6 for
@@ -34,8 +35,10 @@ from .crypto_sources import gather_all
 __all__ = ['AGGREGATED_CHAINS', 'CryptoTracker']
 
 #: Chains the aggregated keyless/keyed sources can currently enrich.
-#: xmr / xrp / ada addresses are validated and chain-labelled only.
-AGGREGATED_CHAINS = ('btc', 'eth', 'doge', 'ltc')
+#: As of v5.2 that is every validated chain except xmr (Monero balances are
+#: unobservable by design) - xrp/ada/sol joined via XRPScan, Koios and the
+#: public Solana JSON-RPC.
+AGGREGATED_CHAINS = ('btc', 'eth', 'doge', 'ltc', 'xrp', 'ada', 'sol')
 
 
 class CryptoTracker:

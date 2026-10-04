@@ -7,7 +7,7 @@ crypto addresses, file hashes, CVEs, AS numbers, MAC addresses, IBANs,
 IMEIs and geographic coordinates.
 """
 
-__version__ = "5.1.0"
+__version__ = "5.2.0"
 __author__ = "MJH"
 __license__ = "MIT"
 

@@ -20,6 +20,9 @@ ONIONOO_URL = tor.ONIONOO_URL
 SPAMHAUS_URL = feeds.FEED_URLS['spamhaus_drop']
 FEODO_URL = feeds.FEED_URLS['feodo']
 FIREHOL_URL = feeds.FEED_URLS['firehol_level1']
+CINS_URL = feeds.FEED_URLS['cins_army']
+BLOCKLIST_DE_URL = feeds.FEED_URLS['blocklist_de']
+OPENPHISH_URL = feeds.FEED_URLS['openphish']
 
 SPAMHAUS_BODY = (
     '; Copyright 2024 The Spamhaus Project Ltd.\n'
@@ -40,6 +43,10 @@ FIREHOL_BODY = (
     '2001:db8::/32\n'
     'banana\n'
 )
+CINS_BODY = ('2.3.4.5\n' '3.4.5.6\n' 'not-an-ip\n')
+BLOCKLIST_DE_BODY = ('4.5.6.7\n' '5.6.7.8\n')
+OPENPHISH_BODY = ('http://6.7.8.9/login\n' 'https://phishing.example.com/x\n'
+                  'http://7.8.9.10:8080/pay\n')
 
 RELAY_PAYLOAD = {
     'relays': [{
@@ -94,12 +101,16 @@ def _no_relays(fake_http):
 
 
 def _install_feeds(monkeypatch, exit_body='9.9.9.9\n', spamhaus=SPAMHAUS_BODY,
-                   feodo=FEODO_BODY, firehol=FIREHOL_BODY):
+                   feodo=FEODO_BODY, firehol=FIREHOL_BODY, cins=CINS_BODY,
+                   blocklist_de=BLOCKLIST_DE_BODY, openphish=OPENPHISH_BODY):
     return FakeText({
         EXIT_URL: exit_body,
         SPAMHAUS_URL: spamhaus,
         FEODO_URL: feodo,
         FIREHOL_URL: firehol,
+        CINS_URL: cins,
+        BLOCKLIST_DE_URL: blocklist_de,
+        OPENPHISH_URL: openphish,
     }).install(monkeypatch)
 
 
@@ -362,7 +373,9 @@ def test_check_ip_listed_count_math(fake_http, monkeypatch):
     assert result['spamhaus_drop'] is True  # bare 5.6.7.0/24 line
     assert result['feodo'] is True
     assert result['firehol_level1'] is False  # only 1.2.3.0/24 + 2001:db8::/32
-    assert result['listed_count'] == 2
+    assert result['blocklist_de'] is True  # 5.6.7.8 ships in the v5.2 body
+    assert result['cins_army'] is False
+    assert result['listed_count'] == 3
 
 
 def test_check_ip_invalid_address(fake_http, monkeypatch):
@@ -412,7 +425,8 @@ def test_check_ip_carries_relay_details(fake_http, monkeypatch):
 def test_feeds_status_before_any_load():
     status = feeds.feeds_status()
     assert [item['name'] for item in status] == [
-        'spamhaus_drop', 'feodo', 'firehol_level1', 'urlhaus', 'threatfox']
+        'spamhaus_drop', 'feodo', 'firehol_level1', 'urlhaus', 'threatfox',
+        'cins_army', 'blocklist_de', 'openphish']
     for item in status:
         assert set(item) == {'name', 'url', 'entries', 'cached', 'error'}
         assert item['entries'] == 0
@@ -442,7 +456,7 @@ def test_feeds_failure_path(fake_http, monkeypatch):
     assert result['feodo'] is False
     assert result['firehol_level1'] is False
     assert result['listed_count'] == 0
-    assert failing.count == 6  # exit list + five feeds
+    assert failing.count == 9  # exit list + eight feeds
     status = {item['name']: item for item in feeds.feeds_status()}
     for name in ('spamhaus_drop', 'feodo', 'firehol_level1'):
         assert status[name]['error'] == 'timeout'
@@ -455,18 +469,23 @@ def test_feeds_sections_rows(fake_http, monkeypatch):
     _install_feeds(monkeypatch)
     feeds.check_ip('1.2.3.4')
     rows = feeds.feeds_sections()
-    assert len(rows) == 5
+    assert len(rows) == 8
     assert all(len(row) == 3 for row in rows)
     pairs = {row[0]: row for row in rows}
     assert pairs['Spamhaus DROP'][1] == '2'
     assert pairs['Spamhaus DROP'][2] == 'cached'
     assert pairs['Feodo Tracker'][1] == '2'
     assert pairs['FireHOL Level 1'][1] == '2'
+    # v5.2 feeds: two bare IPs each; openphish keeps only the literal-IP
+    # hosts (6.7.8.9 and 7.8.9.10 - the domain host is dropped).
+    assert pairs['CINS Army'][1] == '2'
+    assert pairs['blocklist.de'][1] == '2'
+    assert pairs['OpenPhish'][1] == '2'
 
 
 def test_feeds_sections_not_loaded():
     rows = feeds.feeds_sections()
-    assert len(rows) == 5
+    assert len(rows) == 8
     assert rows[0] == ['Spamhaus DROP', '0', 'not loaded']
 
 
@@ -491,7 +510,8 @@ def test_intel_sections_combined(fake_http, monkeypatch):
     assert pairs['Spamhaus DROP'] == 'listed'
     assert pairs['Feodo Tracker'] == 'listed'
     assert pairs['FireHOL Level 1'] == 'clear'
-    assert pairs['Feeds listed'] == '2'
+    assert pairs['blocklist.de'] == 'listed'
+    assert pairs['Feeds listed'] == '3'
     assert len(fake_http.calls) == 1  # exactly one Onionoo lookup
 
 
@@ -514,9 +534,9 @@ def test_second_check_does_not_refetch(fake_http, monkeypatch):
     _no_relays(fake_http)
     fake = _install_feeds(monkeypatch)
     feeds.check_ip('1.2.3.4')
-    assert fake.count == 6  # exit list + five feeds
+    assert fake.count == 9  # exit list + eight feeds
     feeds.check_ip('1.2.3.4')
-    assert fake.count == 8  # cached feeds served; failed urlhaus/threatfox retried
+    assert fake.count == 11  # cached feeds served; failed urlhaus/threatfox retried
     # the per-address Onionoo lookup runs per check (the shared HTTP cache
     # would dedupe it in production; it is disabled under pytest)
     assert len(fake_http.calls) == 2

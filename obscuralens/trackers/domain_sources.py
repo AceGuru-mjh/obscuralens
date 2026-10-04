@@ -9,6 +9,9 @@ so one blocked or flaky source cannot blank out a whole report. Coverage:
 * ``certspotter`` - Certificate Transparency issuance history and subdomains
 * ``http``        - homepage status, title, server/security headers, robots.txt
 * ``doh.google``  - A/AAAA/MX/NS via DNS-over-HTTPS, cross-confirming ``dns``
+* ``doh.cloudflare`` - the same record set via Cloudflare's 1.1.1.1 resolver
+  (v5.2), stacking with both resolvers in provenance - a third independent
+  vantage point for DNS answers
 
 Sources listed in ``app.disabled_sources`` are skipped. Field provenance is
 tracked: ``gather_all`` returns which source(s) supplied each value, so a
@@ -451,6 +454,58 @@ def _doh_mx_hosts(answers: List[str]) -> List[str]:
     return [host for _prio, host in records]
 
 
+def _doh_cloudflare(domain: str) -> Dict[str, Any]:
+    """
+    DNS-over-HTTPS core record set via Cloudflare 1.1.1.1 (keyless, v5.2).
+
+    Endpoint: ``https://cloudflare-dns.com/dns-query?name={domain}&type=A``
+    (plus AAAA, MX and NS) with the ``Accept: application/dns-json`` header
+    the JSON variant of RFC 8484 requires - the plain endpoint without that
+    header answers with wireformat bytes instead.
+
+    Like ``doh.google`` this deliberately re-uses the ``dns`` reader's field
+    names (``a_records`` / ``aaaa_records`` / ``mx_records`` /
+    ``ns_records``) so the classic resolver, Google and Cloudflare stack in
+    ``gather_all`` provenance: three independent vantage points answering
+    the same question. ``doh_cf_responded`` records that the resolver
+    answered (Status 0) even when a record type is empty.
+    """
+    out: Dict[str, Any] = {}
+    responded = False
+
+    queries = (
+        ('A', _DOH_TYPE_A),
+        ('AAAA', _DOH_TYPE_AAAA),
+        ('MX', _DOH_TYPE_MX),
+        ('NS', _DOH_TYPE_NS),
+    )
+    for rtype, type_code in queries:
+        ok, data, _ = http.get_json(
+            f"https://cloudflare-dns.com/dns-query?name={domain}&type={rtype}",
+            headers={'Accept': 'application/dns-json'})
+        if not ok or not isinstance(data, dict) or data.get('Status') != 0:
+            continue
+        responded = True
+        answers = _doh_answers(data, type_code)
+        if not answers:
+            continue
+        if type_code == _DOH_TYPE_A:
+            out['a_records'] = [v for v in answers if _is_ipv4_literal(v)]
+        elif type_code == _DOH_TYPE_AAAA:
+            out['aaaa_records'] = [v for v in answers if _is_ipv6_literal(v)]
+        elif type_code == _DOH_TYPE_MX:
+            hosts = [h for h in _doh_mx_hosts(answers) if h and h != '.']
+            if hosts:
+                out['mx_records'] = hosts
+        elif type_code == _DOH_TYPE_NS:
+            out['ns_records'] = sorted({v.rstrip('.') for v in answers if v})
+
+    if not responded:
+        return {}
+    out['doh_cf_responded'] = True
+    return {k: v for k, v in out.items() if v}
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -466,6 +521,7 @@ FREE_SOURCES: Dict[str, Any] = {
     'hackertarget': _hackertarget,
     'security_txt': _security_txt,
     'doh.google': _doh_google,
+    'doh.cloudflare': _doh_cloudflare,
 }
 
 # Human-readable metadata used by `obscuralens sources` and the README.
@@ -480,6 +536,7 @@ SOURCE_CATALOG = {
     'hackertarget': 'Subdomain/IP host search (keyless, daily quota)',
     'security_txt': 'RFC 9116 security.txt disclosure contacts and policy (keyless)',
     'doh.google': 'A/AAAA/MX/NS records via Google DNS-over-HTTPS, cross-confirming the dns source (keyless)',
+    'doh.cloudflare': 'A/AAAA/MX/NS records via the Cloudflare 1.1.1.1 DoH resolver, a third DNS vantage point (keyless; v5.2)',
 }
 
 

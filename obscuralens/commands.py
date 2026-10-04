@@ -193,7 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(p_url)
 
     p_crypto = sub.add_parser('crypto', help='analyze a cryptocurrency address')
-    p_crypto.add_argument('target', help='btc / eth / xmr / doge / ltc / xrp / ada address')
+    p_crypto.add_argument('target', help='btc / eth / xmr / doge / ltc / xrp / ada / sol address')
     add_common(p_crypto)
 
     p_hash = sub.add_parser('hash', help='look up a file hash')

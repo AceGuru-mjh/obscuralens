@@ -1,7 +1,7 @@
 """
 Threat-intel blocklist feeds: download, parse, cache and IP membership.
 
-Five keyless feeds are supported (the last two joined in v5.0):
+Eight keyless feeds are supported (three joined in v5.2):
 
 * **spamhaus_drop** — Spamhaus DROP (hijacked / rogue ranges), lines like
   ``1.2.3.0/24 ; SBL12345 ; description`` with ``;``/``#`` comments.
@@ -19,6 +19,14 @@ Five keyless feeds are supported (the last two joined in v5.0):
   API (``POST /api/v1/`` with ``{"query": "get_iocs"}``) now demands an
   abuse.ch Auth-Key, so the keyless recent CSV export is used instead -
   same data, no account, and plain GET transport.
+* **cins_army** (v5.2) — CINS Army blocklist (cinsscore.com), one bare IP
+  per line; a curated score-based feed of currently active attackers.
+* **blocklist_de** (v5.2) — blocklist.de aggregated abuse list
+  (``lists/all.txt``): IPs that attacked mail/HTTP/SSH honeypots in the
+  last 48 hours, one bare IP per line.
+* **openphish** (v5.2) — OpenPhish community phishing feed, one URL per
+  line; the host is extracted exactly like urlhaus and kept when it is a
+  literal IP (the free feed is small but refreshed hourly).
 
 Every feed body is parsed into ``ipaddress`` network objects, so
 membership is an exact subnet match instead of a string comparison, and
@@ -53,6 +61,10 @@ FEED_URLS: Dict[str, str] = {
                       'blocklist-ipsets/master/firehol_level1.netset',
     'urlhaus': 'https://urlhaus.abuse.ch/downloads/text/',
     'threatfox': 'https://threatfox.abuse.ch/export/csv/recent/',
+    # v5.2 additions -----------------------------------------------------
+    'cins_army': 'https://cinsscore.com/list/ci-badguys.txt',
+    'blocklist_de': 'https://lists.blocklist.de/lists/all.txt',
+    'openphish': 'https://openphish.com/feed.txt',
 }
 
 # Human labels used by the report rows.
@@ -62,6 +74,9 @@ FEED_LABELS: Dict[str, str] = {
     'firehol_level1': 'FireHOL Level 1',
     'urlhaus': 'abuse.ch URLhaus',
     'threatfox': 'abuse.ch ThreatFox',
+    'cins_army': 'CINS Army',
+    'blocklist_de': 'blocklist.de',
+    'openphish': 'OpenPhish',
 }
 
 # Comment prefixes shared by every feed format.
@@ -133,10 +148,25 @@ def _threatfox_host(line: str) -> str:
     return host.rsplit(':', 1)[0] if host.count(':') == 1 else host
 
 
+def _openphish_host(line: str) -> str:
+    """
+    Extract the host from one OpenPhish feed URL line (v5.2).
+
+    Lines look like ``https://phish.example/login``; ``urlparse`` yields the
+    host (IP or domain, port stripped) and ``_network_from_token`` keeps
+    only literal IPs - domains are dropped exactly like urlhaus does.
+    """
+    try:
+        return urlparse(line).hostname or ''
+    except ValueError:
+        return ''
+
+
 #: name -> tokenizer for non-bare-network feed lines (absent = plain split).
 _FEED_TOKENIZERS: Dict[str, Any] = {
     'urlhaus': _urlhaus_host,
     'threatfox': _threatfox_host,
+    'openphish': _openphish_host,
 }
 
 # In-module cache: name -> (fetch timestamp, [ip_network, ...]).
@@ -231,21 +261,20 @@ def check_ip(ip: str) -> Dict[str, Any]:
     """
     Check one address against the Tor exit list and every blocklist feed.
 
-    Returns ``{'tor', 'spamhaus_drop', 'feodo', 'firehol_level1',
-    'urlhaus', 'threatfox', 'listed_count', 'relay'}`` where
-    ``listed_count`` counts how many of those six lists contain the
-    address. Invalid input gives all-False verdicts, and
-    ``app.feeds_enabled`` switched off gives exactly
+    Returns ``{'tor', <one key per feed>, 'listed_count', 'relay'}`` where
+    ``listed_count`` counts how many lists contain the address (the eight
+    blocklist feeds plus the Tor exit list). Invalid input gives all-False
+    verdicts, and ``app.feeds_enabled`` switched off gives exactly
     ``{'disabled': True}``. Never raises.
     """
     if not config.app_config.feeds_enabled:
         return {'disabled': True}
-    empty = {
-        'tor': False, 'spamhaus_drop': False, 'feodo': False,
-        'firehol_level1': False, 'urlhaus': False, 'threatfox': False,
+    empty = dict.fromkeys(FEED_URLS, False)
+    empty.update({
+        'tor': False,
         'listed_count': 0,
         'relay': {'is_relay': False, 'error': 'invalid ip address'},
-    }
+    })
     try:
         ip_obj = ipaddress.ip_address(str(ip).strip())
     except (ValueError, TypeError):

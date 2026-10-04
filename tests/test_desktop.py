@@ -599,7 +599,7 @@ class TestUpdateChecker:
         assert checker.last_error
 
     def test_check_stable_uses_latest_endpoint(self):
-        release = make_release("v5.2.0")
+        release = make_release("v5.3.0")
         fetcher = FakeFetch({LATEST_URL: (200, json.dumps(release))})
         checker = UpdateChecker(channel="stable", fetch=fetcher)
         info = checker.check()

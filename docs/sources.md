@@ -72,6 +72,7 @@ live under `obscuralens sources health` — see
 | hackertarget | Subdomain/IP host search (daily quota) | none |
 | security_txt | RFC 9116 security.txt disclosure contacts and policy | none |
 | doh.google | DNS-over-HTTPS resolver (dns.google): A/AAAA/MX/NS answers cross-checking the classic `dns` source, plus a `doh_responded` marker | none |
+| doh.cloudflare | DNS-over-HTTPS via the Cloudflare 1.1.1.1 resolver: the same A/AAAA/MX/NS record set as a third independent DNS vantage point, plus a `doh_cf_responded` marker (v5.2) | none |
 
 ## Email (`obscuralens email`)
 
@@ -98,26 +99,43 @@ live under `obscuralens sources health` — see
 
 ## Username (`obscuralens username`)
 
-The username tracker sweeps 45 platforms — 38 HTML platforms and 7 JSON API
-platforms — with honest three-state verdicts per platform
+The username tracker sweeps **104 platforms** — 95 HTML platforms and 9
+JSON API platforms — with honest three-state verdicts per platform
 (confirmed / ruled-out / inconclusive). JS-shell and bot-wall pages are never
 claimed as hits. Restrict a scan with `--platforms steam,kaggle`.
 
-HTML platforms (38): Behance, Bitbucket, Blogger, DeviantArt, Dribbble,
-Etsy, Facebook, Flickr, GitHub, GitLab, Hackaday.io, Instagram, Kaggle,
-Last.fm, LinkedIn, Mastodon, Medium, Patreon, Pinterest, Quora, Redbubble,
-Reddit, Replit, SlideShare, Snapchat, SoundCloud, Spotify, Steam, Substack,
-Telegram, TikTok, Tumblr, Twitch, Twitter, Vimeo, Wattpad, WordPress,
-YouTube.
+HTML platforms (95): 9GAG, About.me, AtCoder, Behance, Bitbucket, Bitwarden
+Forum, Blender Artists, Blogger, Credly, Crowdin, DeviantArt, Disqus,
+Dribbble, Etsy, Exophase, Facebook, Flickr, Fosstodon, Freesound, Geocaching,
+GitBook, GitHub, GitLab, Gitee, GoodReads, HackMD, Hackaday.io, HackerOne,
+Hashnode, HubPages, Hugging Face, IFTTT, Instagram, Instructables, Ionic
+Forum, Issuu, Itch.io, Joplin Forum, Kaggle, Kongregate, Laracast, Last.fm,
+Launchpad, LinkedIn, Linktree, LinuxFR, Mastodon, Medium, Memrise,
+MyAnimeList, MyDramaList, MyMiniFactory, OK.ru, OpenGameArt, Patreon,
+Pinterest, Pixelfed, Pokemon Showdown, Quora, Rclone Forum, Redbubble,
+Reddit, Replit, RubyGems, Rust Users, Scratch, Sketchfab, SlideShare,
+Snapchat, SoundCloud, SourceForge, SpeakerDeck, Spotify, Steam, Strava,
+Substack, Telegram, Tenor, TheMovieDB, TikTok, TradingView, Tumblr, Twitch,
+Twitter, Ubuntu Discourse, VK, Vimeo, WakaTime, Wattpad, Windy, WordPress,
+YouPic, YouTube, n8n Community, write.as.
 
 > Patreon and Etsy sit behind aggressive bot walls: both existing and
 > missing accounts answer HTTP 403, so their verdict rules report
 > `unknown` (inconclusive) — the same honesty policy as every JS-shell
 > platform. Substack resolves via page title ("| Substack" marker) and
 > Replit via its login-redirect split, giving real found / not-found
-> verdicts.
+> verdicts. Hashnode decides from the page title ("User not found |
+> Hashnode" vs a real profile title).
 
-JSON API platforms (7):
+The v5.2 HTML additions all ride the `STATUS_RELIABLE` fast path: every one
+of them was probed live before shipping, and a plain 200 on the profile
+URL counts as a hit only because missing accounts verifiably answer 404.
+Platforms that bot-wall every scripted client (Codepen, Codewars, LeetCode,
+npm, ArtStation, Trakt, osu!, Wikipedia, Fandom, Imgur, Speedrun.com, …)
+were tested and deliberately **not** added — they could only ever report
+"unknown".
+
+JSON API platforms (9):
 
 | Platform | Coverage | Key |
 |---|---|---|
@@ -128,6 +146,8 @@ JSON API platforms (7):
 | DockerHub | Account existence and profile | none |
 | Dev.to | Account existence and profile | none |
 | Chess.com | Account existence and profile | none |
+| Bluesky | DID-confirmed profile via the public App View API (`app.bsky.actor.getProfile`); bare usernames resolve `<name>.bsky.social`, dotted handles are used verbatim (v5.2) | none |
+| Dailymotion | User via api.dailymotion.com with an explicit field list: screenname, creation date, follower/video/view totals (v5.2) | none |
 
 ## URL (`obscuralens url`)
 
@@ -136,13 +156,15 @@ JSON API platforms (7):
 | http_probe | Redirect chain, final status, title and server headers | none |
 | urlscan | Public urlscan.io scan history and malicious verdicts | none |
 | wayback | Wayback Machine capture history via the CDX API | none |
+| openphish | OpenPhish community phishing feed membership: exact-URL and host-level matches; a feed-clear is a fact, not a failure (v5.2) | none |
 | google_safe_browsing | Google Safe Browsing threat verdicts | `google_safe_browsing` |
 | virustotal | URL scan detections and reputation | `virustotal` |
 
 ## Crypto (`obscuralens crypto`)
 
-Supported chains: BTC, ETH, DOGE, LTC (validators also recognise XMR, XRP and
-ADA addresses — currently no source covers them). Chain routing means an ETH
+Supported chains: BTC, ETH, DOGE, LTC, XRP, ADA, SOL (validators also
+recognise XMR addresses — Monero balances are unobservable by design, so
+xmr is chain-labelled only). Chain routing means an ETH
 address never touches the BTC explorers.
 
 | Source | Coverage | Key |
@@ -151,6 +173,10 @@ address never touches the BTC explorers.
 | blockstream.info | Esplora funded/spent sums, tx and mempool counters, last confirmed activity (BTC only) | none |
 | blockchair | Address type, balance and first/last seen dates (BTC/ETH/LTC/DOGE, rate-limited) | none |
 | mempool.space | Bitcoin funded−spent balance, received/sent totals, tx count, pending-tx counter (BTC only; shares field names with blockchain.info so provenance stacks) | none |
+| blockcypher | Balance, received/sent totals and tx counters (BTC/ETH/LTC/DOGE, keyless, rate-limited; LTC and DOGE's second aggregated source; v5.2) | none |
+| xrpscan | XRP balance, sequence, owner count, latest affecting transaction and ledger index (XRP only; v5.2) | none |
+| koios | Lovelace balance, stake address, script flag, UTXO count and UTXO-derived last activity via the Koios Cardano API pool (ADA only; v5.2) | none |
+| solana | Lamports balance, owner program, executable flag and data size via the public Solana mainnet JSON-RPC (SOL only; v5.2) | none |
 | etherscan | Ethereum balance and transaction timestamps | `etherscan` |
 
 ## Hash (`obscuralens hash`)
@@ -172,6 +198,8 @@ SHA-384/SHA-512 validate but have no sources today).
 | nvd | NVD 2.0: description, CVSS, CWE, references, CPEs | optional `nvd` |
 | osv | Google OSV.dev: affected packages and severity vector | none |
 | cvelist | CVEProject cvelistV5 raw CNA record | none |
+| cveawg | The CVE Program's authoritative record API (cveawg.mitre.org): same CVE 5.1 schema as cvelist, cross-confirming it with stacked provenance (v5.2) | none |
+| ghsa | GitHub Security Advisories: GHSA ids, highest severity, CVSS score and CWE list (v5.2) | optional `github` |
 | epss | FIRST.org EPSS exploitation probability | none |
 | circl | CIRCL cveproxy record (CVE-5.1 and legacy schemas): description/CVSS/references merged onto NVD's field names, plus `circl_state`/`circl_title`/`circl_assigner`/`circl_vulnerable_products` | none |
 
@@ -260,6 +288,9 @@ the checks off entirely.
 | FireHOL level 1 | Aggregated "do not route" netset | none |
 | URLhaus | abuse.ch malicious-URL host network list (plain-text download, ~56k URLs) | none |
 | ThreatFox | abuse.ch IOC feed — the keyless recent CSV export (~7k IOCs; the JSON API now requires an Auth-Key), `ip`-typed IOCs only, port/bracket-IPv6 stripped | none |
+| CINS Army | cinsscore.com score-based blocklist of currently active attackers (~15k IPs; v5.2) | none |
+| blocklist.de | Aggregated abuse list: IPs that attacked mail/HTTP/SSH honeypots in the last 48 hours (~8k IPs; v5.2) | none |
+| OpenPhish | OpenPhish community phishing feed — hosts extracted per URL; from the URL tracker the full URLs and hosts are matched exactly (v5.2) | none |
 
 Feeds are capped at 20 000 networks each (dumps are newest-first, so the
 freshest entries survive) and host-type IOCs are tokenized per feed (URLhaus
