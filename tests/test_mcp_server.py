@@ -27,6 +27,9 @@ TOOL_NAMES = {
     'analytics_stats', 'analytics_anomalies', 'analytics_keywords',
     'analytics_language', 'analytics_similarity', 'analytics_graph',
     'analytics_history',
+    # v6.1 tools
+    'tools_dorks',
+
 }
 
 
@@ -193,4 +196,4 @@ def test_main_end_to_end(monkeypatch):
     assert len(out_lines) == 2
     first, second = json.loads(out_lines[0]), json.loads(out_lines[1])
     assert first['result']['serverInfo']['name'] == 'obscuralens'
-    assert len(second['result']['tools']) == 47  # 8 core + 10 v4.0 + 16 v5.0 + 6 v6.0 + 7 v6.0-part2 tools
+    assert len(second['result']['tools']) == 48  # 8 core + 10 v4.0 + 16 v5.0 + 6 v6.0 + 7 v6.0-part2 + 1 v6.1 tools

@@ -470,6 +470,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_risk.add_argument('target')
     add_common(p_risk)
 
+    # -- v6.1 dork builder ----------------------------------------------------
+
+    p_dorks = sub.add_parser(
+        'dorks', help='ready-to-open search-engine dorks for a target (v6.1)')
+    p_dorks.add_argument('target', nargs='?',
+                         help='any target; the kind is auto-detected')
+    p_dorks.add_argument('--kind', choices=KINDS, default=None,
+                         help='override the auto-detected kind')
+    p_dorks.add_argument('--list', action='store_true', dest='list_kinds',
+                         help='list the kinds that carry dork templates')
+    add_common(p_dorks)
+
     p_timeline = sub.add_parser(
         'timeline', help='chronological event timeline from stored history')
     p_timeline.add_argument('target', nargs='?',
@@ -1031,7 +1043,41 @@ def _extra_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
             extra.extend(risk_sections(risk))
         except ImportError:
             pass
+    # v6.1: evidence confidence section (only when confidence was attached).
+    confidence = result.get('confidence')
+    if isinstance(confidence, dict) and confidence.get('fields_scored'):
+        extra.extend(_confidence_sections(confidence))
     return extra
+
+
+def _confidence_sections(confidence: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Report sections for the evidence-confidence block (v6.1)."""
+    per_field = confidence.get('per_field') or {}
+    sections: List[Dict[str, Any]] = [{
+        'title': 'EVIDENCE CONFIDENCE',
+        'type': 'keyval',
+        'rows': [
+            ['Overall', f"{confidence.get('overall', 0):.2f}"
+                        f" ({confidence.get('band', 'unknown')})"],
+            ['Fields scored', str(confidence.get('fields_scored', 0))],
+            ['Corroborated (2+ sources)', str(confidence.get('corroborated', 0))],
+        ],
+    }]
+    rows = []
+    for field, entry in sorted(per_field.items(),
+                               key=lambda kv: kv[1].get('score', 0),
+                               reverse=True)[:20]:
+        named = ', '.join(entry.get('named') or [])
+        rows.append([_label(field), f"{entry.get('score', 0):.2f}",
+                     str(entry.get('sources', 0)), named])
+    if rows:
+        sections.append({
+            'title': 'FIELD CONFIDENCE (TOP 20)',
+            'type': 'table',
+            'columns': ['Field', 'Score', 'Sources', 'Named sources'],
+            'rows': rows,
+        })
+    return sections
 
 
 # ---------------------------------------------------------------------------
@@ -1041,6 +1087,13 @@ def _extra_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
 def _run_lookup(args: argparse.Namespace, kind: str, target: str,
                 title: str, **tracker_kwargs: Any) -> int:
     result = _tracker(kind).track(target, **tracker_kwargs)
+    # v6.1: evidence confidence - how well each fact is corroborated, from
+    # the same provenance map the report already shows. Purely additive.
+    try:
+        from .correlation import attach_confidence
+        attach_confidence(result)
+    except Exception:
+        pass
     if getattr(args, 'risk', False):
         try:
             from .correlation import attach_risk
@@ -1854,6 +1907,42 @@ def _cmd_mcp(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 # v4.0 handlers: risk / timeline / correlate / diff / export
 # ---------------------------------------------------------------------------
+
+def _cmd_dorks(args: argparse.Namespace) -> int:
+    """Generate ready-to-open search-engine dorks for a target (v6.1)."""
+    from .utils.dorks import KINDS_WITH_DORKS, dorks_for_target
+
+    if getattr(args, 'list_kinds', False):
+        rows = [[kind, 'yes'] for kind in KINDS_WITH_DORKS]
+        _emit(_render_sections_text([{
+            'title': 'DORK-ENABLED KINDS', 'type': 'table',
+            'columns': ['Kind', 'Templates'], 'rows': rows,
+        }]), args.output)
+        return 0
+
+    if not args.target:
+        _err('a target is required (or use --list)')
+        return 2
+
+    kind = getattr(args, 'kind', None)
+    links = dorks_for_target(args.target, kind)
+    if not links:
+        detected = '' if kind else ' (kind not recognised)'
+        _err(f'no dork templates for this target{detected}')
+        return 1
+
+    fmt = args.format or 'table'
+    if fmt == 'json':
+        _emit(json.dumps({'target': args.target, 'dorks': links}, indent=2,
+                         ensure_ascii=False), args.output)
+    else:
+        rows = [[link['engine'], link['label'], link['url']] for link in links]
+        _emit(_render_sections_text([{
+            'title': 'SEARCH DORKS', 'type': 'table',
+            'columns': ['Engine', 'Purpose', 'URL'], 'rows': rows,
+        }]), args.output)
+    return 0
+
 
 def _cmd_risk(args: argparse.Namespace) -> int:
     from .correlation import risk_sections, score
@@ -3928,6 +4017,8 @@ _HANDLERS = {
     'patterns': _cmd_patterns,
     'geo': _cmd_geo,
     'alerts': _cmd_alerts,
+    # v6.1 commands
+    'dorks': _cmd_dorks,
     # v5.1 desktop beta commands
     'desktop': _cmd_desktop,
     'update': _cmd_update,

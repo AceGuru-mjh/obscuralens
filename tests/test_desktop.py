@@ -546,24 +546,24 @@ class TestUpdateChecker:
 
     def test_check_beta_newer(self):
         key = current_platform_key()
-        matching = "ObscuraLens-6.0.0-beta.1-{0}".format(key)
+        matching = "ObscuraLens-6.2.0-beta.1-{0}".format(key)
         release = make_release(
-            "v6.0.0-beta.1",
+            "v6.2.0-beta.1",
             prerelease=True,
-            assets=[matching, "ObscuraLens-6.0.0-beta.1-win-x64.exe"],
+            assets=[matching, "ObscuraLens-6.2.0-beta.1-win-x64.exe"],
         )
         fetcher = FakeFetch({LIST_URL: (200, json.dumps([release]))})
         checker = UpdateChecker(fetch=fetcher)
         info = checker.check()
         assert info is not None
         assert info.is_newer is True
-        assert info.latest_tag == "v6.0.0-beta.1"
-        assert info.latest_version == "6.0.0-beta.1"
+        assert info.latest_tag == "v6.2.0-beta.1"
+        assert info.latest_version == "6.2.0-beta.1"
         assert info.channel == "beta"
         assert info.is_prerelease is True
         assert info.download_url.endswith(matching)
         assert matching in info.asset_names
-        assert "ObscuraLens-6.0.0-beta.1-win-x64.exe" in info.asset_names
+        assert "ObscuraLens-6.2.0-beta.1-win-x64.exe" in info.asset_names
         assert checker.last_error == ""
         assert fetcher.calls and fetcher.calls[0][0] == LIST_URL
 
@@ -599,7 +599,7 @@ class TestUpdateChecker:
         assert checker.last_error
 
     def test_check_stable_uses_latest_endpoint(self):
-        release = make_release("v5.3.0")
+        release = make_release("v6.2.0")
         fetcher = FakeFetch({LATEST_URL: (200, json.dumps(release))})
         checker = UpdateChecker(channel="stable", fetch=fetcher)
         info = checker.check()
@@ -742,7 +742,7 @@ class TestUpdateChecker:
         assert "beta" in text
 
     def test_check_for_updates_with_injected_fetch(self):
-        release = make_release("v6.0.0-beta.1", prerelease=True)
+        release = make_release("v6.2.0-beta.1", prerelease=True)
         fetcher = FakeFetch({LIST_URL: (200, json.dumps([release]))})
         info = updater.check_for_updates(fetch=fetcher)
         assert info is not None

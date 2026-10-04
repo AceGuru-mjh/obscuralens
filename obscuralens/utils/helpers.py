@@ -20,6 +20,27 @@ from .. import __version__
 _UNICODE_PROBE = '\u2713\u2717\u2550\u2551\u2500\u2022\u2192'
 
 
+def fanout_workers(task_count: int) -> int:
+    """
+    Parallel worker count for a source sweep, honouring ``app.max_workers``
+    (v6.1).
+
+    Every ``gather_all`` fan-out used to hardcode ``min(len(tasks), 12)``,
+    which ignored the ``max_workers`` setting the HTTP connection pool
+    already scales with - a user who raised ``max_workers`` to 24 was still
+    capped at 12 concurrent source readers. This helper keeps the cap at a
+    sane ceiling (32) so a pathological config cannot spawn hundreds of
+    threads, and never returns less than 1.
+    """
+    try:
+        from ..config import config
+        cap = int(config.app_config.max_workers or 12)
+    except Exception:  # config not importable in isolated contexts
+        cap = 12
+    cap = max(1, min(cap, 32))
+    return max(1, min(int(task_count or 0), cap))
+
+
 def _encoding_supports(chars: str) -> bool:
     """Check whether an encoding can represent the given characters."""
     encoding = getattr(sys.stdout, 'encoding', None) or 'ascii'

@@ -2,6 +2,155 @@
 
 ## Changelog
 
+## 6.1.0 — Corroboration & Coverage
+
+ObscuraLens 6.1 is a trust-and-reach release. It adds **evidence
+confidence scoring** — every field now carries a noisy-OR corroboration
+score computed from which sources supplied it, the differentiator that
+separates graph-first tools like Umbra and Estorides from single-source
+lookups — plus a **search-dork builder** across 13 kinds, **17 new
+keyless data sources** (every endpoint live-verified before shipping),
+**three new blockchains** (TRON, NEAR, ATOM) and a **keyless live-flight**
+reader. On the performance side, the source fan-out finally honours
+`max_workers` (the hardcoded 12-thread cap that ignored the setting is
+gone, everywhere) and fragile community APIs get their own slower
+rate-limit buckets so a parallel sweep cannot trip their 429s.
+
+> Note: the v6.0 sensor kinds (vin / flight / mmsi / app / bssid / plate)
+> shipped without a changelog entry; see the 6.0.0 backfill below.
+
+### Added — Evidence confidence scoring (the Umbra-style corroboration layer)
+
+- **`confidence` block on every lookup result** (CLI, web API, investigate
+  pivots and MCP): `overall` score + band, per-field
+  `{score, sources, named}`, and a corroborated-fields count. Computed
+  from the existing `field_sources` provenance map — no extra network
+  round trips, purely additive, never gates a lookup.
+- **Noisy-OR combination over a curated source-trust table**: offline
+  standards maths and curated packs rate 0.95, first-party authoritative
+  records (registries, the CVE Program, chain RPCs, PeeringDB, CAIDA)
+  rate 0.9, community aggregators and scrapes rate 0.75, everything
+  else defaults to 0.8. Two independent sources corroborating each other
+  compound above either alone — five aggregators still cannot outvote
+  one authoritative record.
+- **Table/Markdown/HTML reports gain an EVIDENCE CONFIDENCE section**
+  (overall band, corroborated count, top-20 per-field scores with the
+  named sources behind each fact).
+
+### Added — Three new blockchains (7 → 10 chains)
+
+- **TRON** via TronGrid (`wallet/getaccount`): TRX balance, account
+  type, decoded contract names, creation time. Never-activated addresses
+  answer `{}` — reported as a real zero-balance negative, the same honest
+  treatment the Solana reader gives.
+- **NEAR** via the public RPC (`query`/`view_account`): balance, locked
+  stake, contract code hash, storage usage. Named accounts
+  (`alice.near`) route to the crypto kind ahead of the domain validator —
+  `.near` is not an ICANN TLD, so no real domain can be hijacked.
+  `UNKNOWN_ACCOUNT` errors are real negatives, not failures.
+- **ATOM (Cosmos Hub)** via the cosmos.directory REST proxy (the official
+  `api.cosmos.network` front door has been serving TLS errors): uatom
+  and IBC token balances, account number and sequence.
+- **Cross-chain enrichment for ETH addresses**: `avax_cchain` checks the
+  same 0x address on the Avalanche C-chain public RPC (balance + nonce);
+  `ethplorer` (freekey tier) adds the ERC-20 token portfolio, spot price
+  and tx count on top of the existing Etherscan/Blockchair/BlockCypher
+  coverage; `xrpl_public` gives XRP a fully independent second opinion
+  via the xrplcluster.com community RPC (provenance stacks with XRPScan).
+
+### Added — Keyless sources across seven kinds
+
+- **CVE + CISA KEV**: the Known Exploited Vulnerabilities catalog (via
+  CISA's own cisagov/kev-data GitHub mirror — the cisa.gov feed sits
+  behind datacenter-hostile bot rules). A KEV listing is the single
+  highest-signal fact a CVE report can carry: actively-exploited
+  verdict, ransomware/actor flags, due date. A miss is a real negative.
+- **IP + proxycheck.io**: VPN/proxy/relay verdict and 0-100 risk score —
+  the orthogonal second opinion on proxy verdicts next to ipapi.is.
+- **Email + XposedOrNot**: keyless breach analytics (risk profile,
+  exposing sites, paste count) that cross-confirms the keyed HIBP
+  verdict; clean addresses are real negatives.
+- **Domain + hstspreload.org** (Chromium preload status, a durable trust
+  signal) and **+ ransomware.live** (leak-site victim check: which group
+  listed the domain and when; 1 req/min, cached six hours).
+- **ASN + CAIDA AS-Rank** (global customer-cone ranking, RIR source)
+  and **+ PeeringDB** (the operator-maintained peering record: traffic
+  volume, IX presence, policy).
+- **Flight + adsb.lol**: the first keyless **live** flight reader —
+  position, altitude, ground speed, registration and squawk for the
+  aircraft broadcasting the designator right now (IATA and ICAO callsign
+  forms both tried). Nothing airborne is an honest negative; a transport
+  failure is never misreported as "not airborne".
+- **Coords + Open-Meteo**: current weather, wind and an independent
+  elevation cross-check (photo verification: was it really raining at
+  that geotag?).
+
+### Added — Username sweep 104 → 112 platforms
+
+- **6 HTML platforms** live-verified with clean splits: Calendly,
+  Gumroad, OpenSea, Bandcamp (200-vs-404), Ko-fi (homepage-fallback
+  title rule) and Codeforces (profile-title rule).
+- **2 JSON API platforms**: Stack Exchange (users API with exact
+  display-name matching — the API's `inname` search is substring-based,
+  so the verdict engine now supports username-aware verdict functions)
+  and Duolingo (the 2017-06-30 users endpoint: `users: []` for missing
+  accounts).
+- Bot-walled candidates were probed and deliberately left out
+  (unsplash, producthunt, researchgate, scribd, discogs, genius,
+  chess.com, kickstarter, 500px's SPA shell, lobste.rs) — from scripted
+  clients they can only ever answer "unknown".
+
+### Added — Search-dork builder (13 kinds)
+
+- **`obscuralens dorks <target>`** builds ready-to-open search-engine
+  links for any auto-detected target: domain exposed-file hunting
+  (`site: ext:env`), email leak context, username platform-scoped
+  searches, CVE exploit hunting, IP threat-intel mentions and more,
+  across Google, Bing, DuckDuckGo, Yandex and GitHub code search.
+  `--kind` overrides detection, `--list` shows coverage, `-f json`
+  machine-reads it.
+- **Web toolbox tab** ("Search dorks") with kind selector and clickable
+  links; **`GET /api/tools/dorks`** endpoint; **MCP `tools_dorks`** tool
+  for AI agents. Link generation is purely local — the analyst stays in
+  control of every active query, keeping the tool's passive-first
+  promise intact.
+
+### Changed — Performance and politeness
+
+- **The source fan-out honours `max_workers`**: every `gather_all` used
+  to hardcode `min(len(tasks), 12)`, silently capping users who raised
+  the setting (the HTTP pool already scaled with it). A shared
+  `fanout_workers()` helper (capped at a sane 32) now drives all 17
+  source modules.
+- **Per-host rate-limit overrides**: hosts with documented or
+  empirically verified limits below the configured default
+  (`api.ethplorer.io` 0.4/s, `api.ransomware.live` 0.02/s,
+  `api.adsb.lol` 0.8/s, the chain RPCs) get their own slower token
+  buckets, so a 12-worker sweep cannot trip a fragile community API into
+  a 429. `snapshot()` now lists the overridden hosts in effect.
+
+### Testing & docs
+
+- 99 new offline tests (`tests/test_v61_sources.py`) covering every new
+  reader (parse, real-negative and transport-failure paths), the new
+  chains, the confidence math, the dork builder, the rate overrides and
+  the fan-out helper; the full suite now stands at **2423 passed** /
+  3 skipped with ruff clean.
+- `docs/sources.md`, README and the CLI/web/MCP surfaces updated for the
+  new catalog; version metadata de-staled (the package still claimed
+  "14 target kinds" in `pyproject.toml` after v6.0 shipped 20).
+
+## 6.0.0 — Sensor Matrix (backfill)
+
+Six new target kinds grew the matrix from 14 to 20 kinds: vehicle VINs
+(NHTSA vPIC + offline ISO 3779 decomposition), flight designators
+(offline airline pack + aviationstack when keyed), maritime MMSIs
+(offline ITU-R decomposition + flag-state pack), software packages
+(PyPI/npm/crates/Docker Hub registries + OSV advisories), WiFi BSSIDs
+(IEEE OUI pack + WiGLE when keyed) and license plates (offline country
+format pack). Four new offline data packs (WMI, TAC, MID, plate formats)
+joined `obscuralens/data/`, and every kind gained a rule pack.
+
 ## 5.2.0 — Sources & Speed
 
 ObscuraLens 5.2 is a coverage-and-performance release: the username sweep

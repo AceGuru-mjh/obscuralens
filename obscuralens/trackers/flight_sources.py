@@ -40,6 +40,7 @@ report can show exactly where a fact came from.
 """
 
 import concurrent.futures as futures
+import contextlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -47,6 +48,7 @@ from ..config import config
 from ..health import health
 from ..utils.coordinate_math import haversine_km
 from ..utils.data_packs import DATA_DIR
+from ..utils.helpers import fanout_workers
 from ..utils.http_client import http
 from ..utils.validators import normalize_flight, split_flight
 
@@ -476,6 +478,111 @@ def _aviationstack(flight_value: Any, key: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v6.1 addition: adsb.lol live ADS-B positions - the first keyless live
+# flight source. Probed live before shipping (bbox queries answer live
+# aircraft; callsign queries answer a clean empty array when nothing with
+# that callsign is airborne).
+# ---------------------------------------------------------------------------
+
+#: Live positions go stale in minutes, so the cache TTL is short; the
+#: community API rate limits aggressively, which the per-host rate
+#: override in core.ratelimit handles politely.
+_ADSB_TTL = 60
+
+
+def _adsb_lol(flight_value: Any) -> Dict[str, Any]:
+    """
+    adsb.lol community ADS-B API (keyless, v6.1): live position.
+
+    Endpoint: ``https://api.adsb.lol/v2/callsign/{callsign}`` answers the
+    aircraft currently broadcasting that callsign: position, barometric
+    altitude, ground speed, track heading, registration, type code, squawk
+    and seconds since last contact. Both the raw designator and the ICAO
+    radio-callsign form (``LH123`` -> ``DLH123``) are tried, because
+    airlines mix the two on the wire. Nothing airborne answers a clean
+    empty array - reported honestly as ``adsb_currently_airborne: False``
+    rather than a source failure, so a landed/scheduled flight still gets
+    its offline pack facts with a live "not in the air right now" verdict.
+
+    Fields: ``adsb_currently_airborne``, ``adsb_callsign``,
+    ``adsb_registration``, ``adsb_aircraft_type``, ``adsb_altitude_ft``,
+    ``adsb_ground_speed_kn``, ``adsb_track_heading``,
+    ``adsb_latitude`` / ``adsb_longitude``, ``adsb_squawk``,
+    ``adsb_last_seen_s``.
+    """
+    flight = _flight_text(flight_value)
+    parts = split_flight(flight)
+    if not parts:
+        return {}
+
+    carrier, number, suffix = parts
+    candidates = [f"{carrier}{number}{suffix}".upper()]
+    resolved = _lookup_airline(carrier.upper())
+    if resolved and resolved[4]:  # radio callsign from the airline pack
+        icao_form = f"{resolved[4]}{number}{suffix}".upper()
+        if icao_form not in candidates:
+            candidates.append(icao_form)
+
+    freshest: Optional[Dict[str, Any]] = None
+    freshest_seen: Optional[float] = None
+    any_ok = False
+    for callsign in candidates:
+        ok, d, _ = http.get_json(
+            f"https://api.adsb.lol/v2/callsign/{callsign}",
+            cache_ttl=_ADSB_TTL)
+        if not ok or not isinstance(d, dict):
+            continue
+        any_ok = True
+        for ac in d.get('ac') or []:
+            if not isinstance(ac, dict):
+                continue
+            seen = ac.get('seen')
+            try:
+                seen_s = float(seen) if seen is not None else None
+            except (TypeError, ValueError):
+                seen_s = None
+            if freshest is None or (seen_s is not None
+                                    and (freshest_seen is None
+                                         or seen_s < freshest_seen)):
+                freshest = ac
+                freshest_seen = seen_s
+
+    if freshest is None:
+        if any_ok:
+            # The API answered and nothing with that callsign is airborne.
+            return {'adsb_currently_airborne': False}
+        # Every transport attempt failed - no honest conclusion possible.
+        return {}
+
+    out: Dict[str, Any] = {'adsb_currently_airborne': True}
+    if freshest.get('flight'):
+        out['adsb_callsign'] = str(freshest.get('flight')).strip()
+    if freshest.get('r'):
+        out['adsb_registration'] = str(freshest.get('r')).strip()
+    if freshest.get('t'):
+        out['adsb_aircraft_type'] = str(freshest.get('t')).strip()
+    if freshest.get('squawk'):
+        out['adsb_squawk'] = str(freshest.get('squawk'))
+    alt = freshest.get('alt_baro')
+    if isinstance(alt, (int, float)) or (isinstance(alt, str) and alt.isdigit()):
+        with contextlib.suppress(TypeError, ValueError):
+            out['adsb_altitude_ft'] = int(alt)
+    if freshest.get('gs') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['adsb_ground_speed_kn'] = round(float(freshest.get('gs')), 1)
+    if freshest.get('track') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['adsb_track_heading'] = round(float(freshest.get('track')), 1)
+    if freshest.get('lat') is not None and freshest.get('lon') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['adsb_latitude'] = round(float(freshest.get('lat')), 5)
+            out['adsb_longitude'] = round(float(freshest.get('lon')), 5)
+    if freshest_seen is not None:
+        out['adsb_last_seen_s'] = round(freshest_seen, 1)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Analyst utilities (not registered as sources; imported by tests and tools)
 # ---------------------------------------------------------------------------
 
@@ -531,6 +638,7 @@ def airport_distance(iata_one: Any, iata_two: Any) -> Optional[float]:
 FREE_SOURCES: Dict[str, Any] = {
     'airline_pack': _airline_pack,
     'flight_math': _flight_math,
+    'adsb_lol': _adsb_lol,
 }
 
 # aviationstack needs an API key (free tier exists); the reader takes
@@ -545,6 +653,8 @@ SOURCE_CATALOG = {
                      '(obscuralens/data/airlines_iata.txt): name, country, callsign'),
     'flight_math': ('Offline designator anatomy: IATA/ICAO renderings, radio '
                     'callsign, direction and band conventions'),
+    'adsb_lol': ('Live ADS-B position, altitude, speed and aircraft via the '
+                 'adsb.lol community API (keyless; v6.1)'),
     'aviationstack': 'aviationstack.com live status, airports and aircraft (API key)',
 }
 
@@ -617,7 +727,7 @@ def gather_all(flight_value: Any, keys: Optional[Dict[str, str]] = None) -> Dict
     status: Dict[str, Dict[str, Any]] = {}
 
     if tasks:
-        with futures.ThreadPoolExecutor(max_workers=min(len(tasks), 12)) as ex:
+        with futures.ThreadPoolExecutor(max_workers=fanout_workers(len(tasks))) as ex:
             future_map = {ex.submit(fn): name for name, fn in tasks.items()}
             for future in futures.as_completed(future_map):
                 name = future_map[future]

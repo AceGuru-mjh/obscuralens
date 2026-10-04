@@ -28,6 +28,7 @@ import requests
 
 from ..config import config
 from ..health import health
+from ..utils.helpers import fanout_workers
 from ..utils.http_client import http
 from .email_sources import _dns_records, _domain_rdap, _parse_iso
 
@@ -507,6 +508,92 @@ def _doh_cloudflare(domain: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v6.1 additions: HSTS preload status and ransomware.live leak-site
+# exposure. Both endpoints were probed live before shipping (positive and
+# negative targets).
+# ---------------------------------------------------------------------------
+
+def _hstspreload(domain: str) -> Dict[str, Any]:
+    """
+    hstspreload.org API (keyless, v6.1): preload list membership.
+
+    Endpoint: ``https://hstspreload.org/api/v2/status?domain=…`` answers
+    the Chromium HSTS preload list state for the domain: ``preloaded``,
+    ``pending``, ``rejected`` or ``unknown``. A preloaded domain has made
+    a public, auditable commitment to HTTPS - a strong trust signal that
+    survives no matter which server answers today. Every valid domain
+    answers HTTP 200 with a JSON status object, so transport failures and
+    malformed bodies map to ``{}`` (honest no-data).
+
+    Fields: ``hsts_preloaded`` (bool), ``hsts_preload_status`` (raw
+    status), ``hsts_preload_domain`` (the preloaded parent when the
+    lookup domain is a subdomain).
+    """
+    ok, d, _ = http.get_json(
+        f"https://hstspreload.org/api/v2/status?domain={domain}", cache_ttl=86400)
+    if not ok or not isinstance(d, dict) or not d.get('status'):
+        return {}
+
+    status = str(d.get('status')).lower()
+    return {
+        'hsts_preloaded': status == 'preloaded',
+        'hsts_preload_status': status,
+        'hsts_preload_domain': d.get('preloadedDomain') or None,
+    }
+
+
+def _ransomware_live(domain: str) -> Dict[str, Any]:
+    """
+    ransomware.live recent attacks feed (keyless, v6.1).
+
+    Endpoint: ``https://api.ransomware.live/recentcyberattacks`` - a JSON
+    array of recent leak-site posts (domain, group, country, discovery
+    date). The reader scans it for the target domain and its registrable
+    parent, reporting which ransomware group listed it and when. The
+    public API allows one request per minute, so the response caches for
+    six hours (the feed refreshes roughly hourly) and a 429 maps to the
+    honest no-data answer instead of a failure. A miss is a real negative
+    (``ransomware_listed: False``).
+
+    Fields: ``ransomware_listed``, ``ransomware_group``,
+    ``ransomware_post_title``, ``ransomware_discovered``.
+    """
+    registrable = domain
+    parts = domain.split('.')
+    if len(parts) > 2 and parts[-1] in ('co', 'com', 'org', 'net', 'gov', 'edu'):
+        registrable = '.'.join(parts[-3:])
+    elif len(parts) > 2:
+        registrable = '.'.join(parts[-2:])
+
+    ok, d, _ = http.get_json(
+        "https://api.ransomware.live/recentcyberattacks", cache_ttl=21600)
+    if not ok or not isinstance(d, list):
+        return {}
+
+    record = None
+    for entry in d:
+        if not isinstance(entry, dict):
+            continue
+        victim = str(entry.get('domain') or '').lower().strip()
+        if victim and (victim == domain.lower() or victim == registrable.lower()):
+            record = entry
+            break
+
+    if record is None:
+        return {'ransomware_listed': False}
+
+    out: Dict[str, Any] = {'ransomware_listed': True}
+    if record.get('group_name'):
+        out['ransomware_group'] = record.get('group_name')
+    title = record.get('post_title') or record.get('description')
+    if isinstance(title, str) and title.strip():
+        out['ransomware_post_title'] = title.strip()[:200]
+    if record.get('discovered'):
+        out['ransomware_discovered'] = str(record.get('discovered'))[:10]
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -522,6 +609,8 @@ FREE_SOURCES: Dict[str, Any] = {
     'security_txt': _security_txt,
     'doh.google': _doh_google,
     'doh.cloudflare': _doh_cloudflare,
+    'hstspreload': _hstspreload,
+    'ransomware_live': _ransomware_live,
 }
 
 # Human-readable metadata used by `obscuralens sources` and the README.
@@ -537,6 +626,8 @@ SOURCE_CATALOG = {
     'security_txt': 'RFC 9116 security.txt disclosure contacts and policy (keyless)',
     'doh.google': 'A/AAAA/MX/NS records via Google DNS-over-HTTPS, cross-confirming the dns source (keyless)',
     'doh.cloudflare': 'A/AAAA/MX/NS records via the Cloudflare 1.1.1.1 DoH resolver, a third DNS vantage point (keyless; v5.2)',
+    'hstspreload': 'Chromium HSTS preload list status and preloaded parent domain (keyless; v6.1)',
+    'ransomware_live': 'Ransomware leak-site victim check against recent attack posts (keyless, 1 req/min, cached; v6.1)',
 }
 
 
@@ -584,7 +675,7 @@ def gather_all(domain: str) -> Dict[str, Any]:
     status: Dict[str, Dict[str, Any]] = {}
 
     if tasks:
-        with futures.ThreadPoolExecutor(max_workers=min(len(tasks), 8)) as ex:
+        with futures.ThreadPoolExecutor(max_workers=fanout_workers(len(tasks))) as ex:
             future_map = {ex.submit(fn): name for name, fn in tasks.items()}
             for future in futures.as_completed(future_map):
                 name = future_map[future]

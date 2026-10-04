@@ -45,11 +45,13 @@ each value, so a report can show exactly where a fact came from.
 
 import concurrent.futures as futures
 import contextlib
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ..config import config
 from ..health import health
+from ..utils.helpers import fanout_workers
 from ..utils.http_client import http
 from ..utils.validators import detect_crypto_chain
 
@@ -592,6 +594,298 @@ def _solana(address: str) -> Dict[str, Any]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# v6.1 additions: Ethplorer, Avalanche C-chain, xrplcluster, TronGrid,
+# NEAR RPC and the Cosmos directory REST - three new chains (TRON, NEAR,
+# ATOM) plus cross-chain enrichment for ETH addresses. Every endpoint was
+# probed live before shipping (positive and negative targets).
+# ---------------------------------------------------------------------------
+
+def _ethplorer(address: str) -> Dict[str, Any]:
+    """
+    Ethplorer getAddressInfo (keyless ``freekey`` tier, ETH only, v6.1).
+
+    ``https://api.ethplorer.io/getAddressInfo/{addr}?apiKey=freekey``
+    reports the ETH balance, an ERC-20 token portfolio and the transaction
+    count. The free tier throttles hard after a couple of requests, so the
+    reader caches for an hour (balances move slowly) and maps the 429 to
+    the generic no-data answer instead of failing the whole sweep.
+
+    Fields: ``eth_balance`` (stacks with etherscan/blockchair provenance),
+    ``ethplorer_token_count``, ``ethplorer_token_symbols`` (top five),
+    ``ethplorer_price_usd`` (spot price at query time).
+    """
+    if detect_crypto_chain(address) != 'eth':
+        return {}
+
+    ok, d, _ = http.get_json(
+        f"https://api.ethplorer.io/getAddressInfo/{address}?apiKey=freekey",
+        cache_ttl=3600)
+    if not ok or not isinstance(d, dict) or 'error' in d:
+        return {}
+
+    out: Dict[str, Any] = {'chain': 'eth'}
+    eth = d.get('ETH')
+    if isinstance(eth, dict):
+        with contextlib.suppress(TypeError, ValueError):
+            out['eth_balance'] = _wei_to_eth(eth.get('balance'))
+        price = (eth.get('price') or {})
+        if isinstance(price, dict) and price.get('rate') is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                out['ethplorer_price_usd'] = float(price.get('rate'))
+    tokens = d.get('tokens')
+    if isinstance(tokens, list) and tokens:
+        out['ethplorer_token_count'] = len(tokens)
+        symbols = []
+        for token in tokens[:8]:
+            if isinstance(token, dict):
+                info = token.get('tokenInfo') or token
+                symbol = info.get('symbol') if isinstance(info, dict) else None
+                if symbol:
+                    symbols.append(str(symbol).upper())
+        if symbols:
+            out['ethplorer_token_symbols'] = symbols[:5]
+    if d.get('countTxs') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['ethplorer_tx_count'] = int(d.get('countTxs'))
+    return out if len(out) > 1 else out
+
+
+def _avax_cchain(address: str) -> Dict[str, Any]:
+    """
+    Avalanche C-chain public RPC (keyless, ETH-format addresses, v6.1).
+
+    ``https://api.avax.network/ext/bc/C/rpc`` answers standard EVM JSON-RPC,
+    so the same 0x address that just resolved on Ethereum is checked for a
+    cross-chain footprint: an ``eth_getBalance`` in wei (AVA has the same
+    18-decimal minor units) plus a nonce via ``eth_getTransactionCount``.
+
+    Fields: ``avax_balance`` (AVAX, 6 decimals), ``avax_nonce``,
+    ``avax_active`` (balance or nonce above zero).
+    """
+    if detect_crypto_chain(address) != 'eth':
+        return {}
+
+    ok, d, _ = http.post_json(
+        "https://api.avax.network/ext/bc/C/rpc",
+        payload={'jsonrpc': '2.0', 'id': 1, 'method': 'eth_getBalance',
+                 'params': [address, 'latest']})
+    if not ok or not isinstance(d, dict) or 'result' not in d:
+        return {}
+
+    out: Dict[str, Any] = {}
+    with contextlib.suppress(TypeError, ValueError):
+        out['avax_balance'] = _wei_to_eth(int(str(d.get('result')), 16), 6)
+
+    ok2, d2, _ = http.post_json(
+        "https://api.avax.network/ext/bc/C/rpc",
+        payload={'jsonrpc': '2.0', 'id': 2, 'method': 'eth_getTransactionCount',
+                 'params': [address, 'latest']})
+    if ok2 and isinstance(d2, dict) and d2.get('result') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['avax_nonce'] = int(str(d2.get('result')), 16)
+
+    balance = out.get('avax_balance') or 0
+    nonce = out.get('avax_nonce') or 0
+    out['avax_active'] = bool(balance or nonce)
+    return out
+
+
+def _xrpl_public(address: str) -> Dict[str, Any]:
+    """
+    xrplcluster.com public JSON-RPC (keyless, XRP only, v6.1).
+
+    The community-operated cluster answers ``account_info`` for any XRP
+    address, making it a fully independent second opinion on the XRPScan
+    record: same AccountRoot fields (balance in drops, sequence, owner
+    count) reported by a different server. Funded accounts stack
+    provenance on the xrpscan values; never-funded accounts answer a JSON
+    ``error`` object and map to ``{}`` (honest no-data).
+    """
+    if detect_crypto_chain(address) != 'xrp':
+        return {}
+
+    ok, d, _ = http.post_json(
+        "https://xrplcluster.com",
+        payload={'method': 'account_info',
+                 'params': [{'account': address}]})
+    result = d.get('result') if ok and isinstance(d, dict) else None
+    if not isinstance(result, dict):
+        return {}
+    account = result.get('account_data')
+    if not isinstance(account, dict) or 'Account' not in account:
+        return {}
+
+    out: Dict[str, Any] = {'chain': 'xrp'}
+    with contextlib.suppress(TypeError, ValueError):
+        out['xrp_balance'] = round(int(account.get('Balance')) / 1e6, 6)
+    if account.get('Sequence') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['xrp_sequence'] = int(account.get('Sequence'))
+    if account.get('OwnerCount') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['xrp_owner_count'] = int(account.get('OwnerCount'))
+    return out
+
+
+def _tron(address: str) -> Dict[str, Any]:
+    """
+    TronGrid public API (keyless, TRON only, v6.1).
+
+    ``https://api.trongrid.io/wallet/getaccount`` with ``visible: true``
+    accepts base58 addresses directly and returns the account object:
+    TRX balance in sun (1e-6), the account type, the decoded name for
+    contracts and the creation timestamp. Never-activated addresses answer
+    an empty object ``{}`` - a real finding, reported as a zero balance
+    with ``tron_account_active: False`` the same way the Solana reader
+    does. Malformed base58 answers an ``Error`` object and maps to ``{}``.
+    """
+    if detect_crypto_chain(address) != 'tron':
+        return {}
+
+    ok, d, _ = http.post_json(
+        "https://api.trongrid.io/wallet/getaccount",
+        payload={'address': address, 'visible': True})
+    if not ok or not isinstance(d, dict):
+        return {}
+    if d.get('Error') or 'Error' in d:
+        return {}
+
+    if not d:  # empty object = never activated on-chain
+        return {
+            'chain': 'tron',
+            'tron_balance': 0.0,
+            'tron_account_active': False,
+        }
+
+    out: Dict[str, Any] = {'chain': 'tron', 'tron_account_active': True}
+    if d.get('balance') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['tron_balance'] = round(int(d.get('balance')) / 1e6, 6)
+    else:
+        out['tron_balance'] = 0.0
+    if d.get('type'):
+        out['tron_account_type'] = str(d.get('type')).lower()
+    name = d.get('account_name')
+    if isinstance(name, str) and name.strip():
+        out['tron_account_name'] = name.strip()
+    if d.get('create_time') is not None:
+        first_seen = _epoch_to_iso(int(d.get('create_time')) / 1000)
+        if first_seen:
+            out['first_seen'] = first_seen
+    return out
+
+
+def _near(address: str) -> Dict[str, Any]:
+    """
+    NEAR Protocol public RPC (keyless, NEAR only, v6.1).
+
+    ``https://rpc.mainnet.near.org`` answers ``query`` with
+    ``request_type: view_account`` for named accounts (``alice.near``):
+    the balance in yoctoNEAR (1e-24), the contract code hash and storage
+    usage. Valid-format accounts that were never created answer a JSON-RPC
+    error object (``UNKNOWN_ACCOUNT``) - reported honestly as
+    ``near_account_exists: False`` instead of a source failure; transport
+    failures map to ``{}``.
+    """
+    if detect_crypto_chain(address) != 'near':
+        return {}
+
+    ok, d, _ = http.post_json(
+        "https://rpc.mainnet.near.org",
+        payload={'jsonrpc': '2.0', 'id': 'obscuralens', 'method': 'query',
+                 'params': {'request_type': 'view_account',
+                            'finality': 'final',
+                            'account_id': address.lower()}})
+    if not ok or not isinstance(d, dict):
+        return {}
+
+    result = d.get('result')
+    if isinstance(result, dict):
+        out: Dict[str, Any] = {'chain': 'near', 'near_account_exists': True}
+        if result.get('amount') is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                out['near_balance'] = round(int(result.get('amount')) / 1e24, 6)
+        if result.get('locked') is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                out['near_locked'] = round(int(result.get('locked')) / 1e24, 6)
+        if result.get('code_hash'):
+            out['near_code_hash'] = result.get('code_hash')
+        if result.get('storage_usage') is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                out['near_storage_bytes'] = int(result.get('storage_usage'))
+        return out
+
+    error = d.get('error')
+    if isinstance(error, dict):
+        cause = error.get('cause') or {}
+        name = str(cause.get('name') or '') if isinstance(cause, dict) else ''
+        text = json.dumps(error).lower()
+        if 'unknown_account' in name.lower() or 'unknown_account' in text:
+            # Valid shape, never created on-chain: a real negative answer.
+            return {'chain': 'near', 'near_account_exists': False}
+    return {}
+
+
+def _cosmos(address: str) -> Dict[str, Any]:
+    """
+    Cosmos Hub balances via the cosmos.directory REST proxy (keyless, v6.1).
+
+    The community directory proxies the Cosmos Hub LCD
+    (``rest.cosmos.directory/cosmoshub/...``) - the official
+    ``api.cosmos.network`` front door has been serving TLS errors from many
+    networks, so the directory is the reliable public path. The bank module
+    answers token balances in uatom (1e-6); the auth module adds the
+    account number and sequence. Valid bech32 addresses that never held
+    funds answer an empty balance list - reported as a zero balance with
+    ``atom_account_active: False``.
+    """
+    if detect_crypto_chain(address) != 'atom':
+        return {}
+
+    ok, d, _ = http.get_json(
+        f"https://rest.cosmos.directory/cosmoshub/cosmos/bank/v1beta1/balances/{address}",
+        cache_ttl=600)
+    if not ok or not isinstance(d, dict):
+        return {}
+
+    balances = d.get('balances')
+    if not isinstance(balances, list):
+        return {}
+
+    out: Dict[str, Any] = {'chain': 'atom'}
+    atom = 0
+    others: List[str] = []
+    for bal in balances:
+        if not isinstance(bal, dict):
+            continue
+        denom = str(bal.get('denom') or '')
+        amount = bal.get('amount')
+        if denom == 'uatom' and amount is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                atom = int(amount)
+        elif denom.startswith('ibc/') or denom.startswith('factory/'):
+            others.append(denom)
+    out['atom_balance'] = round(atom / 1e6, 6)
+    out['atom_account_active'] = bool(atom or others)
+    if others:
+        out['atom_token_count'] = len(balances)
+
+    ok2, d2, _ = http.get_json(
+        f"https://rest.cosmos.directory/cosmoshub/cosmos/auth/v1beta1/accounts/{address}",
+        cache_ttl=600)
+    if ok2 and isinstance(d2, dict):
+        account = d2.get('account')
+        if isinstance(account, dict):
+            if account.get('account_number') is not None:
+                with contextlib.suppress(TypeError, ValueError):
+                    out['atom_account_number'] = str(account.get('account_number'))
+            if account.get('sequence') is not None:
+                with contextlib.suppress(TypeError, ValueError):
+                    out['atom_sequence'] = str(account.get('sequence'))
+    return out
+
+
 FREE_SOURCES: Dict[str, Any] = {
     'blockchain.info': _blockchain_info,
     'blockstream.info': _blockstream,
@@ -601,6 +895,12 @@ FREE_SOURCES: Dict[str, Any] = {
     'xrpscan': _xrpscan,
     'koios': _koios,
     'solana': _solana,
+    'ethplorer': _ethplorer,
+    'avax_cchain': _avax_cchain,
+    'xrpl_public': _xrpl_public,
+    'tron': _tron,
+    'near': _near,
+    'cosmos': _cosmos,
 }
 
 KEYED_SOURCES: Dict[str, Any] = {
@@ -625,6 +925,18 @@ SOURCE_CATALOG = {
              'activity (ADA only, keyless; v5.2)',
     'solana': 'Lamports balance, owner program, executable flag and data '
               'size via the public JSON-RPC (SOL only, keyless; v5.2)',
+    'ethplorer': 'ERC-20 token portfolio, balance and tx count via the '
+                 'freekey tier (ETH only, keyless, rate-limited; v6.1)',
+    'avax_cchain': 'Cross-chain Avalanche C-chain balance and nonce for '
+                   'ETH-format addresses (keyless; v6.1)',
+    'xrpl_public': 'Independent account_info second opinion from the '
+                   'xrplcluster.com community RPC (XRP only, keyless; v6.1)',
+    'tron': 'TRX balance, account type and creation time via TronGrid '
+            '(TRON only, keyless; v6.1)',
+    'near': 'NEAR balance, code hash and storage via the public RPC '
+            '(NEAR named accounts, keyless; v6.1)',
+    'cosmos': 'ATOM and IBC token balances plus account number via the '
+              'cosmos.directory REST proxy (ATOM only, keyless; v6.1)',
     'etherscan': 'Ethereum balance and transaction timestamps (keyed)',
 }
 
@@ -689,7 +1001,7 @@ def gather_all(address: str, keys: Optional[Dict[str, str]] = None) -> Dict[str,
     status: Dict[str, Dict[str, Any]] = {}
 
     if tasks:
-        with futures.ThreadPoolExecutor(max_workers=min(len(tasks), 12)) as ex:
+        with futures.ThreadPoolExecutor(max_workers=fanout_workers(len(tasks))) as ex:
             future_map = {ex.submit(fn): name for name, fn in tasks.items()}
             for future in futures.as_completed(future_map):
                 name = future_map[future]

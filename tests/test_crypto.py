@@ -239,13 +239,21 @@ def test_chain_routing_skips_btc_sources_for_eth(fake_http):
     fake_http.json = lambda url, **kw: (True, {'data': {ETH_ADDR: {'address': {
         'type': 'account', 'balance': 0, 'transactions_count': 0,
     }}}}, '')
+    # v6.1: ethplorer also runs for ETH addresses (freekey JSON API);
+    # avax_cchain uses post_json and answers not-configured -> no data.
+    fake_http.post = lambda url, payload=None, **kw: (False, None,
+                                                      'not configured')
 
     out = cs.gather_all(ETH_ADDR)  # no keys: etherscan stays off
 
     urls = sorted(u for _, u in fake_http.calls)
+    # avax_cchain: one post (the balance call fails -> the nonce call is
+    # skipped); ethplorer joins the ETH fan-out via the freekey JSON API.
     assert urls == sorted([
+        'https://api.avax.network/ext/bc/C/rpc',
         'https://api.blockchair.com/ethereum/dashboards/address/' + ETH_ADDR,
         f'https://api.blockcypher.com/v1/eth/main/addrs/{ETH_ADDR}/balance',
+        f'https://api.ethplorer.io/getAddressInfo/{ETH_ADDR}?apiKey=freekey',
     ])
     assert out['sources']['blockchair']['ok'] is True
     assert out['sources']['blockchain.info']['ok'] is False
@@ -398,7 +406,8 @@ def test_tracker_helpers():
     assert CryptoTracker.chain_of(BTC_ADDR) == 'btc'
     assert CryptoTracker.chain_of('nope') is None
     assert CryptoTracker.supported_chains() == ['btc', 'eth', 'doge', 'ltc',
-                                                'xrp', 'ada', 'sol']
+                                                'xrp', 'ada', 'tron', 'atom',
+                                                'near', 'sol']
 
 
 def test_tracker_all_sources_fail(fake_http, tmp_env):
@@ -409,7 +418,8 @@ def test_tracker_all_sources_fail(fake_http, tmp_env):
     assert result['sources_ok'] == []
     assert set(result['sources_failed']) == {
         'blockchain.info', 'blockstream.info', 'blockchair', 'mempool.space',
-        'blockcypher', 'xrpscan', 'koios', 'solana'}
+        'blockcypher', 'xrpscan', 'koios', 'solana', 'ethplorer',
+        'avax_cchain', 'xrpl_public', 'tron', 'near', 'cosmos'}
     assert set(result['sources_failed'].values()) == {'no data'}
     assert result['errors'] == ['all data sources failed']
     # Chain and address are still recorded.
@@ -469,11 +479,15 @@ def test_tracker_full_btc_pipeline(fake_http, tmp_env, monkeypatch):
     assert result['sources_ok'] == ['blockchain.info', 'blockchair',
                                     'blockcypher', 'blockstream.info',
                                     'mempool.space']
-    # Chain-mismatched readers answer {} without any network round trip.
-    assert result['sources_failed'] == {'xrpscan': 'no data',
-                                        'koios': 'no data',
-                                        'solana': 'no data'}
-    assert result['errors'] == ['3 source(s) unavailable']
+    # Chain-mismatched readers answer {} without any network round trip
+    # (v6.1 grows the mismatch set to the six new ETH/XRP/TRON/NEAR/ATOM
+    # readers).
+    assert result['sources_failed'] == {
+        'xrpscan': 'no data', 'koios': 'no data', 'solana': 'no data',
+        'ethplorer': 'no data', 'avax_cchain': 'no data',
+        'xrpl_public': 'no data', 'tron': 'no data', 'near': 'no data',
+        'cosmos': 'no data'}
+    assert result['errors'] == ['9 source(s) unavailable']
     assert result['info']['chain'] == 'btc'
     assert result['info']['address'] == BTC_ADDR
     assert result['info']['btc_balance'] == 1.0

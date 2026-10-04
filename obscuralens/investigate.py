@@ -140,6 +140,12 @@ def detect_kind(target: str) -> Optional[str]:
     # checksum failure instead of the kind silently changing.
     if normalize_iban(value):
         return 'iban'
+    # v6.1 NEAR: named accounts ('alice.near', 'app.alice.near') carry a
+    # dot and would otherwise be claimed by the domain branch below, but
+    # '.near' is not an ICANN TLD - no real domain can end in it - so
+    # routing it to the crypto family here is always safe.
+    if value.lower().endswith('.near') and validate_crypto_address(value)[0]:
+        return 'crypto'
     if '.' in value and validate_domain(value)[0]:
         return 'domain'
     # v5.0 IMEI: before phone because validate_phone happily accepts a bare
@@ -654,6 +660,13 @@ def investigate(target: str, pivot: bool = True, max_pivots: int = 3,
             payload['errors'].append(
                 f"{kind_name} {target_value}: {type(e).__name__}")
             return None
+        # v6.1: evidence confidence - annotate every sub-result (primary and
+        # pivots) with how well its facts are corroborated. Never gates.
+        try:
+            from .correlation.confidence import attach_confidence
+            attach_confidence(result)
+        except Exception:
+            pass
         return result
 
     primary = run(kind, value)

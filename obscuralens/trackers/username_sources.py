@@ -6,6 +6,7 @@ follower counts, avatar, verified badge, links. Every extractor is wrapped so a
 layout change degrades to "no data" instead of raising.
 """
 
+import contextlib
 import json
 import re
 from datetime import datetime, timezone
@@ -943,6 +944,121 @@ def _dailymotion_profile(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# v6.1 JSON API platforms: Stack Exchange and Duolingo. Both were probed
+# live before shipping (positive and negative usernames).
+# ---------------------------------------------------------------------------
+
+def _stackexchange_verdict(data: Any, username: str = '') -> Optional[bool]:
+    """
+    Stack Exchange users endpoint verdict (username-aware, v6.1).
+
+    ``https://api.stackexchange.com/2.3/users?inname={}&site=stackoverflow``
+    performs a substring search, so the verdict is an exact
+    ``display_name`` match (case-insensitive) against any returned item:
+    no items at all, or items without an exact match, means the account
+    name is free on Stack Overflow.
+    """
+    if not isinstance(data, dict):
+        return None
+    items = data.get('items')
+    if not isinstance(items, list):
+        return None
+    if not items:
+        return False
+    wanted = (username or '').strip().lower()
+    if not wanted:
+        return None
+    for item in items:
+        if isinstance(item, dict):
+            name = str(item.get('display_name') or '').strip().lower()
+            if name == wanted:
+                return True
+    return False
+
+
+def _stackexchange_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Stack Overflow profile facts, exact-match item first.
+
+    The endpoint's ``inname`` search is substring-based, so the item whose
+    ``display_name`` matches best is preferred; when nothing matches
+    exactly the top reputation item still describes the nearest account
+    the substring caught.
+    """
+    items = data.get('items')
+    if not isinstance(items, list) or not items:
+        return {}
+    record = items[0] if isinstance(items[0], dict) else None
+    for item in items:
+        if isinstance(item, dict) and item.get('display_name'):
+            record = item
+            break
+    if record is None:
+        return {}
+
+    out: Dict[str, Any] = {
+        'name': record.get('display_name'),
+        'reputation': record.get('reputation'),
+        'location': record.get('location'),
+        'website': record.get('website_url'),
+        'joined': _epoch_date(record.get('creation_date')),
+        'last_online': _epoch_date(record.get('last_access_date')),
+        'is_employee': record.get('is_employee'),
+    }
+    badges = record.get('badge_counts')
+    if isinstance(badges, dict):
+        with contextlib.suppress(TypeError, ValueError):
+            out['badges'] = (f"{badges.get('gold', 0)} gold / "
+                             f"{badges.get('silver', 0)} silver / "
+                             f"{badges.get('bronze', 0)} bronze")
+    return out
+
+
+def _duolingo_verdict(data: Any) -> Optional[bool]:
+    """
+    Duolingo profile verdict.
+
+    ``https://www.duolingo.com/2017-06-30/users?username={}`` answers
+    ``{"users": [{...}]}`` for an existing learner and ``{"users": []}``
+    for a missing one - a clean JSON split.
+    """
+    if not isinstance(data, dict):
+        return None
+    users = data.get('users')
+    if not isinstance(users, list):
+        return None
+    return bool(users)
+
+
+def _duolingo_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Duolingo learner facts: bio, course count, active learning pairs."""
+    users = data.get('users')
+    if not isinstance(users, list) or not users \
+            or not isinstance(users[0], dict):
+        return {}
+    record = users[0]
+
+    out: Dict[str, Any] = {}
+    if record.get('username'):
+        out['name'] = record.get('username')
+    if isinstance(record.get('bio'), str) and record['bio'].strip():
+        out['bio'] = record['bio'].strip()[:200]
+    courses = record.get('courses')
+    if isinstance(courses, list):
+        out['courses'] = len(courses)
+        pairs = []
+        for course in courses[:5]:
+            if isinstance(course, dict) and course.get('learningLanguage'):
+                pair = str(course.get('learningLanguage')).upper()
+                if course.get('fromLanguage'):
+                    pair += f"<-{str(course.get('fromLanguage')).upper()}"
+                pairs.append(pair)
+        if pairs:
+            out['learning'] = ', '.join(pairs)
+    return out
+
+
 API_PLATFORMS: Dict[str, Dict[str, Any]] = {
     'Keybase': {
         'api_url': 'https://keybase.io/_/api/1.0/user/lookup.json?username={}',
@@ -1005,6 +1121,21 @@ API_PLATFORMS: Dict[str, Dict[str, Any]] = {
         'verdict': _dailymotion_verdict,
         'extract': _dailymotion_profile,
     },
+    # v6.1 additions -------------------------------------------------------
+    'Stack Exchange': {
+        'api_url': ('https://api.stackexchange.com/2.3/users'
+                    '?order=desc&sort=reputation&inname={}&site=stackoverflow'),
+        'url': 'https://stackoverflow.com/users/{}',
+        'verdict': _stackexchange_verdict,
+        'extract': _stackexchange_profile,
+        'verdict_takes_username': True,
+    },
+    'Duolingo': {
+        'api_url': 'https://www.duolingo.com/2017-06-30/users?username={}',
+        'url': 'https://www.duolingo.com/profile/{}',
+        'verdict': _duolingo_verdict,
+        'extract': _duolingo_profile,
+    },
 }
 
 
@@ -1035,6 +1166,14 @@ HTML_PLATFORMS: List[Dict[str, str]] = [
     {"name": "Etsy", "url": "https://www.etsy.com/shop/{}"},
     {"name": "Substack", "url": "https://{}.substack.com"},
     {"name": "Replit", "url": "https://replit.com/@{}"},
+    # v6.1 additions: every 200-vs-404 split or title signature was
+    # re-verified live before shipping.
+    {"name": "Calendly", "url": "https://calendly.com/{}"},
+    {"name": "Gumroad", "url": "https://gumroad.com/{}"},
+    {"name": "OpenSea", "url": "https://opensea.io/{}"},
+    {"name": "Bandcamp", "url": "https://bandcamp.com/{}"},
+    {"name": "Ko-fi", "url": "https://ko-fi.com/{}"},
+    {"name": "Codeforces", "url": "https://codeforces.com/profile/{}"},
 ]
 
 
@@ -1124,6 +1263,44 @@ def _rule_hashnode(username: str, body: str, low: str,
     return None
 
 
+def _rule_kofi(username: str, body: str, low: str,
+               response: Any) -> Optional[Tuple[str, str, str]]:
+    """
+    Ko-fi verdict rule: the homepage fallback vs a real page title (v6.1).
+
+    Endpoint: ``https://ko-fi.com/{username}``. Missing usernames do not
+    404 - they land on the generic homepage whose title starts with
+    ``'Ko-fi |'``; real creator pages carry a specific title such as
+    ``'Buy Grace a Coffee'``. Both splits are decided from the title
+    alone; anything else falls through to the generic evidence rule.
+    """
+    title = (_title(body) or '').strip().lower()
+    if title.startswith('ko-fi |'):
+        return 'not_found', 'medium', 'ko-fi homepage fallback (no profile)'
+    if title:
+        return 'found', 'medium', f'ko-fi page title: {title[:60]}'
+    return None
+
+
+def _rule_codeforces(username: str, body: str, low: str,
+                     response: Any) -> Optional[Tuple[str, str, str]]:
+    """
+    Codeforces verdict rule: profile titles vs the generic site title (v6.1).
+
+    Endpoint: ``https://codeforces.com/profile/{username}``. Missing
+    profiles answer HTTP 200 with the bare ``'Codeforces'`` site title;
+    existing ones render ``'<handle> - Codeforces'``. Both splits are
+    decided from the title alone; anything else falls through to the
+    generic evidence rule.
+    """
+    title = (_title(body) or '').strip().lower()
+    if title == 'codeforces':
+        return 'not_found', 'medium', 'codeforces generic page title'
+    if title.endswith('codeforces') and len(title) > len('codeforces'):
+        return 'found', 'medium', f'codeforces profile title: {title[:60]}'
+    return None
+
+
 #: Platform name -> verdict rule, mirroring the tracker's ``_rule_*``
 #: contract: ``(username, body, low, response) -> (status, confidence,
 #: reason)`` or ``None`` to fall through to the generic evidence rule.
@@ -1133,6 +1310,8 @@ HTML_VERDICT_RULES: Dict[str, Any] = {
     'Substack': _rule_substack,
     'Replit': _rule_replit,
     'Hashnode': _rule_hashnode,
+    'Ko-fi': _rule_kofi,
+    'Codeforces': _rule_codeforces,
 }
 
 # Human-readable metadata for the twelve v5.0 platform checks (the four new
@@ -1151,4 +1330,13 @@ SOURCE_CATALOG: Dict[str, str] = {
     'Medium': 'Profile page - bot-walled, honest unknown (HTML, keyless; v4.0)',
     'DockerHub': 'Account via hub.docker.com JSON API (keyless; v4.0)',
     'Bitbucket': 'Workspace page (HTML, keyless; v4.0)',
+    # v6.1 additions
+    'Calendly': 'Scheduling profile page, 200-vs-404 status split (HTML, keyless; v6.1)',
+    'Gumroad': 'Creator storefront page, 200-vs-404 status split (HTML, keyless; v6.1)',
+    'OpenSea': 'NFT collector profile page, 200-vs-404 status split (HTML, keyless; v6.1)',
+    'Bandcamp': 'Fan/collection profile page, 200-vs-404 status split (HTML, keyless; v6.1)',
+    'Ko-fi': 'Creator support page, homepage-fallback title split (HTML, keyless; v6.1)',
+    'Codeforces': 'Competitive-programming profile, title-signature verdict (HTML, keyless; v6.1)',
+    'Stack Exchange': 'Stack Overflow account via the users API, exact display-name match (keyless; v6.1)',
+    'Duolingo': 'Learner profile via the 2017-06-30 users JSON API (keyless; v6.1)',
 }

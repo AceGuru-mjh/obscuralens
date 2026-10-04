@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "obscuralens"
-version = "5.2.0"
-description = "Multi-source OSINT console and investigation platform for 14 target kinds with a built-in web UI"
+version = "6.1.0"
+description = "Multi-source OSINT console and investigation platform for 20 target kinds with a built-in web UI"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

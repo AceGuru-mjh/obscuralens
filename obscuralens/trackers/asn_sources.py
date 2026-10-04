@@ -17,10 +17,12 @@ report can show exactly where a fact came from.
 """
 
 import concurrent.futures as futures
+import contextlib
 from typing import Any, Dict, List, Optional
 
 from ..config import config
 from ..health import health
+from ..utils.helpers import fanout_workers
 from ..utils.http_client import http
 from ..utils.validators import normalize_asn
 
@@ -252,12 +254,115 @@ def _bgpview(asn: Any) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v6.1 additions: CAIDA AS-Rank (global ranking and customer cone) and
+# PeeringDB (the peering ecosystem's self-published record). Both were
+# probed live before shipping - AS15169 answers rich records, unknown ASNs
+# answer clean negatives.
+# ---------------------------------------------------------------------------
+
+def _asrank(asn: Any) -> Dict[str, Any]:
+    """
+    CAIDA AS-Rank (keyless, v6.1): global connectivity ranking.
+
+    Endpoint: ``https://api.asrank.caida.org/v2/restful/asns/{asn}``.
+    AS-Rank scores every AS on the planet by its position in the inferred
+    customer-cone hierarchy - the closest thing routing research has to an
+    importance score. ``rank`` 1 is the most transit-heavy AS; ``source``
+    says which RIR registered it; ``cone`` counts the ASes reachable
+    through customers. Unknown ASNs answer ``{"data": {"asn": null}}``,
+    which maps to ``{}``.
+
+    Fields: ``asrank_rank``, ``asrank_source`` (RIR), ``asrank_cone``,
+    ``asrank_ixp`` (bool), ``asrank_seen`` (bool).
+    """
+    num = _as_number(asn)
+    if not num:
+        return {}
+
+    ok, d, _ = http.get_json(
+        f"https://api.asrank.caida.org/v2/restful/asns/{num}", cache_ttl=86400)
+    record = (d.get('data') or {}).get('asn') if ok and isinstance(d, dict) else None
+    if not isinstance(record, dict):
+        return {}
+
+    out: Dict[str, Any] = {}
+    if record.get('rank') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['asrank_rank'] = int(record.get('rank'))
+    if record.get('source'):
+        out['asrank_source'] = record.get('source')
+    if record.get('asnName'):
+        out['asrank_name'] = record.get('asnName')
+    cone = record.get('cone')
+    if isinstance(cone, dict) and cone.get('number') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['asrank_cone'] = int(cone.get('number'))
+    if record.get('ixp') is not None:
+        out['asrank_ixp'] = bool(record.get('ixp'))
+    if record.get('seen') is not None:
+        out['asrank_seen'] = bool(record.get('seen'))
+    return out
+
+
+def _peeringdb(asn: Any) -> Dict[str, Any]:
+    """
+    PeeringDB (keyless, v6.1): the network's self-published peering record.
+
+    Endpoint: ``https://www.peeringdb.com/api/net?asn={asn}``. Operators
+    maintain their own entries - network name, traffic volume, service
+    level, IX and facility presence, policy notes - so this is the one
+    source that reports what the AS *says about itself*. Unknown ASNs
+    answer HTTP 404 with an error body, which maps to ``{}``.
+
+    Fields: ``pdb_name``, ``pdb_name_long``, ``pdb_website``,
+    ``pdb_traffic_volume``, ``pdb_scope``, ``pdb_ix_count``,
+    ``pdb_policy_general``, ``pdb_info_type``.
+    """
+    num = _as_number(asn)
+    if not num:
+        return {}
+
+    ok, d, _ = http.get_json(
+        f"https://www.peeringdb.com/api/net?asn={num}", cache_ttl=86400)
+    if not ok or not isinstance(d, dict):
+        return {}
+    entries = d.get('data')
+    if not isinstance(entries, list) or not entries:
+        return {}
+    record = entries[0]
+    if not isinstance(record, dict):
+        return {}
+
+    out: Dict[str, Any] = {}
+    if record.get('name'):
+        out['pdb_name'] = record.get('name')
+    if record.get('name_long'):
+        out['pdb_name_long'] = record.get('name_long')
+    if record.get('website'):
+        out['pdb_website'] = record.get('website')
+    if record.get('info_traffic'):
+        out['pdb_traffic_volume'] = record.get('info_traffic')
+    if record.get('info_type'):
+        out['pdb_info_type'] = record.get('info_type')
+    if record.get('policy_general'):
+        out['pdb_policy_general'] = record.get('policy_general')
+    if record.get('ix_count') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['pdb_ix_count'] = int(record.get('ix_count'))
+    if record.get('netixlan_updated'):
+        out['pdb_last_updated'] = record.get('netixlan_updated')
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
 FREE_SOURCES: Dict[str, Any] = {
     'ripestat': _ripestat,
     'bgpview': _bgpview,
+    'asrank': _asrank,
+    'peeringdb': _peeringdb,
 }
 
 # AS number intelligence is fully keyless today; the registry stays here so
@@ -269,6 +374,10 @@ KEYED_SOURCES: Dict[str, Any] = {}
 SOURCE_CATALOG = {
     'ripestat': 'RIPEstat AS overview and announced prefixes (keyless)',
     'bgpview': 'BGPView AS record, prefixes and peers (keyless)',
+    'asrank': 'CAIDA AS-Rank global ranking, RIR source and customer-cone '
+              'size (keyless; v6.1)',
+    'peeringdb': 'Operator-maintained peering record: name, traffic volume, '
+                 'IX presence, policy (keyless; v6.1)',
 }
 
 
@@ -328,7 +437,7 @@ def gather_all(asn_value: Any, keys: Optional[Dict[str, str]] = None) -> Dict[st
     status: Dict[str, Dict[str, Any]] = {}
 
     if tasks:
-        with futures.ThreadPoolExecutor(max_workers=min(len(tasks), 12)) as ex:
+        with futures.ThreadPoolExecutor(max_workers=fanout_workers(len(tasks))) as ex:
             future_map = {ex.submit(fn): name for name, fn in tasks.items()}
             for future in futures.as_completed(future_map):
                 name = future_map[future]

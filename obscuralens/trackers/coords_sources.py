@@ -57,6 +57,7 @@ from ..utils import coordinate_math
 from ..utils.data_packs import load_data_pack
 from ..utils.geo import country_name as geo_country_name
 from ..utils.geo import distance_km
+from ..utils.helpers import fanout_workers
 from ..utils.http_client import http
 from ..utils.validators import parse_coords
 
@@ -312,6 +313,69 @@ def _country_centroids_source(lat: float, lon: float) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# v6.1 addition: Open-Meteo current conditions - keyless weather and an
+# independent elevation cross-check. Probed live before shipping.
+# ---------------------------------------------------------------------------
+
+def _open_meteo(lat: float, lon: float) -> Dict[str, Any]:
+    """
+    Open-Meteo current weather (keyless, v6.1).
+
+    Endpoints: ``https://api.open-meteo.com/v1/forecast?…&current=…``
+    (non-commercial keyless tier) and ``/v1/elevation`` for an independent
+    second elevation opinion that cross-confirms Open-Elevation in the
+    provenance stack. Weather answers twice over for OSINT: photo
+    verification (was it really raining at that geotag?) and pattern-of-
+    life context. Every request carries the position's timezone, so the
+    answer also yields the local time zone name as a bonus field.
+
+    Fields: ``temperature_c``, ``wind_speed_kmh``, ``wind_direction_deg``,
+    ``weather_code``, ``weather_timezone``, ``open_meteo_elevation_m``,
+    ``open_meteo_elevation_agree`` (bool when both elevation sources ran).
+    """
+    ok, d, _ = http.get_json(
+        'https://api.open-meteo.com/v1/forecast'
+        f'?latitude={lat}&longitude={lon}'
+        '&current=temperature_2m,wind_speed_10m,wind_direction_10m,weather_code'
+        '&timezone=auto', cache_ttl=1800)
+    if not ok or not isinstance(d, dict):
+        return {}
+
+    out: Dict[str, Any] = {}
+    current = d.get('current')
+    if isinstance(current, dict):
+        if current.get('temperature_2m') is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                out['temperature_c'] = round(float(current.get('temperature_2m')), 1)
+        if current.get('wind_speed_10m') is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                out['wind_speed_kmh'] = round(float(current.get('wind_speed_10m')), 1)
+        if current.get('wind_direction_10m') is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                out['wind_direction_deg'] = int(current.get('wind_direction_10m'))
+        if current.get('weather_code') is not None:
+            out['weather_code'] = current.get('weather_code')
+    if d.get('timezone'):
+        out['weather_timezone'] = d.get('timezone')
+    if d.get('elevation') is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            out['open_meteo_elevation_m'] = round(float(d.get('elevation')), 1)
+
+    if not out:
+        return {}
+
+    ok2, d2, _ = http.get_json(
+        f'https://api.open-meteo.com/v1/elevation?latitude={lat}&longitude={lon}',
+        cache_ttl=86400)
+    if ok2 and isinstance(d2, dict):
+        values = d2.get('elevation')
+        if isinstance(values, list) and values \
+                and isinstance(values[0], (int, float)):
+            out['open_meteo_elevation_m'] = round(float(values[0]), 1)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -321,6 +385,7 @@ FREE_SOURCES: Dict[str, Any] = {
     'open_elevation': _open_elevation,
     'geohash_local': _geohash_local,
     'country_centroids': _country_centroids_source,
+    'open_meteo': _open_meteo,
 }
 
 # Coordinate intelligence is fully keyless today; the registry stays here so
@@ -335,6 +400,8 @@ SOURCE_CATALOG = {
     'open_elevation': 'Open-Elevation SRTM elevation lookup in metres (keyless)',
     'geohash_local': 'Offline coordinate maths: geohash, Maidenhead, DMS/DDM/UTM/MGRS, timezone and solar hints',
     'country_centroids': 'Offline country centroid pack: nearest country by great-circle distance',
+    'open_meteo': 'Current weather, wind and an independent elevation cross-check '
+                  'via Open-Meteo (keyless; v6.1)',
 }
 
 
@@ -402,7 +469,7 @@ def gather_all(coords_value: Any, keys: Optional[Dict[str, str]] = None) -> Dict
     status: Dict[str, Dict[str, Any]] = {}
 
     if tasks:
-        with futures.ThreadPoolExecutor(max_workers=min(len(tasks), 12)) as ex:
+        with futures.ThreadPoolExecutor(max_workers=fanout_workers(len(tasks))) as ex:
             future_map = {ex.submit(fn): name for name, fn in tasks.items()}
             for future in futures.as_completed(future_map):
                 name = future_map[future]
