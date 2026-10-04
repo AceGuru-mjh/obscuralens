@@ -242,8 +242,11 @@ def test_chain_routing_skips_btc_sources_for_eth(fake_http):
 
     out = cs.gather_all(ETH_ADDR)  # no keys: etherscan stays off
 
-    urls = [u for _, u in fake_http.calls]
-    assert urls == ['https://api.blockchair.com/ethereum/dashboards/address/' + ETH_ADDR]
+    urls = sorted(u for _, u in fake_http.calls)
+    assert urls == sorted([
+        'https://api.blockchair.com/ethereum/dashboards/address/' + ETH_ADDR,
+        f'https://api.blockcypher.com/v1/eth/main/addrs/{ETH_ADDR}/balance',
+    ])
     assert out['sources']['blockchair']['ok'] is True
     assert out['sources']['blockchain.info']['ok'] is False
     assert out['fields']['chain'] == 'eth'
@@ -394,7 +397,8 @@ def test_tracker_passes_etherscan_key_from_config(monkeypatch, tmp_env):
 def test_tracker_helpers():
     assert CryptoTracker.chain_of(BTC_ADDR) == 'btc'
     assert CryptoTracker.chain_of('nope') is None
-    assert CryptoTracker.supported_chains() == ['btc', 'eth', 'doge', 'ltc']
+    assert CryptoTracker.supported_chains() == ['btc', 'eth', 'doge', 'ltc',
+                                                'xrp', 'ada', 'sol']
 
 
 def test_tracker_all_sources_fail(fake_http, tmp_env):
@@ -404,7 +408,8 @@ def test_tracker_all_sources_fail(fake_http, tmp_env):
     assert result['success'] is False
     assert result['sources_ok'] == []
     assert set(result['sources_failed']) == {
-        'blockchain.info', 'blockstream.info', 'blockchair', 'mempool.space'}
+        'blockchain.info', 'blockstream.info', 'blockchair', 'mempool.space',
+        'blockcypher', 'xrpscan', 'koios', 'solana'}
     assert set(result['sources_failed'].values()) == {'no data'}
     assert result['errors'] == ['all data sources failed']
     # Chain and address are still recorded.
@@ -448,6 +453,13 @@ def test_tracker_full_btc_pipeline(fake_http, tmp_env, monkeypatch):
                 'mempool_stats': {'funded_txo_sum': 0, 'spent_txo_sum': 0,
                                   'tx_count': 0},
             }, '')
+        if 'api.blockcypher.com/v1/btc/main/addrs/' in url:
+            return (True, {
+                'address': BTC_ADDR, 'total_received': 150000000,
+                'total_sent': 50000000, 'balance': 100000000,
+                'final_balance': 100000000, 'n_tx': 3,
+                'unconfirmed_n_tx': 0,
+            }, '')
         return (False, None, 'unexpected url: ' + url)
 
     fake_http.json = dispatch
@@ -455,9 +467,13 @@ def test_tracker_full_btc_pipeline(fake_http, tmp_env, monkeypatch):
 
     assert result['success'] is True
     assert result['sources_ok'] == ['blockchain.info', 'blockchair',
-                                    'blockstream.info', 'mempool.space']
-    assert result['sources_failed'] == {}
-    assert result['errors'] == []
+                                    'blockcypher', 'blockstream.info',
+                                    'mempool.space']
+    # Chain-mismatched readers answer {} without any network round trip.
+    assert result['sources_failed'] == {'xrpscan': 'no data',
+                                        'koios': 'no data',
+                                        'solana': 'no data'}
+    assert result['errors'] == ['3 source(s) unavailable']
     assert result['info']['chain'] == 'btc'
     assert result['info']['address'] == BTC_ADDR
     assert result['info']['btc_balance'] == 1.0
@@ -467,11 +483,14 @@ def test_tracker_full_btc_pipeline(fake_http, tmp_env, monkeypatch):
     assert result['info']['blockchair_balance'] == 1.23456789
     assert result['info']['blockchair_tx_count'] == 5
     assert result['info']['mempool_pending'] == 0
+    assert result['info']['blockcypher_balance'] == 1.0
+    assert result['info']['blockcypher_tx_count'] == 3
     assert result['info']['first_seen'] == ISO_GENESIS
     assert result['info']['last_seen'] == ISO_LATE
     assert result['field_sources']['btc_balance'] == ['blockchain.info',
                                                       'mempool.space']
-    assert result['field_count'] >= 12
+    assert result['field_sources']['blockcypher_balance'] == ['blockcypher']
+    assert result['field_count'] >= 16
     assert db.get_query_by_id(
         db.search_history(BTC_ADDR)[0].id).query_type == 'crypto'
 

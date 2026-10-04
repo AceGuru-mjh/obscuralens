@@ -235,15 +235,20 @@ _LTC_RE = re.compile(r'^(?:[LM][a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1[a-z0-9]{11,71})$
 _XRP_RE = re.compile(r'^r[1-9A-HJ-NP-Za-km-z]{24,34}$')
 # Cardano: addr1... (bech32, 40-120 chars)
 _ADA_RE = re.compile(r'^addr1[a-z0-9]{40,120}$')
+# Solana: 32-44 base58 chars, no version prefix (checked last so the
+# longer-established base58 families win any length overlap).
+_SOL_RE = re.compile(r'^[1-9A-HJ-NP-Za-km-z]{32,44}$')
 
 
 def detect_crypto_chain(address: str) -> Optional[str]:
     """
     Identify the likely blockchain of an address string.
 
-    Returns one of ``btc / eth / xmr / doge / ltc / xrp / ada`` or ``None``.
-    Ethereum-style addresses also cover EVM forks (BSC, Polygon, …) but are
-    reported as ``eth`` since the primary lookup path is identical.
+    Returns one of ``btc / eth / xmr / doge / ltc / xrp / ada / sol`` or
+    ``None``. Ethereum-style addresses also cover EVM forks (BSC, Polygon, …)
+    but are reported as ``eth`` since the primary lookup path is identical.
+    Solana is checked last: its 32-44 char base58 space overlaps the shorter
+    Bitcoin families, so the prefixed formats win first.
     """
     value = (address or '').strip()
     if not value:
@@ -262,6 +267,8 @@ def detect_crypto_chain(address: str) -> Optional[str]:
         return 'xrp'
     if _ADA_RE.match(value):
         return 'ada'
+    if _SOL_RE.match(value):
+        return 'sol'
     return None
 
 
@@ -273,7 +280,7 @@ def validate_crypto_address(address: str) -> Tuple[bool, str]:
     if chain:
         return True, ""
     return False, ("Unrecognised crypto address (supported: btc, eth, xmr, "
-                   "doge, ltc, xrp, ada)")
+                   "doge, ltc, xrp, ada, sol)")
 
 
 # --- file hashes -------------------------------------------------------------

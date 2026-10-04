@@ -2,7 +2,7 @@
 CVE (Common Vulnerabilities and Exposures) intelligence sources.
 
 Every provider is queried independently and results are merged field-by-field
-so a single flaky source cannot blank out the whole report. All five sources
+so a single flaky source cannot blank out the whole report. All seven sources
 are keyless:
 
 * ``nvd``        - NVD 2.0 REST API: description, CVSS, CWE, references, CPEs.
@@ -11,6 +11,14 @@ are keyless:
 * ``osv``        - Google OSV.dev: package-level impact and severity vectors.
 * ``cvelist``  - The CVEProject cvelistV5 GitHub repository (raw JSON),
                    i.e. the authoritative CNA-published record.
+* ``cveawg``  - The CVE Program's authoritative record API
+                   (cveawg.mitre.org, v5.2): the same CVE JSON 5.1 schema
+                   cvelist mirrors, straight from the source of truth, so the
+                   two readers cross-confirm each other.
+* ``ghsa``       - GitHub Security Advisories (v5.2): GHSA ids, severity
+                   ratings, CVSS scores and CWE classifications - GitHub's
+                   independent review on top of the CNA record. Keyless with
+                   a low shared rate limit; a ``github`` service key lifts it.
 * ``epss``       - FIRST.org EPSS: probability the vuln is exploited soon.
 * ``circl``      - CIRCL CVE search mirror: full CVE record plus CIRCL-specific
                    extras such as state, assigner and vulnerable products.
@@ -229,23 +237,16 @@ def _cvelist_url(cve_id: str) -> str:
             f"/cves/{parts[1]}/{bucket}xxx/{parts[0]}-{parts[1]}-{parts[2]}.json")
 
 
-def _cvelist(cve_id: str) -> Dict[str, Any]:
+def _parse_cve_record(d: Dict[str, Any]) -> Dict[str, Any]:
     """
-    CVEProject cvelistV5 raw JSON (keyless), the CNA-published record.
+    Extract the CNA-published facts from a CVE JSON 5.1 record.
 
-    This is the fastest public mirror of the record NVD eventually enriches:
-    title, publication state and the affected product list, straight from the
-    assigning CNA before any analyst re-analysis.
+    Both ``cvelist`` (the raw GitHub mirror) and ``cveawg`` (the authoritative
+    CVE Program API) serve the same ``cveMetadata`` + ``containers.cna``
+    schema, so this one parser feeds both readers and their identical field
+    names stack in ``gather_all`` provenance - two independent mirrors of the
+    authoritative record cross-confirming each other.
     """
-    cve_id = _clean_id(cve_id)
-    parts = cve_id.split('-')
-    if len(parts) != 3 or not parts[2].isdigit():
-        return {}
-
-    ok, d, _ = http.get_json(_cvelist_url(cve_id))
-    if not ok or not d:
-        return {}
-
     cna = ((d.get('containers') or {}).get('cna')) or {}
     meta = d.get('cveMetadata') or {}
     out: Dict[str, Any] = {}
@@ -273,6 +274,108 @@ def _cvelist(cve_id: str) -> Dict[str, Any]:
     if products:
         out['cna_affected_products'] = products[:_MAX_PRODUCTS]
 
+    return out
+
+
+def _cvelist(cve_id: str) -> Dict[str, Any]:
+    """
+    CVEProject cvelistV5 raw JSON (keyless), the CNA-published record.
+
+    This is the fastest public mirror of the record NVD eventually enriches:
+    title, publication state and the affected product list, straight from the
+    assigning CNA before any analyst re-analysis.
+    """
+    cve_id = _clean_id(cve_id)
+    parts = cve_id.split('-')
+    if len(parts) != 3 or not parts[2].isdigit():
+        return {}
+
+    ok, d, _ = http.get_json(_cvelist_url(cve_id))
+    if not ok or not d or not isinstance(d, dict):
+        return {}
+    return _parse_cve_record(d)
+
+
+def _cveawg(cve_id: str) -> Dict[str, Any]:
+    """
+    The CVE Program's authoritative record API (keyless, v5.2).
+
+    ``https://cveawg.mitre.org/api/cve/{id}`` serves the same CVE JSON 5.1
+    record the cvelist repository mirrors, straight from the source of
+    truth (cveawg.mitre.org is the official CVEOrg automation working-group
+    endpoint). When GitHub raw is slow or rate-limited this reader keeps the
+    CNA facts flowing, and when both answer the identical ``cna_*`` field
+    names stack in provenance as an independent cross-confirmation.
+    """
+    cve_id = _clean_id(cve_id)
+    parts = cve_id.split('-')
+    if len(parts) != 3 or not parts[2].isdigit():
+        return {}
+
+    ok, d, _ = http.get_json(f"https://cveawg.mitre.org/api/cve/{cve_id}")
+    if not ok or not isinstance(d, dict) or d.get('dataType') != 'CVE_RECORD':
+        return {}
+    return _parse_cve_record(d)
+
+
+def _ghsa(cve_id: str) -> Dict[str, Any]:
+    """
+    GitHub Security Advisories database (keyless, low rate limit; a token
+    configured for the ``github`` service lifts it, v5.2).
+
+    ``https://api.github.com/advisories?cve_id={id}`` maps the CVE onto
+    GitHub-curated advisories: GHSA ids, severity ratings, CVSS scores and
+    CWE classifications - a genuinely independent review on top of the CNA
+    record. One CVE can map to several advisories (multiple ecosystems), so
+    the reader reports the highest severity and the advisory list.
+    """
+    cve_id = _clean_id(cve_id)
+    headers = {'Accept': 'application/vnd.github+json'}
+    token = config.get_api_key('github')
+    if token:
+        headers['Authorization'] = f"Bearer {token}"
+
+    ok, d, _ = http.get_json(
+        f"https://api.github.com/advisories?cve_id={cve_id}&per_page=10",
+        headers=headers, cache_ttl=3600)
+    if not ok or not isinstance(d, list) or not d:
+        return {}
+
+    ghsa_ids: List[str] = []
+    severities: List[str] = []
+    cvss_scores: List[float] = []
+    cwes: List[str] = []
+    for advisory in d:
+        if not isinstance(advisory, dict):
+            continue
+        if advisory.get('ghsa_id'):
+            ghsa_ids.append(advisory['ghsa_id'])
+        if advisory.get('severity'):
+            severities.append(advisory['severity'])
+        score = advisory.get('cvss') or {}
+        if isinstance(score, dict):
+            try:
+                if score.get('score') is not None:
+                    cvss_scores.append(round(float(score['score']), 1))
+            except (TypeError, ValueError):
+                pass
+        for cwe in advisory.get('cwe_ids') or []:
+            if isinstance(cwe, dict) and cwe.get('cwe_id'):
+                cwes.append(cwe['cwe_id'])
+
+    out: Dict[str, Any] = {}
+    if ghsa_ids:
+        out['ghsa_ids'] = ghsa_ids[:_MAX_PACKAGES]
+    if severities:
+        # Highest severity wins: critical > high > medium > low > none.
+        rank = {'critical': 4, 'high': 3, 'moderate': 2, 'medium': 2,
+                'low': 1, 'none': 0}
+        out['ghsa_severity'] = max(severities,
+                                    key=lambda s: rank.get(s.lower(), -1))
+    if cvss_scores:
+        out['ghsa_cvss_score'] = max(cvss_scores)
+    if cwes:
+        out['ghsa_cwes'] = sorted(set(cwes))[:_MAX_CPES]
     return out
 
 
@@ -445,12 +548,15 @@ FREE_SOURCES: Dict[str, Any] = {
     'nvd': _nvd,
     'osv': _osv,
     'cvelist': _cvelist,
+    'cveawg': _cveawg,
+    'ghsa': _ghsa,
     'epss': _epss,
     'circl': _circl,
 }
 
 # All CVE sources are keyless. NVD's optional key is read from the config
-# service ``nvd`` inside the reader itself (see ``_nvd``), so this registry
+# service ``nvd`` inside the reader itself (see ``_nvd``), and GHSA's optional
+# key is the shared ``github`` service (see ``_ghsa``), so this registry
 # stays empty but keeps the familiar module shape.
 KEYED_SOURCES: Dict[str, Any] = {}
 
@@ -459,6 +565,10 @@ SOURCE_CATALOG = {
     'nvd': 'NVD 2.0: description, CVSS, CWE, references, CPEs (keyless; optional key)',
     'osv': 'Google OSV.dev: affected packages and severity vector (keyless)',
     'cvelist': 'CVEProject cvelistV5 raw CNA record (keyless)',
+    'cveawg': 'CVE Program authoritative record API, cross-confirming '
+              'cvelist (keyless; v5.2)',
+    'ghsa': 'GitHub Security Advisories: severity, CVSS and CWE review '
+            '(keyless, low rate; optional github key; v5.2)',
     'epss': 'FIRST.org EPSS exploitation probability (keyless)',
     'circl': 'cve.circl.lu record mirror: description, CVSS, references, state, '
              'assigner and vulnerable products (keyless)',

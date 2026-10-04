@@ -53,8 +53,15 @@ class HttpClient:
                 status_forcelist=(429, 500, 502, 503, 504),
                 allowed_methods=frozenset(['GET', 'HEAD']),
             )
-            adapter = HTTPAdapter(max_retries=retry, pool_connections=20,
-                                  pool_maxsize=20)
+            # Pool sized for the parallel fan-out: urllib3 keeps one pool per
+            # host, and a 20-source sweep touches 20 different hosts at once
+            # while batch runs stack several lookups per host. The old fixed
+            # 20/20 pool evicted pools mid-sweep and forced reconnects (a
+            # full TCP + TLS handshake each time); scaling with max_workers
+            # keeps every source on a warm keep-alive connection (v5.2).
+            pool = max(48, int(config.app_config.max_workers or 12) * 4)
+            adapter = HTTPAdapter(max_retries=retry, pool_connections=pool,
+                                  pool_maxsize=pool)
             self.session.mount('https://', adapter)
             self.session.mount('http://', adapter)
         self._proxy = None

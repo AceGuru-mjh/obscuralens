@@ -2,6 +2,106 @@
 
 ## Changelog
 
+## 5.2.0 — Sources & Speed
+
+ObscuraLens 5.2 is a coverage-and-performance release: the username sweep
+more than doubles (41 → 104 platforms, every addition live-verified before
+shipping), four new blockchains gain aggregated sources, CVE and domain
+lookups gain the authoritative primary records, the threat-intel feed count
+grows from five to eight — and the HTTP cache gets a persistent-connection
+rewrite that removes the per-operation SQLite reopen that dominated cache
+latency since v3.
+
+### Added — Username sweep 41 → 104 platforms
+
+- **57 new HTML platforms** (Gitee, Hugging Face, GoodReads, SourceForge,
+  Strava, MyAnimeList, RubyGems, Issuu, Itch.io, Launchpad, Sketchfab,
+  SpeakerDeck, About.me, Credly, Disqus, Instructables, MyMiniFactory,
+  Scratch, TradingView, WakaTime, Geocaching, HackMD, Crowdin, Freesound,
+  GitBook, HubPages, IFTTT, Kongregate, Laracast, Memrise, OpenGameArt,
+  Pokemon Showdown, Tenor, TheMovieDB, Windy, YouPic, Exophase, write.as,
+  Bitwarden/Ionic/n8n/Rclone/Joplin/Ubuntu/Rust/Blender community forums,
+  Linktree, AtCoder, MyDramaList, 9GAG, VK, OK.ru, HackerOne, LinuxFR,
+  Fosstodon, Pixelfed, Hashnode). Every one was probed live: existing
+  accounts answer HTTP 200 and missing accounts answer 404.
+- **Bluesky** via the public App View JSON API (`app.bsky.actor.getProfile`)
+  — DID-confirmed existence, high-confidence verdicts; bare usernames
+  default to `<name>.bsky.social` handles, dotted handles are used verbatim.
+- **Dailymotion** via `api.dailymotion.com/user/{name}` with an explicit
+  field list; 404-for-missing splits.
+- Bot-walled platforms (Codepen, Codewars, LeetCode, npm, ArtStation, Trakt,
+  osu!, Wikipedia, Fandom, Imgur, Speedrun.com and others) were probed and
+  **deliberately not added** — from scripted clients they can only ever
+  answer "unknown", which would be noise, not coverage.
+
+### Fixed — dead registries that shipped since v5.0
+
+- `STATUS_RELIABLE` was declared but never consulted by the verdict engine;
+  it is now wired into `_verdict` (after marker checks, platform rules and
+  profile evidence, so nothing that already worked changes its verdict).
+- The Patreon/Etsy/Substack/Replit entries that `username_sources` has
+  always declared — with bespoke verdict rules — were documented as scanned
+  but never unioned into the platform registry; `_build_platforms()` now
+  merges them, and their `HTML_VERDICT_RULES` are dispatched alongside the
+  tracker's own rules (Patreon/Etsy bot-wall honesty, Substack title split,
+  Replit login-redirect split, Hashnode user-not-found title split).
+
+### Added — crypto chains xrp / ada / sol (and BlockCypher for LTC/DOGE)
+
+- `xrpscan` (XRP, keyless): XRP balance, sequence, owner count and the
+  latest affecting transaction with its ledger index.
+- `koios` (ADA, keyless POST): lovelace balance, stake address, script flag,
+  UTXO count and UTXO-derived last activity.
+- `solana` (SOL, keyless JSON-RPC): lamports balance, owner program,
+  executable flag and data size; never-funded accounts report
+  `sol_account_active: False` instead of a failure.
+- `blockcypher` (BTC/ETH/LTC/DOGE, keyless): balance, received/sent totals
+  and tx counters — LTC and DOGE finally get a second aggregated source.
+- Solana address detection (`32-44 char base58`, checked after the prefixed
+  base58 families so Bitcoin wins any length overlap). Every validated
+  chain except xmr (balances unobservable by design) now has sources.
+
+### Added — CVE, domain and threat-intel sources
+
+- `cveawg` (CVE, keyless): the CVE Program's authoritative record API at
+  cveawg.mitre.org — same CVE 5.1 schema as cvelist, so the two readers
+  cross-confirm with stacked provenance (the record parser is shared).
+- `ghsa` (CVE, keyless with optional `github` key): GitHub Security
+  Advisories — GHSA ids, highest severity, CVSS score and CWE list.
+- `doh.cloudflare` (domain, keyless): A/AAAA/MX/NS via the Cloudflare
+  1.1.1.1 DoH resolver with the `Accept: application/dns-json` header —
+  a third independent DNS vantage point stacking with `dns` and `doh.google`.
+- Intel feeds +**CINS Army** (15k active-attacker IPs), +**blocklist.de**
+  (~8k 48h abuse IPs), +**OpenPhish** (hourly phishing URL feed).
+- `openphish` URL source: exact-URL and host-level phishing membership for
+  the `url` tracker — a feed-clear is reported as a fact, not a failure,
+  and the download is shared with the IP-side feed through the HTTP cache.
+
+### Changed — performance
+
+- **SQLite cache persistent connections** (thread-local, schema created
+  once per connection): cache get/set previously reopened the database and
+  re-ran the DDL on *every* call (~1-3 ms each, twenty times per lookup);
+  now 0.04 ms per operation — a 25-75x cache-latency reduction. Corrupt
+  rows drop the connection so the next call self-heals; `synchronous=NORMAL`
+  keeps WAL commits cheap.
+- **Connection pools sized for the fan-out**: `pool_connections` /
+  `pool_maxsize` scale with `app.max_workers` (min 48) instead of the fixed
+  20/20 that evicted pools mid-sweep and forced full TCP+TLS reconnects.
+- Deep username scans on the new platforms extract a light Open-Graph
+  profile (`name`/`bio`/`avatar`) — enrichment only, never verdict
+  evidence, so JS shells cannot fabricate hits.
+
+### Tests
+
+- 61 new offline tests (`tests/test_v52_sources.py`): persistent-cache
+  reuse/path-change/thread-locality/self-healing, platform registry
+  completeness, STATUS_RELIABLE verdict paths, Bluesky/Dailymotion verdicts
+  and profiles (including the HTTP-400 miss mapping), the four new crypto
+  readers, cveawg/ghsa parsing, Cloudflare DoH field merging, the new feed
+  parsers and the OpenPhish URL source (exact/host/clear/unavailable).
+- Full suite: 2016 passed / 3 skipped (was 1955).
+
 ## 5.1.0-beta.1 — Desktop Beta
 
 ObscuraLens 5.1 launches the **Desktop Beta program**: the whole platform as

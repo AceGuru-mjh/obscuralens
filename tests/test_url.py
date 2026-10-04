@@ -394,7 +394,8 @@ def test_gather_all_skips_domain_for_ip_and_bare_hosts(monkeypatch):
 
 
 def test_source_registry_is_complete():
-    assert set(us.FREE_SOURCES) == {'http_probe', 'urlscan', 'wayback'}
+    assert set(us.FREE_SOURCES) == {'http_probe', 'urlscan', 'wayback',
+                                    'openphish'}
     assert set(us.KEYED_SOURCES) == {'google_safe_browsing', 'virustotal'}
     for name in list(us.FREE_SOURCES) + list(us.KEYED_SOURCES):
         assert name in us.SOURCE_CATALOG

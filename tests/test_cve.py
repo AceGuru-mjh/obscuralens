@@ -67,6 +67,7 @@ OSV = {
 }
 
 CNA = {
+    'dataType': 'CVE_RECORD',
     'containers': {'cna': {
         'title': 'Remote code execution in Apache Log4j2',
         'datePublic': '2021-11-24',
@@ -83,6 +84,16 @@ CNA = {
 
 EPSS = {'data': [{'cve': 'CVE-2021-44228', 'epss': '0.97',
                   'percentile': '0.9987', 'date': '2024-06-01'}]}
+
+# GitHub Security Advisories: one advisory entry as returned by
+# api.github.com/advisories?cve_id=... (a list payload).
+GHSA = {
+    'ghsa_id': 'GHSA-jfh8-c2jp-5sc3',
+    'cve_id': 'CVE-2021-44228',
+    'severity': 'CRITICAL',
+    'cvss': {'score': 10.0, 'vector_string': 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N'},
+    'cwe_ids': [{'cwe_id': 'CWE-917'}],
+}
 
 # CIRCL mirrors the CNA-published CVE 5.1 record (same family as the
 # cvelistV2 payload, with cveMetadata carrying state/assigner/dates and no
@@ -109,13 +120,17 @@ CIRCL = {
 
 
 def _all_sources(url, **kwargs):
-    """Dispatch any of the five CVE source URLs to a fixture payload."""
+    """Dispatch any of the seven CVE source URLs to a fixture payload."""
     if 'services.nvd.nist.gov' in url:
         return True, _nvd_payload(), ''
     if 'api.osv.dev' in url:
         return True, OSV, ''
     if 'raw.githubusercontent.com' in url:
         return True, CNA, ''
+    if 'cveawg.mitre.org' in url:
+        return True, CNA, ''
+    if 'api.github.com/advisories' in url:
+        return True, [GHSA], ''
     if 'api.first.org' in url:
         return True, EPSS, ''
     if 'cve.circl.lu' in url:
@@ -415,7 +430,7 @@ def test_gather_all_nvd_key_override(fake_http):
 
 def test_registries_are_consistent():
     assert set(cve_sources.FREE_SOURCES) == {
-        'nvd', 'osv', 'cvelist', 'epss', 'circl'}
+        'nvd', 'osv', 'cvelist', 'cveawg', 'ghsa', 'epss', 'circl'}
     assert cve_sources.KEYED_SOURCES == {}
     assert set(cve_sources.SOURCE_CATALOG) == set(cve_sources.FREE_SOURCES)
 
@@ -430,7 +445,8 @@ def test_tracker_success_shape(fake_http, recording_db):
 
     assert result['cve'] == 'CVE-2021-44228'
     assert result['success'] is True
-    assert result['sources_ok'] == ['circl', 'cvelist', 'epss', 'nvd', 'osv']
+    assert result['sources_ok'] == ['circl', 'cveawg', 'cvelist', 'epss',
+                                    'ghsa', 'nvd', 'osv']
     assert result['sources_failed'] == {}
     assert result['errors'] == []
     assert result['field_count'] > 5
@@ -440,6 +456,9 @@ def test_tracker_success_shape(fake_http, recording_db):
     assert result['info']['epss_score'] == 97.0
     assert result['info']['osv_packages'] == ['Maven/log4j', 'PyPI/requests']
     assert result['info']['cna_state'] == 'PUBLISHED'
+    assert result['info']['ghsa_severity'] == 'CRITICAL'
+    # cvelist and cveawg serve the same record, so provenance stacks.
+    assert result['field_sources']['cna_state'] == ['cvelist', 'cveawg']
     # Provenance is surfaced as field_sources.
     assert result['field_sources']['cvss_score'] == ['nvd']
     assert result['field_sources']['epss_score'] == ['epss']
@@ -459,7 +478,7 @@ def test_tracker_partial_failure_still_succeeds(fake_http, recording_db):
     fake_http.json = dispatch
     result = CVETracker().track('CVE-2021-44228')
     assert result['success'] is True
-    assert result['sources_ok'] == ['circl', 'nvd', 'osv']
+    assert result['sources_ok'] == ['circl', 'cveawg', 'ghsa', 'nvd', 'osv']
     # Readers swallow transport errors and return {} - the merged report then
     # records the source as "no data" rather than crashing the scan.
     assert result['sources_failed'] == {'cvelist': 'no data', 'epss': 'no data'}
@@ -515,6 +534,7 @@ def test_batch_track_preserves_order(fake_http, recording_db):
 
 def test_tracker_helpers():
     tracker = CVETracker()
-    assert tracker.source_names() == ['circl', 'cvelist', 'epss', 'nvd', 'osv']
+    assert tracker.source_names() == ['circl', 'cveawg', 'cvelist', 'epss',
+                                      'ghsa', 'nvd', 'osv']
     assert set(tracker.source_catalog()) == set(cve_sources.SOURCE_CATALOG)
     assert 'keyless' in tracker.source_catalog()['nvd']

@@ -10,6 +10,7 @@ import json
 import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 
 def _epoch_date(value: Any) -> Optional[str]:
@@ -674,6 +675,40 @@ def extract(platform: str, html: str) -> Dict[str, Any]:
             if v is not None and v != '' and v != [] and v != {}}
 
 
+def generic_profile(html: str) -> Dict[str, Any]:
+    """
+    Light Open-Graph/Twitter-card profile from any profile page (v5.2).
+
+    Used ONLY to enrich deep-scan reports for platforms without a bespoke
+    extractor - it is deliberately never fed into the verdict engine, because
+    JS-shell pages also carry og: tags and would fabricate hits. Extracted
+    values map onto the standard profile field names where they exist:
+    ``og:title`` → name, ``og:description``/``twitter:description`` → bio,
+    ``og:image`` → avatar, plus the raw page title as ``page_title``.
+    """
+    if not html:
+        return {}
+    try:
+        out: Dict[str, Any] = {}
+        # _meta() takes names WITHOUT the 'og:' prefix and also matches the
+        # twitter:* card tags via the name= attribute.
+        og_title = _meta(html, 'title', 'twitter:title')
+        description = _meta(html, 'description', 'twitter:description')
+        image = _meta(html, 'image', 'twitter:image')
+        page_title = _title(html)
+        if og_title:
+            out['name'] = og_title[:80]
+        if description:
+            out['bio'] = description[:300]
+        if image:
+            out['avatar'] = image[:500]
+        if page_title and page_title != og_title:
+            out['page_title'] = page_title[:80]
+        return out
+    except Exception:
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # JSON API platforms
 #
@@ -834,6 +869,80 @@ def _api_verdict(data: Any) -> Optional[bool]:
     return None
 
 
+# ---------------------------------------------------------------------------
+# v5.2 JSON API platforms: Bluesky and Dailymotion
+# ---------------------------------------------------------------------------
+
+def _bluesky_actor(username: str) -> str:
+    """
+    Resolve the Bluesky actor for a scan username.
+
+    A bare word is defaulted to the ``<name>.bsky.social`` handle (the common
+    case for a username sweep); an input that already looks like a handle
+    (contains a dot - a custom domain or an explicit .bsky.social) is used
+    verbatim.
+    """
+    name = (username or '').strip()
+    return name if '.' in name else f"{name}.bsky.social"
+
+
+def _bluesky_api_url(username: str) -> str:
+    return ("https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile"
+            f"?actor={quote(_bluesky_actor(username))}")
+
+
+def _bluesky_profile_url(username: str) -> str:
+    return f"https://bsky.app/profile/{quote(_bluesky_actor(username))}"
+
+
+def _bluesky_verdict(data: Any) -> Optional[bool]:
+    """The App View API confirms existence: hits carry a DID, misses a 400."""
+    if isinstance(data, dict):
+        if data.get('did'):
+            return True
+        if data.get('error'):
+            return False
+    return None
+
+
+def _bluesky_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'name': data.get('displayName') or data.get('handle'),
+        'username': data.get('handle'),
+        'bio': data.get('description'),
+        'avatar': data.get('avatar'),
+        'created': data.get('createdAt'),
+        'followers': data.get('followersCount'),
+        'following': data.get('followsCount'),
+        'posts': data.get('postsCount'),
+    }
+
+
+def _dailymotion_verdict(data: Any) -> Optional[bool]:
+    """api.dailymotion.com 404s for missing users; hits carry an id."""
+    if isinstance(data, dict):
+        if data.get('error'):
+            return False
+        if data.get('id') or data.get('screenname'):
+            return True
+    return None
+
+
+def _dailymotion_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'name': data.get('screenname'),
+        'username': data.get('id'),
+        'bio': data.get('description') or data.get('biography'),
+        'avatar': data.get('avatar_360_url') or data.get('avatar_480_url')
+                  or data.get('avatar_120_url'),
+        'created': _epoch_date(data.get('created_time')),
+        'followers': data.get('followers_total'),
+        'videos': data.get('videos_total'),
+        'views': data.get('views_total'),
+        'links': [data['url']] if data.get('url') else None,
+    }
+
+
 API_PLATFORMS: Dict[str, Dict[str, Any]] = {
     'Keybase': {
         'api_url': 'https://keybase.io/_/api/1.0/user/lookup.json?username={}',
@@ -876,6 +985,25 @@ API_PLATFORMS: Dict[str, Dict[str, Any]] = {
         'url': 'https://www.chess.com/member/{}',
         'verdict': _api_verdict,
         'extract': _chesscom_profile,
+    },
+    # v5.2 additions -------------------------------------------------------
+    'Bluesky': {
+        'api_url': _bluesky_api_url,
+        'url': _bluesky_profile_url,
+        'verdict': _bluesky_verdict,
+        'extract': _bluesky_profile,
+        # Missing accounts answer HTTP 400 with a JSON error body instead of
+        # the 404 the generic checker already understands.
+        'err_verdicts': {'http 400': False},
+    },
+    'Dailymotion': {
+        'api_url': ('https://api.dailymotion.com/user/{}'
+                    '?fields=id,screenname,url,created_time,description,'
+                    'avatar_120_url,avatar_360_url,avatar_480_url,'
+                    'views_total,videos_total,followers_total'),
+        'url': 'https://www.dailymotion.com/{}',
+        'verdict': _dailymotion_verdict,
+        'extract': _dailymotion_profile,
     },
 }
 
@@ -977,6 +1105,25 @@ def _rule_replit(username: str, body: str, low: str,
     return None
 
 
+def _rule_hashnode(username: str, body: str, low: str,
+                   response: Any) -> Optional[Tuple[str, str, str]]:
+    """
+    Hashnode verdict rule: the page title is the signature (v5.2).
+
+    Endpoint: ``https://hashnode.com/@{username}``. Missing accounts still
+    answer HTTP 200, but with a "User not found | Hashnode" title; real
+    profiles render a ``<name> - Hashnode`` title. Both splits are decided
+    from the title alone; anything else falls through to the generic rule.
+    """
+    title = _title(body) or ''
+    lowered = title.strip().lower()
+    if 'user not found' in lowered:
+        return 'not_found', 'high', 'hashnode user-not-found title'
+    if lowered.endswith('hashnode') and len(lowered) > len('hashnode'):
+        return 'found', 'medium', f'hashnode profile title: {title[:60]}'
+    return None
+
+
 #: Platform name -> verdict rule, mirroring the tracker's ``_rule_*``
 #: contract: ``(username, body, low, response) -> (status, confidence,
 #: reason)`` or ``None`` to fall through to the generic evidence rule.
@@ -985,6 +1132,7 @@ HTML_VERDICT_RULES: Dict[str, Any] = {
     'Etsy': _rule_etsy,
     'Substack': _rule_substack,
     'Replit': _rule_replit,
+    'Hashnode': _rule_hashnode,
 }
 
 # Human-readable metadata for the twelve v5.0 platform checks (the four new

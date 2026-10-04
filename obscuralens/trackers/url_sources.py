@@ -28,9 +28,10 @@ import concurrent.futures as futures
 import contextlib
 import ipaddress
 import re
+import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-from urllib.parse import quote, urljoin
+from typing import Any, Dict, List, Optional, Set, Tuple
+from urllib.parse import quote, urljoin, urlparse
 
 from ..config import config
 from ..health import health
@@ -396,6 +397,94 @@ def _virustotal(url: str, api_key: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# OpenPhish community phishing feed (v5.2)
+# ---------------------------------------------------------------------------
+
+_OPENPHISH_FEED_URL = 'https://openphish.com/feed.txt'
+# (fetched_at, urls, hosts) - the same cached response body the IP intel
+# feeds module consumes, so one download serves both readers.
+_openphish_cache: Optional[Tuple[float, Set[str], Set[str]]] = None
+
+
+def _openphish_feed() -> Tuple[Set[str], Set[str]]:
+    """
+    Parse the OpenPhish community feed into (urls, hosts), TTL-cached.
+
+    The free feed is small (~100 URLs, refreshed hourly) and its hosts are
+    overwhelmingly domains - exactly the IOC type the IP-side feed filters
+    out, which is why this URL-side reader keeps them. Cache TTL follows
+    ``app.feed_cache_ttl``; a transport failure keeps the last known sets.
+    """
+    global _openphish_cache
+    ttl = int(config.app_config.feed_cache_ttl or 21600)
+    now = time.time()
+    if _openphish_cache is not None and (now - _openphish_cache[0]) < ttl:
+        return _openphish_cache[1], _openphish_cache[2]
+
+    urls: Set[str] = set()
+    hosts: Set[str] = set()
+    try:
+        ok, text, _ = http.get_text(_OPENPHISH_FEED_URL, use_cache=True,
+                                    cache_ttl=ttl)
+        if ok and text:
+            for line in text.splitlines():
+                line = line.strip()
+                if not line or line.startswith(('#', ';')):
+                    continue
+                urls.add(line)
+                try:
+                    host = (urlparse(line).hostname or '').lower()
+                except ValueError:
+                    continue
+                if host:
+                    hosts.add(host)
+    except Exception:  # never raise from a feed read
+        pass
+    _openphish_cache = (now, urls, hosts)
+    return urls, hosts
+
+
+def _openphish(url: str) -> Dict[str, Any]:
+    """
+    OpenPhish community feed membership (keyless, v5.2).
+
+    Two verdict levels: an exact URL match is the strongest signal
+    (``openphish_match: 'exact url'``), while a host-only match means the
+    same host is currently phishing under another path
+    (``openphish_match: 'host'``). A feed that answered and does not contain
+    the target reports ``openphish_listed: False`` - a genuine clear, not a
+    failure. Switched off together with the IP feeds via
+    ``app.feeds_enabled``.
+    """
+    if not config.app_config.feeds_enabled:
+        return {}
+    target = (url or '').strip()
+    if not target:
+        return {}
+    try:
+        host = (urlparse(target).hostname or '').lower()
+    except ValueError:
+        return {}
+
+    urls, hosts = _openphish_feed()
+    if not urls and not hosts:
+        return {}  # feed unavailable: no data rather than a false clear
+
+    out: Dict[str, Any] = {}
+    if target in urls:
+        out['openphish_listed'] = True
+        out['openphish_match'] = 'exact url'
+    elif host and host in hosts:
+        out['openphish_listed'] = True
+        out['openphish_match'] = 'host'
+    else:
+        out['openphish_listed'] = False
+    if out.get('openphish_listed'):
+        out['openphish_feed'] = 'openphish.com community feed'
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -403,6 +492,7 @@ FREE_SOURCES: Dict[str, Any] = {
     'http_probe': _http_probe,
     'urlscan': _urlscan,
     'wayback': _wayback,
+    'openphish': _openphish,
 }
 
 KEYED_SOURCES: Dict[str, Any] = {
@@ -415,6 +505,8 @@ SOURCE_CATALOG = {
     'http_probe': 'Redirect chain, final status, title and server headers (keyless)',
     'urlscan': 'Public urlscan.io scan history and malicious verdicts (keyless)',
     'wayback': 'Wayback Machine capture history via the CDX API (keyless)',
+    'openphish': 'OpenPhish community phishing feed membership: exact-URL '
+                 'and host-level matches (keyless; v5.2)',
     'google_safe_browsing': 'Google Safe Browsing threat verdicts (keyed)',
     'virustotal': 'URL scan detections and reputation (keyed)',
 }

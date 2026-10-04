@@ -23,7 +23,8 @@ from ..config import config
 from ..database import db
 from ..health import health
 from ..utils.http_client import http
-from .username_sources import API_PLATFORMS, api_profile, extract
+from .username_sources import API_PLATFORMS, HTML_VERDICT_RULES, api_profile, extract, generic_profile
+from .username_sources import HTML_PLATFORMS as EXTRA_HTML_PLATFORMS
 
 
 @dataclass
@@ -42,9 +43,25 @@ class UsernameResult:
 
 
 # Platforms where a plain 200-vs-404 status split was verified empirically.
+# Missing accounts answer HTTP 404 (handled above); a bare 200 on the profile
+# URL is therefore a hit - the Sherlock-style signal. Since v5.2 this set is
+# actually consulted by _verdict (it used to be declared but dead code).
 STATUS_RELIABLE = {
     'Dribbble', 'Flickr', 'Snapchat', 'SoundCloud',
     'Twitter', 'Vimeo', 'YouTube',
+    # v5.2 additions - every split re-verified live before shipping:
+    'Gitee', 'Hugging Face', 'GoodReads', 'SourceForge', 'Strava',
+    'MyAnimeList', 'RubyGems', 'Issuu', 'Itch.io', 'Launchpad',
+    'Sketchfab', 'SpeakerDeck', 'About.me', 'Credly', 'Disqus',
+    'Instructables', 'MyMiniFactory', 'Scratch', 'TradingView',
+    'WakaTime', 'Geocaching', 'HackMD', 'Crowdin', 'Freesound',
+    'GitBook', 'HubPages', 'IFTTT', 'Kongregate', 'Laracast',
+    'Memrise', 'OpenGameArt', 'Pokemon Showdown', 'Tenor',
+    'TheMovieDB', 'Windy', 'YouPic', 'Exophase', 'write.as',
+    'Bitwarden Forum', 'Ionic Forum', 'n8n Community', 'Rclone Forum',
+    'Joplin Forum', 'Ubuntu Discourse', 'Rust Users', 'Blender Artists',
+    'Linktree', 'AtCoder', 'MyDramaList', '9GAG', 'VK', 'OK.ru',
+    'HackerOne', 'LinuxFR', 'Fosstodon', 'Pixelfed',
 }
 
 # Generic "this account does not exist" markers, matched case-insensitively.
@@ -117,13 +134,82 @@ HTML_PLATFORMS = [
     {"name": "Hackaday.io", "url": "https://hackaday.io/{}"},
     {"name": "Last.fm", "url": "https://www.last.fm/user/{}"},
     {"name": "Kaggle", "url": "https://www.kaggle.com/{}"},
+    # v5.2 additions ------------------------------------------------------
+    # Each platform below was probed live before being added: an existing
+    # account answers HTTP 200 and a missing one answers 404, so they ride
+    # the STATUS_RELIABLE fast path above. Platforms that bot-wall every
+    # scripted client (Codepen, Codewars, LeetCode, npm, ArtStation, Trakt,
+    # osu!, MixCloud, Newgrounds, Rumble, ProductHunt, Untappd, Discogs,
+    # Wikipedia, Fandom, Imgur, Speedrun.com and others) were tested and
+    # deliberately NOT added - they could only ever report "unknown".
+    {"name": "Gitee", "url": "https://gitee.com/{}"},
+    {"name": "Hugging Face", "url": "https://huggingface.co/{}"},
+    {"name": "GoodReads", "url": "https://www.goodreads.com/{}"},
+    {"name": "SourceForge", "url": "https://sourceforge.net/u/{}/profile"},
+    {"name": "Strava", "url": "https://www.strava.com/athletes/{}"},
+    {"name": "MyAnimeList", "url": "https://myanimelist.net/profile/{}"},
+    {"name": "RubyGems", "url": "https://rubygems.org/profiles/{}"},
+    {"name": "Issuu", "url": "https://issuu.com/{}"},
+    {"name": "Itch.io", "url": "https://{}.itch.io"},
+    {"name": "Launchpad", "url": "https://launchpad.net/~{}"},
+    {"name": "Sketchfab", "url": "https://sketchfab.com/{}"},
+    {"name": "SpeakerDeck", "url": "https://speakerdeck.com/{}"},
+    {"name": "About.me", "url": "https://about.me/{}"},
+    {"name": "Credly", "url": "https://www.credly.com/users/{}"},
+    {"name": "Disqus", "url": "https://disqus.com/by/{}"},
+    {"name": "Instructables", "url": "https://www.instructables.com/member/{}/"},
+    {"name": "MyMiniFactory", "url": "https://www.myminifactory.com/users/{}"},
+    {"name": "Scratch", "url": "https://scratch.mit.edu/users/{}/"},
+    {"name": "TradingView", "url": "https://www.tradingview.com/u/{}/"},
+    {"name": "WakaTime", "url": "https://wakatime.com/@{}"},
+    {"name": "Geocaching", "url": "https://www.geocaching.com/profile/?u={}"},
+    {"name": "HackMD", "url": "https://hackmd.io/@{}"},
+    {"name": "Crowdin", "url": "https://crowdin.com/profile/{}"},
+    {"name": "Freesound", "url": "https://freesound.org/people/{}/"},
+    {"name": "GitBook", "url": "https://{}.gitbook.io/"},
+    {"name": "HubPages", "url": "https://hubpages.com/@{}"},
+    {"name": "IFTTT", "url": "https://ifttt.com/p/{}"},
+    {"name": "Kongregate", "url": "https://www.kongregate.com/accounts/{}"},
+    {"name": "Laracast", "url": "https://laracasts.com/@{}"},
+    {"name": "Memrise", "url": "https://www.memrise.com/user/{}/"},
+    {"name": "OpenGameArt", "url": "https://opengameart.org/users/{}"},
+    {"name": "Pokemon Showdown", "url": "https://pokemonshowdown.com/users/{}"},
+    {"name": "Tenor", "url": "https://tenor.com/users/{}"},
+    {"name": "TheMovieDB", "url": "https://www.themoviedb.org/u/{}"},
+    {"name": "Windy", "url": "https://community.windy.com/user/{}"},
+    {"name": "YouPic", "url": "https://youpic.com/photographer/{}/"},
+    {"name": "Exophase", "url": "https://www.exophase.com/user/{}/"},
+    {"name": "write.as", "url": "https://write.as/{}"},
+    {"name": "Bitwarden Forum", "url": "https://community.bitwarden.com/u/{}"},
+    {"name": "Ionic Forum", "url": "https://forum.ionicframework.com/u/{}"},
+    {"name": "n8n Community", "url": "https://community.n8n.io/u/{}"},
+    {"name": "Rclone Forum", "url": "https://forum.rclone.org/u/{}"},
+    {"name": "Joplin Forum", "url": "https://discourse.joplinapp.org/u/{}"},
+    {"name": "Ubuntu Discourse", "url": "https://discourse.ubuntu.com/u/{}"},
+    {"name": "Rust Users", "url": "https://users.rust-lang.org/u/{}"},
+    {"name": "Blender Artists", "url": "https://blenderartists.org/u/{}"},
+    {"name": "Linktree", "url": "https://linktr.ee/{}"},
+    {"name": "AtCoder", "url": "https://atcoder.jp/users/{}"},
+    {"name": "MyDramaList", "url": "https://www.mydramalist.com/profile/{}"},
+    {"name": "9GAG", "url": "https://9gag.com/u/{}"},
+    {"name": "VK", "url": "https://vk.com/{}"},
+    {"name": "OK.ru", "url": "https://ok.ru/{}"},
+    {"name": "HackerOne", "url": "https://hackerone.com/{}"},
+    {"name": "LinuxFR", "url": "https://linuxfr.org/users/{}"},
+    {"name": "Fosstodon", "url": "https://fosstodon.org/@{}"},
+    {"name": "Pixelfed", "url": "https://pixelfed.social/{}"},
+    {"name": "Hashnode", "url": "https://hashnode.com/@{}"},
 ]
 
 
 def _build_platforms() -> List[Dict[str, Any]]:
     """Combine HTML and API platforms into one lookup table."""
+    # v5.2: the Patreon/Etsy/Substack/Replit entries that username_sources
+    # has always declared are actually unioned in here now (they used to be
+    # documented but never scanned - dead registry).
     platforms: List[Dict[str, Any]] = [
-        dict(platform, api=False) for platform in HTML_PLATFORMS
+        dict(platform, api=False)
+        for platform in HTML_PLATFORMS + EXTRA_HTML_PLATFORMS
     ]
     for name, spec in API_PLATFORMS.items():
         platforms.append({'name': name, 'url': spec['url'], 'api': True})
@@ -250,6 +336,12 @@ class UsernameTracker:
         profile: Dict[str, Any] = {}
         if status == 'found' and deep and response.text:
             profile = extract(name, response.text)
+            if not profile:
+                # v5.2: platforms without a bespoke extractor still get a
+                # light Open-Graph profile in deep scans. This only enriches
+                # the report - it never feeds the verdict (og: meta tags on
+                # JS shells would otherwise fabricate hits).
+                profile = generic_profile(response.text)
 
         return UsernameResult(
             platform=name, url=url, exists=(status == 'found'),
@@ -262,21 +354,37 @@ class UsernameTracker:
                             deep: bool) -> UsernameResult:
         """Check a platform through its JSON API: high-confidence verdicts."""
         name = platform['name']
-        profile_url = platform['url'].format(username)
         spec = API_PLATFORMS[name]
-        api_url = spec['api_url'].format(username)
+        # v5.2: 'url' and 'api_url' may be callables so a platform can build
+        # its URLs from the username context (Bluesky resolves the actor
+        # handle differently for dotted and bare usernames).
+        profile_url = (spec['url'](username) if callable(spec['url'])
+                       else spec['url'].format(username))
+        api_url = (spec['api_url'](username) if callable(spec['api_url'])
+                   else spec['api_url'].format(username))
         started = time.time()
 
         ok, data, err = http.get_json(api_url)
         elapsed = round(time.time() - started, 2)
 
         if not ok:
+            # v5.2: some APIs answer "no such account" with a non-404 status
+            # (Bluesky replies 400 with a JSON error body); a per-platform
+            # err_verdicts map declares those transport errors as misses.
+            err_map = spec.get('err_verdicts') or {}
             if err == 'not found':
                 return UsernameResult(
                     platform=name, url=profile_url, exists=False,
                     status='not_found', confidence='high',
                     reason='api returned 404 (no such account)',
                     status_code=404, response_time=elapsed,
+                )
+            if err_map.get(err) is False:
+                return UsernameResult(
+                    platform=name, url=profile_url, exists=False,
+                    status='not_found', confidence='high',
+                    reason=f'api answered no-such-account ({err})',
+                    status_code=400, response_time=elapsed,
                 )
             return UsernameResult(
                 platform=name, url=profile_url, exists=False,
@@ -362,11 +470,30 @@ class UsernameTracker:
             if verdict is not None:
                 return verdict
 
+        # v5.2: verdict rules registered by username_sources (Patreon, Etsy,
+        # Substack, Replit, Hashnode) - same (username, body, low, response)
+        # contract as the tracker rules above.
+        sources_rule = HTML_VERDICT_RULES.get(platform)
+        if sources_rule is not None:
+            try:
+                verdict = sources_rule(username, body, low, response)
+            except Exception:
+                verdict = None
+            if verdict is not None:
+                return verdict
+
         # Generic rule: a 200 needs positive profile evidence, otherwise the
         # page is indistinguishable from a JS shell.
         evidence = self._evidence_keys(body, platform)
         if evidence:
             return 'found', 'medium', f"profile evidence: {', '.join(evidence[:4])}"
+
+        # v5.2: platforms whose 200-vs-404 split was verified empirically.
+        # Marker checks, captcha walls and platform rules above already
+        # filtered the shells, so a bare 200 here is an honest hit.
+        if platform in STATUS_RELIABLE:
+            return 'found', 'medium', 'verified 200-vs-404 status split'
+
         return 'unknown', 'low', 'http 200 but no profile evidence (JS shell?)'
 
     @staticmethod

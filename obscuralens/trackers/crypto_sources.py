@@ -14,25 +14,37 @@ configured. ``app.disabled_sources`` can switch any source off.
   first/last seen dates.
 * ``mempool.space`` (BTC, keyless) - funded/spent sums cross-confirming
   blockchain.info plus a pending-mempool counter.
+* ``blockcypher`` (BTC/ETH/LTC/DOGE, keyless, v5.2) - BlockCypher balance
+  API: balance, received/sent totals, tx count and unconfirmed counters.
+* ``xrpscan`` (XRP, keyless, v5.2) - XRPScan account root object: XRP
+  balance, sequence, owner count and the latest affecting transaction.
+* ``koios`` (ADA, keyless, v5.2) - Koios address_info (POST): lovelace
+  balance, stake address, script flag and UTXO-derived last activity.
+* ``solana`` (SOL, keyless, v5.2) - the public mainnet JSON-RPC:
+  ``getBalance`` + ``getAccountInfo`` (lamports, owner program, executable
+  flag, data size).
 
-Because the blockchains speak in integer minor units (satoshis, wei, koinu),
-each reader normalises amounts to human-readable floats before returning:
-BTC-family values are divided by 1e8 and rounded to 8 decimals, ETH values by
-1e18 (rounded to 6 decimals, except Blockchair which keeps 12 to preserve the
-sat/wei granularity it reports). Conversion helpers tolerate ``None``, strings
+Because the blockchains speak in integer minor units (satoshis, wei, koinu,
+lovelace, lamports), each reader normalises amounts to human-readable floats
+before returning: BTC-family values are divided by 1e8 and rounded to 8
+decimals, ETH values by 1e18 (rounded to 6 decimals, except Blockchair which
+keeps 12 to preserve the sat/wei granularity it reports), ADA lovelace by 1e6
+and SOL lamports by 1e9. Conversion helpers tolerate ``None``, strings
 and garbage by returning ``None`` instead of raising.
 
 Chain routing: each reader calls :func:`detect_crypto_chain` first and bails
 out immediately for unsupported chains, so a Bitcoin address never wastes a
-round trip on an Ethereum API. Chains without any aggregated source (xmr,
-xrp, ada) still produce a valid report - the tracker records the detected
-chain and address even when no source can enrich them.
+round trip on an Ethereum API. As of v5.2 every validated chain except xmr
+(Monero balances are unobservable by design) has at least one aggregated
+source; xmr addresses still produce a valid report with the detected chain
+and address recorded.
 
 Field provenance is tracked: ``gather_all`` returns which source(s) supplied
 each value, so a report can show exactly where a fact came from.
 """
 
 import concurrent.futures as futures
+import contextlib
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -398,11 +410,197 @@ def _mempool_space(address: str) -> Dict[str, Any]:
 # Registry
 # ---------------------------------------------------------------------------
 
+#: detect_crypto_chain slug -> BlockCypher API path.
+_BLOCKCYPHER_CHAINS = {
+    'btc': 'btc/main',
+    'eth': 'eth/main',
+    'ltc': 'ltc/main',
+    'doge': 'doge/main',
+}
+
+
+def _blockcypher(address: str) -> Dict[str, Any]:
+    """
+    BlockCypher balance API (keyless, rate-limited; BTC/ETH/LTC/DOGE, v5.2).
+
+    ``https://api.blockcypher.com/v1/{chain}/main/addrs/{addr}/balance``
+    answers with satoshi/wei totals: ``total_received``, ``total_sent``,
+    ``balance``, ``final_balance`` (confirmed + unconfirmed), ``n_tx`` and
+    ``unconfirmed_n_tx``. Values convert with the per-chain helpers, so an
+    ETH account keeps 6 decimals while the BTC family keeps 8.
+    """
+    chain = detect_crypto_chain(address)
+    slug = _BLOCKCYPHER_CHAINS.get(chain or '')
+    if not slug:
+        return {}
+
+    ok, d, _ = http.get_json(
+        f"https://api.blockcypher.com/v1/{slug}/addrs/{address}/balance",
+        cache_ttl=300)
+    if not ok or not isinstance(d, dict) or 'address' not in d:
+        return {}
+
+    to_amount = (_wei_to_eth if chain == 'eth' else _sats_to_btc)
+    out: Dict[str, Any] = {
+        'chain': chain,
+        'blockcypher_balance': to_amount(
+            d.get('final_balance') if chain != 'eth' else d.get('balance')),
+        'blockcypher_total_received': to_amount(d.get('total_received')),
+        'blockcypher_total_sent': to_amount(d.get('total_sent')),
+        'blockcypher_tx_count': d.get('n_tx'),
+    }
+    if d.get('unconfirmed_n_tx'):
+        out['blockcypher_pending_txs'] = d.get('unconfirmed_n_tx')
+    return out
+
+
+def _xrpscan(address: str) -> Dict[str, Any]:
+    """
+    XRPScan account API (keyless, XRP only, v5.2).
+
+    ``https://api.xrpscan.com/api/v1/account/{addr}`` exposes the ledger's
+    AccountRoot object: XRP balance, sequence number, owner count and the
+    latest affecting transaction hash with its ledger index. Accounts that
+    were never funded answer HTTP 404, which leaves ``{}`` (honest no-data).
+    """
+    if detect_crypto_chain(address) != 'xrp':
+        return {}
+
+    ok, d, _ = http.get_json(
+        f"https://api.xrpscan.com/api/v1/account/{address}", cache_ttl=300)
+    if not ok or not isinstance(d, dict) or 'Account' not in d:
+        return {}
+
+    out: Dict[str, Any] = {'chain': 'xrp'}
+    with contextlib.suppress(TypeError, ValueError):
+        out['xrp_balance'] = round(float(d.get('xrpBalance')), 6)
+    if d.get('sequence') is not None:
+        out['xrp_sequence'] = d.get('sequence')
+    if d.get('ownerCount') is not None:
+        out['xrp_owner_count'] = d.get('ownerCount')
+    if d.get('previousAffectingTransactionID'):
+        out['xrp_last_tx'] = d.get('previousAffectingTransactionID')
+    if d.get('previousAffectingTransactionLedgerVersion') is not None:
+        out['xrp_last_ledger'] = d.get('previousAffectingTransactionLedgerVersion')
+    return out
+
+
+def _koios(address: str) -> Dict[str, Any]:
+    """
+    Koios Cardano address_info (keyless POST, ADA only, v5.2).
+
+    Koios is an open Cardano API pool. ``POST
+    https://api.koios.rest/api/v1/address_info`` with ``{"_addresses":
+    [addr]}`` returns per-address rows carrying the lovelace ``balance``, the
+    associated ``stake_address``, a ``script_address`` flag and the UTXO set
+    (whose ``block_time`` entries bound the observed activity). An address
+    with no on-chain history answers an empty list - still a fact, reported
+    as an empty result rather than a failure.
+    """
+    if detect_crypto_chain(address) != 'ada':
+        return {}
+
+    ok, rows, _ = http.post_json(
+        "https://api.koios.rest/api/v1/address_info",
+        payload={"_addresses": [address]})
+    if not ok or not isinstance(rows, list) or not rows:
+        return {}
+
+    d = rows[0]
+    if not isinstance(d, dict):
+        return {}
+
+    out: Dict[str, Any] = {'chain': 'ada'}
+    with contextlib.suppress(TypeError, ValueError):
+        out['ada_balance'] = round(int(d.get('balance')) / 1e6, 6)
+    if d.get('stake_address'):
+        out['ada_stake_address'] = d.get('stake_address')
+    if d.get('script_address') is not None:
+        out['ada_script_address'] = bool(d.get('script_address'))
+    utxos = d.get('utxo_set')
+    if isinstance(utxos, list):
+        out['ada_utxo_count'] = len(utxos)
+        times = []
+        for utxo in utxos:
+            if isinstance(utxo, dict) and utxo.get('block_time') is not None:
+                try:
+                    times.append(int(utxo['block_time']))
+                except (TypeError, ValueError):
+                    continue
+        if times:
+            out['ada_last_activity'] = _epoch_to_iso(max(times))
+    return out
+
+
+def _solana(address: str) -> Dict[str, Any]:
+    """
+    Solana public mainnet JSON-RPC (keyless, SOL only, v5.2).
+
+    Two POSTs to ``https://api.mainnet-beta.solana.com``:
+      * ``getBalance`` - lamports (1 SOL = 1e9 lamports).
+      * ``getAccountInfo`` - owner program, executable flag, data size and
+        rent epoch; ``value: null`` marks an account with no on-chain state,
+        which surfaces as ``sol_account_active: False`` rather than a failure.
+    """
+    if detect_crypto_chain(address) != 'sol':
+        return {}
+
+    ok, d, _ = http.post_json(
+        "https://api.mainnet-beta.solana.com",
+        payload={'jsonrpc': '2.0', 'id': 1, 'method': 'getBalance',
+                 'params': [address]})
+    if not ok or not isinstance(d, dict):
+        return {}
+    result = d.get('result')
+    if not isinstance(result, dict):
+        return {}
+
+    try:
+        lamports = int(result.get('value'))
+    except (TypeError, ValueError):
+        return {}
+
+    out: Dict[str, Any] = {
+        'chain': 'sol',
+        'sol_lamports': lamports,
+        'sol_balance': round(lamports / 1e9, 9),
+    }
+
+    ok, d, _ = http.post_json(
+        "https://api.mainnet-beta.solana.com",
+        payload={'jsonrpc': '2.0', 'id': 1, 'method': 'getAccountInfo',
+                 'params': [address]})
+    if ok and isinstance(d, dict):
+        info = (d.get('result') or {}).get('value')
+        if isinstance(info, dict):
+            out['sol_account_active'] = True
+            if info.get('owner'):
+                out['sol_owner'] = info['owner']
+            if info.get('executable') is not None:
+                out['sol_executable'] = bool(info.get('executable'))
+            if info.get('space') is not None:
+                with contextlib.suppress(TypeError, ValueError):
+                    out['sol_data_size'] = int(info['space'])
+            if info.get('lamports') is not None:
+                try:
+                    out['sol_lamports'] = int(info['lamports'])
+                    out['sol_balance'] = round(int(info['lamports']) / 1e9, 9)
+                except (TypeError, ValueError):
+                    pass
+        else:
+            out['sol_account_active'] = False
+    return out
+
+
 FREE_SOURCES: Dict[str, Any] = {
     'blockchain.info': _blockchain_info,
     'blockstream.info': _blockstream,
     'blockchair': _blockchair,
     'mempool.space': _mempool_space,
+    'blockcypher': _blockcypher,
+    'xrpscan': _xrpscan,
+    'koios': _koios,
+    'solana': _solana,
 }
 
 KEYED_SOURCES: Dict[str, Any] = {
@@ -419,6 +617,14 @@ SOURCE_CATALOG = {
                   '(BTC/ETH/LTC/DOGE, keyless, rate-limited)',
     'mempool.space': 'Funded/spent sums, tx count and pending mempool '
                      'counter (BTC only, keyless)',
+    'blockcypher': 'Balance, received/sent totals and tx counters '
+                   '(BTC/ETH/LTC/DOGE, keyless, rate-limited; v5.2)',
+    'xrpscan': 'XRP balance, sequence, owner count and latest affecting '
+               'transaction (XRP only, keyless; v5.2)',
+    'koios': 'Lovelace balance, stake address, script flag and UTXO-derived '
+             'activity (ADA only, keyless; v5.2)',
+    'solana': 'Lamports balance, owner program, executable flag and data '
+              'size via the public JSON-RPC (SOL only, keyless; v5.2)',
     'etherscan': 'Ethereum balance and transaction timestamps (keyed)',
 }
 
@@ -509,7 +715,7 @@ def gather_all(address: str, keys: Optional[Dict[str, str]] = None) -> Dict[str,
             merged.setdefault(key, value)
 
     # Chain and address identify the target itself; record them even when no
-    # source produced anything (xmr/xrp/ada have no aggregated coverage yet).
+    # source produced anything (xmr is chain-labelled only by design).
     merged['address'] = address
     provenance.setdefault('address', ['crypto_sources'])
     chain = detect_crypto_chain(address)

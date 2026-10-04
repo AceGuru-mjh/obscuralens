@@ -5,8 +5,18 @@ Keeps repeated lookups fast and reduces load on public OSINT endpoints. Only
 successful (HTTP 200) responses are stored. Entries are zlib-compressed JSON
 and expire after ``cache_ttl`` seconds. The cache can be disabled through
 ``app.cache_enabled: false`` in config.yaml or OBSCURALENS_CACHE_ENABLED=0.
+
+Performance note (v5.2): connections are **persistent and thread-local**.
+Earlier releases opened a fresh SQLite connection (and re-ran the schema
+DDL) on every get/set call, which cost ~1-3 ms per cache hit and serialised
+behind the global lock; a 20-source fan-out paid that tax twenty times per
+lookup. The schema is now created once per connection and connections are
+reused until the configured path changes. ``PRAGMA synchronous=NORMAL``
+(WAL-safe) keeps commits cheap. A SQLite error drops the offending
+connection so the next call self-heals with a fresh one.
 """
 
+import contextlib
 import json
 import sqlite3
 import threading
@@ -28,7 +38,7 @@ class HttpCache:
         self._path = path
         self._default_ttl = default_ttl
         self._lock = threading.Lock()
-        self._ready = False
+        self._local = threading.local()
         self.hits = 0
         self.misses = 0
 
@@ -48,11 +58,25 @@ class HttpCache:
 
     # -- storage ----------------------------------------------------------
 
-    def _connect(self) -> sqlite3.Connection:
-        path = self.path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(path), timeout=10)
+    def _conn(self) -> sqlite3.Connection:
+        """
+        Return this thread's persistent connection, opening it on first use.
+
+        The schema DDL runs once per connection (not per call, which dominated
+        cache latency before v5.2). A changed ``cache_path`` transparently
+        re-opens against the new file.
+        """
+        path = str(self.path)
+        conn = getattr(self._local, 'conn', None)
+        if conn is not None and getattr(self._local, 'path', None) == path:
+            return conn
+        if conn is not None:
+            with contextlib.suppress(sqlite3.Error):
+                conn.close()
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(path, timeout=10)
         conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('PRAGMA synchronous=NORMAL')
         conn.execute('''
             CREATE TABLE IF NOT EXISTS http_cache (
                 key TEXT PRIMARY KEY,
@@ -65,7 +89,18 @@ class HttpCache:
             CREATE INDEX IF NOT EXISTS idx_http_cache_expires
             ON http_cache(expires_at)
         ''')
+        self._local.conn = conn
+        self._local.path = path
         return conn
+
+    def _drop_conn(self) -> None:
+        """Close and forget this thread's connection (error self-healing)."""
+        conn = getattr(self._local, 'conn', None)
+        if conn is not None:
+            with contextlib.suppress(sqlite3.Error):
+                conn.close()
+        self._local.conn = None
+        self._local.path = None
 
     @staticmethod
     def _key(namespace: str, url: str) -> str:
@@ -78,25 +113,23 @@ class HttpCache:
         key = self._key(namespace, url)
         try:
             with self._lock:
-                conn = self._connect()
-                try:
-                    row = conn.execute(
-                        'SELECT value, expires_at FROM http_cache WHERE key = ?',
-                        (key,)).fetchone()
-                    if row is None:
-                        self.misses += 1
-                        return None
-                    value, expires_at = row
-                    if expires_at < time.time():
-                        conn.execute('DELETE FROM http_cache WHERE key = ?', (key,))
-                        conn.commit()
-                        self.misses += 1
-                        return None
-                    self.hits += 1
-                    return json.loads(zlib.decompress(value).decode('utf-8'))
-                finally:
-                    conn.close()
+                conn = self._conn()
+                row = conn.execute(
+                    'SELECT value, expires_at FROM http_cache WHERE key = ?',
+                    (key,)).fetchone()
+                if row is None:
+                    self.misses += 1
+                    return None
+                value, expires_at = row
+                if expires_at < time.time():
+                    conn.execute('DELETE FROM http_cache WHERE key = ?', (key,))
+                    conn.commit()
+                    self.misses += 1
+                    return None
+                self.hits += 1
+                return json.loads(zlib.decompress(value).decode('utf-8'))
         except (sqlite3.Error, ValueError, zlib.error, OSError):
+            self._drop_conn()
             self.misses += 1
             return None
 
@@ -117,7 +150,7 @@ class HttpCache:
         expires_at = now + (ttl if ttl is not None else self.default_ttl)
         try:
             with self._lock:
-                conn = self._connect()
+                conn = self._conn()
                 try:
                     conn.execute(
                         'INSERT OR REPLACE INTO http_cache '
@@ -125,9 +158,11 @@ class HttpCache:
                         (key, zlib.compress(payload), expires_at, now))
                     conn.commit()
                     return True
-                finally:
-                    conn.close()
+                except sqlite3.Error:
+                    self._drop_conn()
+                    return False
         except (sqlite3.Error, OSError):
+            self._drop_conn()
             return False
 
     # -- maintenance ------------------------------------------------------
@@ -136,29 +171,33 @@ class HttpCache:
         """Delete expired rows; returns the number removed."""
         try:
             with self._lock:
-                conn = self._connect()
+                conn = self._conn()
                 try:
                     cur = conn.execute('DELETE FROM http_cache WHERE expires_at < ?',
                                        (time.time(),))
                     conn.commit()
                     return cur.rowcount
-                finally:
-                    conn.close()
+                except sqlite3.Error:
+                    self._drop_conn()
+                    return 0
         except (sqlite3.Error, OSError):
+            self._drop_conn()
             return 0
 
     def clear(self) -> int:
         """Delete every cached entry; returns the number removed."""
         try:
             with self._lock:
-                conn = self._connect()
+                conn = self._conn()
                 try:
                     cur = conn.execute('DELETE FROM http_cache')
                     conn.commit()
                     return cur.rowcount
-                finally:
-                    conn.close()
+                except sqlite3.Error:
+                    self._drop_conn()
+                    return 0
         except (sqlite3.Error, OSError):
+            self._drop_conn()
             return 0
 
     def stats(self) -> Dict[str, Any]:
@@ -168,7 +207,7 @@ class HttpCache:
         size_bytes = 0
         try:
             with self._lock:
-                conn = self._connect()
+                conn = self._conn()
                 try:
                     now = time.time()
                     total = conn.execute('SELECT COUNT(*) FROM http_cache').fetchone()[0]
@@ -178,10 +217,10 @@ class HttpCache:
                     size_bytes = conn.execute(
                         'SELECT COALESCE(SUM(LENGTH(value)), 0) FROM http_cache'
                     ).fetchone()[0]
-                finally:
-                    conn.close()
+                except sqlite3.Error:
+                    self._drop_conn()
         except (sqlite3.Error, OSError):
-            pass
+            self._drop_conn()
         return {
             'enabled': self.enabled,
             'entries': total,
