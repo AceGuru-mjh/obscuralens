@@ -2,6 +2,101 @@
 
 ## Changelog
 
+## 6.2.0 — Quality, Benchmarks & Docs
+
+v6.2 completes the six-part v6.0 programme: the benchmark suite, a
+1,319-case test expansion over the weakest modules, the full
+documentation set (architecture / contributing / security), CI jobs for
+the benchmarks and the TypeScript SDK, and two genuine bug fixes found
+by the new tests.
+
+### Added — Benchmark suite (`benchmarks/`)
+
+- **70 offline benchmarks** in three groups: core (validators for every
+  kind, HTTP cache get/set, rate-limiter buckets, metrics, coordinate
+  maths across UTM/MGRS/geohash/Maidenhead/DMS, dork generation,
+  data-catalog lookups), analytics (descriptive stats and histograms on
+  series up to 10,000 points, all five anomaly detectors, DBSCAN and
+  k-means clustering on synthetic geo/feature data, similarity metrics,
+  keyword/language fingerprinting, trend and changepoint summaries,
+  graph metrics to 500 nodes, linear forecasting) and platform (MCP
+  `tools/list` marshalling and offline tool calls, SDK URL building and
+  model hydration, report and template rendering, STIX/MISP export,
+  plugin loading, shell-completion generation, i18n, seeded-database
+  history reads).
+- A deterministic **timing harness** (`harness.py`): warmup + repeat ×
+  number sampling with min/mean/median/p95/stdev and ops-per-second,
+  tag/substring filtering, a CI-safe `--quick` mode (seconds, not
+  minutes), JSON reports, and baseline comparison with a 35% tolerance
+  band (CI machine variance) and verdicts faster/stable/slower/new/
+  missing; `--fail-on-regression` gates exit code 2.
+- A **committed baseline** (`benchmarks/results/baseline.json`) — never
+  auto-overwritten; regenerate deliberately after intentional
+  performance changes. `make bench` / `make bench-quick` /
+  `just bench` / `just bench-quick`; 497 lines of contract tests in
+  `tests/test_benchmarks.py`.
+- Hermetic by construction: stateful benches isolate into per-run
+  tempdirs; the CLI's env bootstrap is applied at import and **restored
+  when `main()` returns**, so importing the runner from pytest never
+  leaks benchmark paths into the surrounding process.
+
+### Added — Test expansion (+1,319 cases; 3,267 → 4,586)
+
+Deep offline suites for the previously weakest modules, with measured
+coverage lifts:
+
+| Module | Before | After |
+|---|---|---|
+| `advanced/report_builder.py` | 11% | 100% |
+| `advanced/batch.py` | 13% | 85%+ |
+| `advanced/alerts.py` | 14% | 85%+ |
+| `advanced/patterns.py` | 14% | 85%+ |
+| `advanced/geospatial.py` | 16% | 99% |
+| `utils/coordinate_math.py` | 19% | 99% |
+| `reporting/sections.py` | 31% | 97% |
+| `visualization/charts.py` | ~0% | 100% |
+| `cli.py` (interactive console) | ~0% | 98% |
+
+Highlights: round-trip anchors for every coordinate format (including
+zone-boundary longitudes and polar solar edges), full SVG-report
+rendering (sparklines, bars, donuts, chips, escaping, determinism),
+interactive-console flows driven end-to-end through scripted `input`
+answers with stubbed trackers, batch/alert/pattern state machines with
+hermetic state files, and the geospatial record pipeline over synthetic
+history.
+
+### Fixed
+
+- **The Makefile used spaces instead of tabs** — every `make` target
+  failed with "missing separator" (17 recipe lines converted; `make
+  test` / `make bench` now work).
+- **`build_history_report` crashed** (IndexError) when stored records
+  existed but none carried a parseable timestamp — the day-bucket chart
+  now renders an honest note instead of indexing into an empty list.
+- `benchmarks/run.py` no longer leaks `OBSCURALENS_*` hermetic env
+  overrides into a surrounding pytest process (restored on `main()`
+  exit; previously broke `test_cases` ordering).
+
+### Added — Documentation set
+
+- **[docs/architecture.md](docs/architecture.md)**: the internals guide
+  — layer map, life-of-a-lookup walkthrough (fan-out → per-source HTTP
+  through cache/rate-limit/circuit-breaker → merge → provenance and
+  noisy-OR confidence → persistence → surfaces), state & storage
+  inventory, concurrency model, the 20-kinds × source-count matrix, and
+  the extension surfaces.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)**: setup, workflow, code style,
+  and step-by-step guides for adding a data source, a target kind, an
+  MCP tool, a REST endpoint, an SDK method or a benchmark.
+- **[SECURITY.md](SECURITY.md)**: vulnerability disclosure, the passive
+  OPSEC stance, secrets handling, local-data sensitivity and purging,
+  supply-chain policy, no-telemetry statement.
+- **[docs/index.md](docs/index.md)**: the reading map by audience;
+  **[docs/benchmarks.md](docs/benchmarks.md)**: usage, baseline policy,
+  adding benchmarks.
+- CI: new `benchmarks` (quick suite + contract tests) and `sdk-js`
+  (78 node:test cases on Node 22) jobs.
+
 ## 6.0-part5 — Ecosystem
 
 Part 5 of the v6.0 series: everything that makes ObscuraLens embeddable

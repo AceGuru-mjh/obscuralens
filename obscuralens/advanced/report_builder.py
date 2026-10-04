@@ -1024,16 +1024,24 @@ def build_history_report(records: Optional[List[Dict[str, Any]]] = None) -> str:
 
     days = sorted(day_counts)
     shown_days = days[-90:]
-    series = [day_counts[day] for day in shown_days]
-    note = ('' if len(days) <= 90
-            else f'<p class="note">Showing the most recent {len(shown_days)} of '
-                 f'{len(days)} active days.</p>')
-    chart = (_svg_sparkline(series)
-             + _svg_bars(series)
-             + f'<p class="muted">{_esc(shown_days[0])} &rarr; '
-               f'{_esc(shown_days[-1])} · peak {max(series)} lookups on one day</p>'
-             + note)
-    body.append(_panel('Lookups Over Time', chart))
+    if shown_days:
+        series = [day_counts[day] for day in shown_days]
+        note = ('' if len(days) <= 90
+                else f'<p class="note">Showing the most recent {len(shown_days)} of '
+                     f'{len(days)} active days.</p>')
+        chart = (_svg_sparkline(series)
+                 + _svg_bars(series)
+                 + f'<p class="muted">{_esc(shown_days[0])} &rarr; '
+                   f'{_esc(shown_days[-1])} · peak {max(series)} lookups on one day</p>'
+                 + note)
+        body.append(_panel('Lookups Over Time', chart))
+    else:
+        # Records exist but none carried a parseable timestamp: the day
+        # buckets are empty, so charting them would index into nothing.
+        body.append(_panel('Lookups Over Time',
+                           '<p class="muted">No parseable timestamps in the '
+                           'recorded history - the day-by-day chart needs '
+                           'dated records.</p>'))
 
     ranked_kinds = sorted(kind_counts.items(), key=lambda kv: (-kv[1], kv[0]))
     slices = [{'label': kind, 'value': count, 'color': _kind_color(kind)}
