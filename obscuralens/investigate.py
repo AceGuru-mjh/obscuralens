@@ -16,7 +16,12 @@ v4.0 pivots:
 v5.0 kinds (mac / iban / imei / coords) are reference data too: the MAC
 vendor, the IBAN bank, the IMEI manufacturer and the coordinates' place are
 all attributes of the target itself, so they surface as graph facts instead
-of pivot lookups (like cve and hash).
+of pivot lookups (like cve and hash). The v6.0 kinds (vin / flight / mmsi /
+app / bssid / plate) follow the same rule: the manufacturer and assembly
+plant of a VIN, the airline behind a flight designator, the flag state of a
+maritime identity, the registry behind a package coordinate, the vendor of
+an access point and the issuing jurisdiction of a plate are attributes, not
+new lookup targets.
 
 The result is a self-contained payload with per-kind tracker results plus an
 entity list and a relationship list, renderable as a table, JSON or a Mermaid
@@ -28,9 +33,14 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .reporting.sections import sections_for
 from .utils.validators import (
+    normalize_app,
+    normalize_bssid,
     normalize_cve,
+    normalize_flight,
     normalize_iban,
     normalize_imei,
+    normalize_mmsi,
+    normalize_vin,
     validate_asn,
     validate_coords,
     validate_crypto_address,
@@ -41,12 +51,15 @@ from .utils.validators import (
     validate_ip,
     validate_mac,
     validate_phone,
+    validate_plate,
     validate_url,
     validate_username,
 )
 
 KINDS = ('ip', 'phone', 'username', 'email', 'domain', 'url', 'crypto',
-         'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords')
+         'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords',
+         # v6.0 kinds
+         'vin', 'flight', 'mmsi', 'app', 'bssid', 'plate')
 
 
 def detect_kind(target: str) -> Optional[str]:
@@ -58,6 +71,29 @@ def detect_kind(target: str) -> Optional[str]:
         return 'ip'
     if validate_email(value)[0]:
         return 'email'
+    # v6.0 flight: right after email because nothing earlier can match a
+    # designator (no ':', no '@', no 'CVE-' prefix, no 32+ hex run), while
+    # everything later either would swallow it or cannot match at all:
+    # designators carry letters so the phone/imei/coords validators reject
+    # them, they have no dot so the domain check skips them, but the ASN
+    # branch below matches 'AS1234'-shaped strings (Alaska Airlines uses
+    # IATA 'AS') and the username catch-all at the very end accepts any
+    # 3-30 character alphanumeric run, so the flight check must run before
+    # both. Five-digit and longer ASNs (AS15169) still classify as asn -
+    # the flight grammar allows only 1-4 digits - and legacy 1-4-digit
+    # AS-number queries keep working via the explicit `obscuralens asn`
+    # command. Shape only (normalize_flight); carrier existence is the
+    # airline pack's job inside the tracker.
+    if normalize_flight(value):
+        return 'flight'
+    # v6.0 app: after email/flight and before url - an app coordinate
+    # ('pypi:requests', 'docker:library/nginx') carries a single ':', which
+    # never collides with emails (they need '@') or URLs (they need '://'),
+    # while the username catch-all at the end would otherwise swallow it.
+    # The five ecosystem prefixes are all 4-6 letters, so a 'DE:'-style
+    # plate prefix can never be mistaken for one.
+    if normalize_app(value):
+        return 'app'
     # URLs and CVEs both contain ':' / '-' shapes; check URL before domain so
     # "https://example.com" is not mistaken for a domain.
     if '://' in value and validate_url(value)[0]:
@@ -76,6 +112,27 @@ def detect_kind(target: str) -> Optional[str]:
     # stripped. validate_mac accepts colon, dash and dot notations.
     if validate_mac(value)[0]:
         return 'mac'
+    # v6.0 bssid: a BSSID is grammatically an EUI-48 MAC address, so the
+    # mac branch above already claims every separator-notation form -
+    # investigate auto-detection deliberately prefers 'mac', and a BSSID
+    # lookup is an explicit statement that the address is an access point
+    # (run `obscuralens bssid ...`). The branch still catches bare-hex
+    # 12-digit strings, which validate_mac rejects (it requires
+    # separators) but the BSSID grammar accepts.
+    if normalize_bssid(value):
+        return 'bssid'
+    # v6.0 VIN: after mac (a MAC is 12 hex characters with separators - a
+    # different charset and length, so the two shapes can never collide)
+    # but before iban: the IBAN branch below is deliberately shape-only,
+    # and its shape (2 letters + 2 digits + 10-30 alphanumeric, total
+    # 14-34) happily accepts a 17-character VIN whose WMI starts with two
+    # letters followed by two digits. VINs are ALWAYS exactly 17
+    # characters, so testing the fixed length first is the only way to
+    # keep both shapes distinguishable. Shape only (normalize_vin) - the
+    # ISO 3779 check digit verdict belongs to the tracker, so a typo'd
+    # VIN still classifies as vin.
+    if normalize_vin(value):
+        return 'vin'
     # v5.0 IBAN: after email (emails carry '@') and after url, and before
     # username (an IBAN is alphanumeric and would otherwise classify as a
     # username). SHAPE ONLY - normalize_iban, not the mod-97 checksum - so a
@@ -91,6 +148,16 @@ def detect_kind(target: str) -> Optional[str]:
     # Shape only (normalize_imei) - the Luhn verdict belongs to the tracker.
     if normalize_imei(value):
         return 'imei'
+    # v6.0 MMSI: after imei because the IMEI branch above grabs 15/16-digit
+    # runs while an MMSI is exactly nine digits, and before coords/phone
+    # because validate_phone accepts any 8-15 digit string, so a bare
+    # nine-digit MMSI would otherwise classify as a phone number. Nothing
+    # between imei and phone can match: hash needs 32+ hex characters,
+    # domains need a dot, coordinates need a separator or hemisphere
+    # letters. Shape only (normalize_mmsi) - there is no checksum in
+    # ITU-R M.1085, so the station-class verdict belongs to the tracker.
+    if normalize_mmsi(value):
+        return 'mmsi'
     # v5.0 coords: before phone because the DD pair separator class includes
     # spaces ("48.8584 2.2945") and validate_phone strips spaces and dots
     # before counting digits, so a space-separated pair would otherwise be
@@ -102,6 +169,16 @@ def detect_kind(target: str) -> Optional[str]:
         return 'phone'
     if validate_crypto_address(value)[0]:
         return 'crypto'
+    # v6.0 plate: the loosest gate, so it runs last before the username
+    # catch-all - every printable 3-20 character string that no earlier
+    # validator wanted classifies as plate (domains, URLs, IBANs, hashes
+    # and crypto addresses are all longer, dotted or shaped differently
+    # and were claimed above). Country-prefixed plates ('DE:B-AB 1234')
+    # reach this branch directly; unprefixed plates only when no other
+    # kind matched, e.g. a flight-shaped designator wins over an
+    # unprefixed German plate.
+    if validate_plate(value)[0]:
+        return 'plate'
     if validate_username(value)[0]:
         return 'username'
     return None
@@ -110,20 +187,26 @@ def detect_kind(target: str) -> Optional[str]:
 def _default_checker(kind: str, target: str) -> Dict[str, Any]:
     """Run the real tracker for a kind (imported lazily to avoid cycles)."""
     from .trackers import (
+        AppTracker,
         ASNTracker,
+        BSSIDTracker,
         CoordsTracker,
         CryptoTracker,
         CVETracker,
         DomainTracker,
         EmailTracker,
+        FlightTracker,
         HashTracker,
         IBANTracker,
         IMEITracker,
         IPTracker,
         MACTracker,
+        MMSITracker,
         PhoneTracker,
+        PlateTracker,
         URLTracker,
         UsernameTracker,
+        VINTracker,
     )
     trackers = {
         'ip': IPTracker, 'phone': PhoneTracker, 'username': UsernameTracker,
@@ -132,6 +215,10 @@ def _default_checker(kind: str, target: str) -> Dict[str, Any]:
         'cve': CVETracker, 'asn': ASNTracker,
         'mac': MACTracker, 'iban': IBANTracker,
         'imei': IMEITracker, 'coords': CoordsTracker,
+        # v6.0 kinds
+        'vin': VINTracker, 'flight': FlightTracker,
+        'mmsi': MMSITracker, 'app': AppTracker,
+        'bssid': BSSIDTracker, 'plate': PlateTracker,
     }
     return trackers[kind]().track(target)
 
@@ -376,6 +463,132 @@ def _add_coords_facts(graph: _Graph, result: Dict[str, Any]) -> None:
     graph.link(node, graph.add_entity('place', place), 'near')
 
 
+# ---------------------------------------------------------------------------
+# v6.0 additions: vin / flight / mmsi fact builders
+# ---------------------------------------------------------------------------
+
+def _add_vin_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity(
+        'vin', result.get('vin'),
+        label=f"{info.get('manufacturer') or info.get('vpic_make') or 'VIN'}: "
+              f"{result.get('vin', '')}")
+    if not node:
+        return
+    graph.link(node, graph.add_entity(
+        'organisation', info.get('manufacturer') or info.get('vpic_make')),
+        'made_by')
+    graph.link(node, graph.add_entity(
+        'country', info.get('country') or info.get('vpic_plant_country')),
+        'assembled_in')
+    graph.link(node, graph.add_entity('vehicle', info.get('vpic_model')),
+               'model_family')
+    plant = info.get('vpic_plant_city')
+    if info.get('vpic_plant_state'):
+        plant = f"{plant}, {info.get('vpic_plant_state')}" if plant \
+            else info.get('vpic_plant_state')
+    graph.link(node, graph.add_entity('place', plant), 'built_at')
+
+
+def _add_flight_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    carrier_label = info.get('airline_name') or info.get('callsign') or 'Flight'
+    node = graph.add_entity(
+        'flight', result.get('flight'),
+        label=f"{carrier_label}: {result.get('flight', '')}")
+    if not node:
+        return
+    graph.link(node, graph.add_entity(
+        'organisation', info.get('airline_name') or info.get('avstack_airline')),
+        'operated_by')
+    graph.link(node, graph.add_entity('country', info.get('country')),
+               'registered_in')
+    graph.link(node, graph.add_entity(
+        'airport', info.get('avstack_departure_airport')
+        or info.get('avstack_departure_iata')), 'departs_from')
+    graph.link(node, graph.add_entity(
+        'airport', info.get('avstack_arrival_airport')
+        or info.get('avstack_arrival_iata')), 'arrives_at')
+    graph.link(node, graph.add_entity(
+        'aircraft', info.get('avstack_aircraft_registration')), 'flown_by')
+
+
+def _add_mmsi_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity(
+        'mmsi', result.get('mmsi'),
+        label=f"{info.get('station_type') or 'Station'}: "
+              f"{result.get('mmsi', '')}")
+    if not node:
+        return
+    graph.link(node, graph.add_entity('country', info.get('country')),
+               'flagged_in')
+    graph.link(node, graph.add_entity('station_class', info.get('station_type')),
+               'station_class')
+
+
+def _add_app_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity(
+        'app', result.get('app'),
+        label=f"{info.get('ecosystem_label') or 'Package'}: "
+              f"{info.get('name') or result.get('app', '')}")
+    if not node:
+        return
+    graph.link(node, graph.add_entity(
+        'ecosystem', info.get('ecosystem_label') or info.get('ecosystem')),
+        'distributed_via')
+    graph.link(node, graph.add_entity(
+        'organisation', info.get('author') or info.get('maintainer')),
+        'authored_by')
+    graph.link(node, graph.add_entity('license', info.get('license')),
+               'licensed_under')
+    for vuln in (info.get('vulnerability_ids') or [])[:5]:
+        if isinstance(vuln, dict) and vuln.get('id'):
+            graph.link(node, graph.add_entity('cve', vuln.get('id')),
+                       'affected_by')
+
+
+def _add_bssid_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity(
+        'bssid', result.get('bssid'),
+        label=f"{info.get('vendor') or 'Access point'}: "
+              f"{result.get('bssid', '')}")
+    if not node:
+        return
+    graph.link(node, graph.add_entity('organisation', info.get('vendor')),
+               'manufactured_by')
+    graph.link(node, graph.add_entity(
+        'network', info.get('ssid'),
+        label=f"SSID {info.get('ssid')}" if info.get('ssid') else ''),
+        'anchors')
+    lat, lon = info.get('lat'), info.get('lon')
+    if lat is not None and lon is not None:
+        graph.link(node, graph.add_entity(
+            'coords', f"{lat}, {lon}",
+            label=f"~{int(info.get('accuracy_range') or 0)} m"), 'located_at')
+
+
+def _add_plate_facts(graph: _Graph, result: Dict[str, Any]) -> None:
+    info = result.get('info', {})
+    node = graph.add_entity(
+        'plate', result.get('plate'),
+        label=f"{info.get('country_prefix') or 'Plate'}: "
+              f"{result.get('plate', '')}")
+    if not node:
+        return
+    for match in (info.get('matched_countries') or [])[:5]:
+        if isinstance(match, dict) and match.get('country'):
+            graph.link(node, graph.add_entity(
+                'country', match.get('country'),
+                label=f"{match.get('country')}"
+                      f"{' / ' + match['region'] if match.get('region') else ''}"),
+                'issued_by')
+    graph.link(node, graph.add_entity('city', info.get('german_city')),
+               'registered_in')
+
+
 _GRAPH_BUILDERS = {
     'domain': _add_domain_facts,
     'ip': _add_ip_facts,
@@ -391,6 +604,13 @@ _GRAPH_BUILDERS = {
     'iban': _add_iban_facts,
     'imei': _add_imei_facts,
     'coords': _add_coords_facts,
+    # v6.0 kinds
+    'vin': _add_vin_facts,
+    'flight': _add_flight_facts,
+    'mmsi': _add_mmsi_facts,
+    'app': _add_app_facts,
+    'bssid': _add_bssid_facts,
+    'plate': _add_plate_facts,
 }
 
 
@@ -403,7 +623,7 @@ def investigate(target: str, pivot: bool = True, max_pivots: int = 3,
     Args:
         target: any supported kind value (IP / domain / email / phone /
             username / url / crypto / hash / cve / asn / mac / iban /
-            imei / coords)
+            imei / coords / vin / flight / mmsi / app / bssid / plate)
         pivot: follow related targets (email->domain, domain->A, ip->PTR)
         max_pivots: maximum related lookups of each kind
         checker: injectable ``callable(kind, value) -> result`` for tests
@@ -479,6 +699,14 @@ def investigate(target: str, pivot: bool = True, max_pivots: int = 3,
         # v5.0 mac / iban / imei / coords need no pivot branches: like cve
         # and hash they are reference data whose attributes (vendor, bank,
         # manufacturer, place) surface as graph facts, not as new lookups.
+        # v6.0 vin / flight / mmsi are reference data for the same reason:
+        # the vehicle, the airline and the flag state are attributes of the
+        # identifier itself (and the optional aviationstack live-status
+        # fields arrive as facts, not as pivot lookups). v6.0 app / bssid /
+        # plate follow suit: the registry, the vendor and the issuing
+        # jurisdiction are attributes of the identifier (vulnerability ids
+        # COULD pivot to cve, but the CVE kind re-queries the same advisory
+        # for less context than the OSV records already carry).
 
     graph = _Graph(value, kind)
     for kind_name, result in payload['results'].items():

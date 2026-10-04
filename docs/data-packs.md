@@ -32,9 +32,10 @@ tour.
 
 ## The shipped packs
 
-Seventeen packs ship today: seven that predate v5.1 and feed the email,
-MAC, IMEI, IBAN and coordinates trackers, and ten added in v5.1 through
-the typed catalog in `obscuralens/utils/data_catalog.py`. Line counts are
+Twenty packs ship today: seven that predate v5.1 and feed the email,
+MAC, IMEI, IBAN and coordinates trackers, ten added in v5.1 through
+the typed catalog in `obscuralens/utils/data_catalog.py`, and three v6.0
+sensor packs feeding the VIN, flight and MMSI trackers. Line counts are
 `wc -l` on the shipped files (comment headers and blank lines included);
 the entry counts are what the catalog actually parses out of them.
 
@@ -80,6 +81,26 @@ subset of MITRE's list, `iana_tlds` covers nearly the entire delegated
 root zone (a few newly delegated strings may lag), and `user_agents` is a
 pool of realistic modern strings rather than an exhaustive matrix.
 
+### The four sensor packs (v6.0)
+
+| Pack | Lines | Entries | Format | Consumed by |
+|---|---|---|---|---|
+| `vin_wmi` | 190 | 166 | `WMI\|Manufacturer\|Country` | `trackers/vin_sources.py` (`vin_math`), `utils/data_catalog.py` -> `wmi()` |
+| `airlines_iata` | 154 | 134 | `IATA\|ICAO\|Name\|Country\|Callsign` | `trackers/flight_sources.py` (`airline_pack`), entity extraction, `utils/data_catalog.py` -> `airline()` |
+| `mid_codes` | 116 | 97 | `MID\|Country` | `trackers/mmsi_sources.py` (`mid_pack`), `utils/data_catalog.py` -> `mid()` |
+| `plate_formats` | 106 | 79 | `Country\|Region\|Pattern-note\|Example\|Notes` | `trackers/plate_sources.py` (`plate_pack`), `utils/data_catalog.py` -> `plate_formats()` |
+
+The four v6.0 packs follow the original-seven pattern (own tracker-side
+loader, case-sensitive fields preserved, missing file = empty, never
+raise) *and* are mirrored into the typed catalog, so both the trackers and
+`obscuralens data` / the rules engine's `known_pack` operator see the same
+registries. Curated from the public ISO 3780 WMI allocations, the IATA
+coding directory + ICAO Doc 8585 designators, the ITU-R M.1085
+Annex I MID assignments and public vehicle-registration format
+descriptions respectively — honest curation sizes, not the
+full registries (several thousand WMIs and designators exist; the ITU MID
+table runs to several hundred and is revised between WRCs).
+
 ## The data_catalog API
 
 ```python
@@ -102,6 +123,9 @@ of them:
 | `FileExtension` | `ext`, `category`, `description` |
 | `MimeType` | `mime`, `extension`, `description` |
 | `UserAgent` | `family`, `platform`, `string` |
+| `WmiEntry` | `wmi`, `manufacturer`, `country` |
+| `Airline` | `iata`, `icao`, `name`, `country`, `callsign` |
+| `MidEntry` | `mid`, `country` |
 | `CatalogStats` | `name`, `entries`, `loaded` |
 
 ### Countries, languages and currencies (ISO registries)
@@ -156,8 +180,22 @@ of them:
 | `search_mimes(query)` | MIME entries whose mime, extension or description contains the query. |
 | `mimes_count()` | Number of parsed MIME entries. |
 | `random_user_agent(family=None, platform=None, seed=None)` | Draw a UA string from the pool, optionally filtered by family/platform substring; `seed` makes the draw deterministic. |
-| `catalog_stats()` | One `CatalogStats` per pack (ten entries): name, entry count, load state. |
+| `catalog_stats()` | One `CatalogStats` per pack (thirteen entries): name, entry count, load state. |
 | `catalog_summary()` | The same data rendered as a fixed-width plain-text table. |
+
+### v6.0 sensor registries (WMI / airlines / MID)
+
+| Function | Description |
+|---|---|
+| `wmi(prefix)` | WMI entry by its 2-3 character VIN prefix, case-insensitive; `None` when the curated pack misses it. |
+| `search_wmis(query)` | WMI entries whose manufacturer or country contains the query (case-insensitive). |
+| `wmis_count()` | Number of parsed WMI entries. |
+| `airline(code)` | Airline entry by its two-letter IATA **or** three-letter ICAO designator, case-insensitive; `None` when unknown. |
+| `search_airlines(query)` | Airline entries whose name, country or callsign contains the query. |
+| `airlines_count()` | Number of parsed airline entries. |
+| `mid(value)` | MID entry by its three-digit code (int or str); `None` when the pack misses it. |
+| `search_mids(query)` | MID entries whose country name contains the query. |
+| `mids_count()` | Number of parsed MID entries. |
 
 ## Usage recipes
 
@@ -333,6 +371,9 @@ representable, which the curated descriptions avoid.
 | `file_extensions` | `ext\|category\|description` | `zip\|archive\|ZIP compressed archive` |
 | `mime_types` | `mime\|ext\|description` | `application/json\|json\|JSON data` |
 | `user_agents` | `family\|platform\|ua-string` | `Chrome\|Windows 11\|Mozilla/5.0 ...` |
+| `vin_wmi` | `wmi\|manufacturer\|country` | `1FA\|Ford\|United States` |
+| `airlines_iata` | `iata\|icao\|name\|country\|callsign` | `BA\|BAW\|British Airways\|United Kingdom\|SPEEDBIRD` |
+| `mid_codes` | `mid\|country` | `366\|United States` |
 
 Two structural notes. `languages_iso639` holds two blocks -- ISO 639-1
 two-letter codes first, then 639-2/639-3 three-letter codes -- separated by

@@ -3,7 +3,8 @@
 Every ObscuraLens lookup fans out to **all** sources for its kind in parallel,
 merges the fields and records which source supplied each fact
 (`field_sources` provenance). This page is the complete catalog, per kind —
-14 kinds as of v5.0.
+20 kinds as of v6.0 (the `vin`, `flight` and `mmsi` sections below are in;
+`app`, `bssid` and `plate` land with the rest of the v6.0 sensor kinds).
 
 ## Keyless vs keyed
 
@@ -273,6 +274,181 @@ application User-Agent); BigDataCloud's client endpoint occasionally
 refuses datacenter IPs — the reader then returns no data and the lookup
 degrades gracefully to the other sources.
 
+## VIN (`obscuralens vin`) *(v6.0)*
+
+Vehicle Identification Numbers (ISO 3779): 17 characters, no I/O/Q, with
+the transliterated mod-11 check digit at position 9 verified **before** any
+source runs. Hyphen/space separated forms and lower case are tolerated.
+The offline decomposition needs no registry at all, so a VIN report always
+answers — the WMI pack and vPIC only enrich it.
+
+| Source | Coverage | Key |
+|---|---|---|
+| vin_math | Offline ISO 3779 decomposition: WMI, VDS/VIS slices, first-character region hint, model-year code with **both** 30-year-cycle candidates, plant code, six-digit production serial, check-digit verdict (+ expected digit on failure), full 17-position map | none (local) |
+| nhtsa_vpic | NHTSA vPIC decoder (`vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues`): make, model, model year, vehicle type, body class, engine and drive details, assembly plant city/state/country, decoder error code — North American market vehicles; European/Asian domestic VINs answer with the error code only | none |
+
+```bash
+obscuralens vin 1HGCM82633A004352
+```
+
+```text
+IDENTITY                ISO 3779 DECOMPOSITION
+  Wmi           1HG      Year Code             3
+  Manufacturer  Honda    Model Year Candidates 2003, 2033
+  Country       United   Model Year Cycle      year code '3' encodes 2003
+               States                          or 2033 (VIN year codes repeat
+  Region Hint   United                         on a 30-year cycle)
+               States    Plant Code            A
+                         Serial Number         004352
+                         Check Digit           3 (valid)
+```
+
+Priority: `vin_math` (standards-derived) > `nhtsa_vpic` (registry mirror).
+A WMI absent from the curated pack is an expected answer ("no
+manufacturer"), never a source failure — the circuit breaker never trips
+on it, so offline VIN batches stay alive.
+
+## Flight (`obscuralens flight`) *(v6.0)*
+
+Flight designators: a 2-letter IATA or 3-letter ICAO carrier code plus a
+1-4 digit flight number and an optional suffix letter (`UA1`, `BA2490`,
+`DLH400A`). Spaces, hyphens and lower case are tolerated. Both offline
+sources answer with the network down; the live source layers on with a key.
+
+| Source | Coverage | Key |
+|---|---|---|
+| airline_pack | Offline curated airline pack (`obscuralens/data/airlines_iata.txt`, 134 carriers): airline name, IATA/ICAO codes, country, radio callsign | none (local) |
+| flight_math | Offline designator anatomy: carrier code flavour (IATA vs ICAO), flight number digits + suffix, both flight-code renderings (`UA1`/`UAL1`), the `{ICAO}{number}` radio callsign, odd/even direction and number-band conventions (explicitly labelled as conventions, not evidence) | none (local) |
+| aviationstack | aviationstack.com live flight API: today's status (scheduled/active/landed/cancelled/diverted), airline confirmation, departure/arrival airports + IATA codes + scheduled times, aircraft registration | optional `aviationstack` |
+
+```bash
+obscuralens flight BA2490
+```
+
+```text
+AIRLINE                  DESIGNATOR ANATOMY
+  Airline Name  British   Carrier Code         BA (IATA)
+               Airways    Flight Number        2490
+  Airline Iata  BA         Radio Callsign      BAW2490
+  Airline Icao  BAW        Direction Hint      even flight number -
+  Country       United                          return/continuation leg
+               Kingdom                         (convention only)
+  Callsign      SPEEDBIRD  Number Band Hint    900+ - supplemental/extra
+                                              sections (convention only)
+```
+
+Priority: `airline_pack` (curated) > `flight_math` > `aviationstack`
+(live mirror). A carrier missing from the curated subset is an expected
+answer ("no airline name"), never a source failure.
+
+## MMSI (`obscuralens mmsi`) *(v6.0)*
+
+Maritime Mobile Service Identities (ITU-R M.1085): nine digits encoding
+the station class in the leading digits — `201-775` ship MIDs, `00` coast
+stations, `0` group calls, `8` handheld VHF, `99` AIS aids to navigation.
+Integers, hyphen/space groups and a `MMSI:` prefix are all accepted. The
+kind is fully offline (like `imei`): no source ever touches the network.
+
+| Source | Coverage | Key |
+|---|---|---|
+| mmsi_math | Offline ITU-R M.1085 structure decode: station class + short code, MID, serial digits, ITU series label, conservative trailing-zero note (zero-ending ship serials, flagged as an unconfirmed convention) | none (local) |
+| mid_pack | Offline curated MID pack (`obscuralens/data/mid_codes.txt`, 97 flag states): the MID → country attribution | none (local) |
+
+```bash
+obscuralens mmsi 366910000
+```
+
+```text
+STATION IDENTITY (ITU-R M.1085)   FLAG STATE & SERIAL
+  Station Type         individual   Mid             366
+                       ship station Country         United
+  Station Type Code    ship         Serial Digits   910000
+  Itu Series           MID 201-775  Trailing Zero   zero-ending serial -
+                       individual   Notes           data/selective-call
+                       series                        identity (unconfirmed
+                                                    convention, not evidence)
+```
+
+A MID absent from the curated pack (97 of several hundred ITU
+assignments) is an expected answer ("no country"), never a source failure —
+the station-class decode still runs for any nine-digit input.
+
+## Software packages (`obscuralens app`) *(v6.0)*
+
+Software supply-chain intelligence for five ecosystems, addressed as
+`<ecosystem>:<name>` coordinates: `pypi:requests`, `npm:lodash`,
+`npm:@babel/core`, `crate:serde`, `docker:library/nginx` (or
+`docker:bitnami/kafka`), `github:psf/requests`. `gather_all` runs only the
+readers that match the named ecosystem — the other registry readers never
+join the fan-out, so the sources status is always an honest account of what
+was actually queried.
+
+| Source | Coverage | Key |
+|---|---|---|
+| pack_meta | Offline ecosystem table: registry URL template, name conventions, mirror notes, namespace rules (Docker `library/` completion for official images) | none (local) |
+| pypi | PyPI JSON API: version, summary, author, license, homepage, `requires_python` | none |
+| npm | npm registry: description, `dist-tags.latest`, version count, maintainers, created/modified timestamps | none |
+| crates | crates.io API: downloads, recent downloads (90-day window), max stable version, categories, keywords (sends a descriptive User-Agent per the crates.io API policy) | none |
+| dockerhub | Docker Hub v2 repository API: pull count, star count, last update, full description excerpt | none |
+| github | GitHub public repository API: stars, forks, open issues, language, SPDX license, `created_at`/`pushed_at`, archived flag, topics count | none |
+| osv | OSV.dev advisory query (POST): vulnerability count and up to five advisory IDs/summaries; only runs for name-queryable ecosystems (PyPI, npm, crates.io, Docker Hub) | none |
+
+```bash
+obscuralens app pypi:requests
+obscuralens app github:psf/requests --risk
+```
+
+The rule pack (`rules/packs/app.yaml`) scores supply-chain posture: known
+OSV advisories (critical), archived repositories, missing licenses,
+two-year-stale records, low download volume, single maintainers and thin
+metadata, balanced by positive context rules for clean, documented,
+actively-pushed packages.
+
+## WiFi BSSIDs (`obscuralens bssid`) *(v6.0)*
+
+WiFi access-point intelligence for any EUI-48 address (the kind accepts the
+same formats as `mac`, but fans out to WiFi-specific sources). BSSIDs and
+plain MACs share a format, so `investigate` auto-detection always prefers
+`mac`; query `bssid` explicitly for the geolocation and randomization
+analysis.
+
+| Source | Coverage | Key |
+|---|---|---|
+| oui_vendor | Offline curated IEEE OUI pack (`obscuralens/data/oui.txt`): the AP vendor under BSSID-specific field names | none (local) |
+| bssid_math | Offline EUI-48 bit decomposition: multicast/local flags, transmission and assignment classes, EUI-64 expansion, modified-EUI-64 IPv6 interface ID, `fe80::` link-local hint, privacy-randomization note | none (local) |
+| mylnikov | api.mylnikov.org crowd-sourced WiFi geolocation: lat/lon, accuracy range, last observation time (0.3 s polite delay; keyless) | none |
+| wigle | WiGLE.net network search: observed SSID, trilat/trilong coordinates, encryption, last-seen date | optional `wigle` |
+
+```bash
+obscuralens bssid 00:1A:2B:3C:4D:5E
+```
+
+A multicast bit set (I/G) means the address can never be an access point;
+a locally-administered bit set (U/L) flags privacy-randomized or virtual
+NICs, where the OUI does not identify a real vendor. mylnikov misses are
+expected (the community has simply not observed the BSSID) and degrade to
+"no data", never an error.
+
+## License plates (`obscuralens plate`) *(v6.0)*
+
+Offline license-plate format analysis. Values are free plate text with an
+optional jurisdiction prefix (`DE:B-AB 1234`, `GB:AB12 CDE`, `US-CA:8ABC123`);
+unprefixed plates are matched loosely against every curated format and
+return a *candidate list*, never a verdict — several jurisdictions share
+common shapes.
+
+| Source | Coverage | Key |
+|---|---|---|
+| plate_pack | Offline curated format pack (`obscuralens/data/plate_formats.txt`, 70+ jurisdictions): prefix parsing, loose per-series matching, confidence scores (0.9 prefixed, 0.5 pattern-only, 0.4 country-only), match notes | none (local) |
+| plate_math | Offline character composition analysis: letter/digit census, separators, composition note, German distinguishing-sign city table (40 entries), EU vs North-American style heuristic | none (local) |
+
+```bash
+obscuralens plate "DE:B-AB 1234"
+```
+
+The kind is fully offline (like `mmsi`/`imei`): no source ever touches the
+network. Quote plate values containing spaces in shells.
+
 ## Threat-intel feeds (`obscuralens intel`)
 
 Blocklist feeds are shared by the IP tracker (`threat_feeds` source) and the
@@ -310,6 +486,9 @@ Shipped as package data (works from wheels and the standalone executable);
 | `tac.txt` | 139 | `TAC8\|Manufacturer\|Model-hint` | imei `tac_pack` |
 | `iban_structures.txt` | 124 | `CC\|length\|bank_code_len\|account_len\|Country name` | iban `iban_structure_pack` |
 | `country_centroids.txt` | 115 | `CC\|lat\|lon\|name` | coords `country_centroids`, geospatial GeoJSON pins |
+| `vin_wmi.txt` | 166 | `WMI\|Manufacturer\|Country` | vin `vin_math`, data catalog `wmi()` |
+| `airlines_iata.txt` | 134 | `IATA\|ICAO\|Name\|Country\|Callsign` | flight `airline_pack`, entity extraction, data catalog `airline()` |
+| `mid_codes.txt` | 97 | `MID\|Country` | mmsi `mid_pack`, data catalog `mid()` |
 
 ## Adding your own sources
 

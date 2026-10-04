@@ -1,0 +1,202 @@
+# ObscuraLens explainable rule pack -- vin
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the VIN tracker output: check_digit_valid, manufacturer,
+# country, region_hint, wmi, year_code, model_year_candidates, plant_code,
+# serial_number, vpic_make, vpic_model, vpic_error_code, vpic_error_text...
+# VIN rules are identifier-integrity signals about the ISO 3779 structure
+# and the curated WMI registry - never statements about the vehicle's owner.
+# ---------------------------------------------------------------------------
+
+name: vin-rules
+description: >-
+  Explainable identifier-integrity heuristics for VIN lookups built on the
+  ISO 3779 check digit, the curated WMI manufacturer registry and NHTSA
+  vPIC decode conditions.
+version: 1
+rules:
+  - id: VIN-001
+    title: ISO 3779 check digit invalid
+    description: >-
+      The transliterated check digit at position 9 fails the mod-11
+      computation. Manufacturers of North American market vehicles encode
+      the digit by construction, so a failure means the identifier was
+      mistyped, truncated, fabricated or altered - the classic signature
+      of a cloned or spoofed vehicle identity.
+    severity: high
+    weight: 25
+    tags: [validity]
+    references: ["ISO 3779", "49 CFR 565"]
+    conditions:
+      - field: check_digit_valid
+        operator: is_false
+
+  - id: VIN-002
+    title: WMI not in the registry
+    description: >-
+      The World Manufacturer Identifier (positions 1-3) is absent from the
+      shipped WMI data pack. The pack is a curated subset of the tens of
+      thousands of ISO 3780 allocations, so a miss usually means a smaller
+      or newer manufacturer rather than a fake VIN; the structural decode
+      still stands.
+    severity: low
+    weight: 10
+    tags: [registry]
+    references: ["ISO 3780"]
+    conditions:
+      - field: manufacturer
+        operator: empty
+        value: true
+
+  - id: VIN-003
+    title: Non-standard model-year code
+    description: >-
+      The character at position 10 is not one of the 30-year-cycle model
+      year codes, so no model year can be derived. Position 10 is
+      manufacturer-defined outside North America, but a non-standard code
+      still narrows the VIN's provenance and weakens any age-based
+      inference built on top of it.
+    severity: info
+    weight: 5
+    tags: [validity]
+    references: ["ISO 3779"]
+    conditions:
+      - field: model_year_candidates
+        operator: empty
+        value: true
+
+  - id: VIN-004
+    title: Unknown first-character region
+    description: >-
+      The first VIN character does not map to an allocated geographic
+      region. Every legal VIN starts in an assigned block, so an unmapped
+      first character is weak evidence of a fabricated identifier; the
+      offline math source reports the rest of the decode either way.
+    severity: info
+    weight: 5
+    tags: [registry]
+    references: ["ISO 3780"]
+    conditions:
+      - field: region_hint
+        operator: empty
+        value: true
+
+  - id: VIN-005
+    title: NHTSA vPIC reported a decode condition
+    description: >-
+      The keyless vPIC decoder returned a non-zero error code (fabricated
+      VINs, corrected check digits, incorrect model years and similar
+      conditions). The offline decode still applies, but the North
+      American registry view of this identifier carries a caveat the
+      analyst should read.
+    severity: low
+    weight: 10
+    tags: [registry]
+    conditions:
+      - field: vpic_error_code
+        operator: regex
+        value: '^[1-9]'
+
+  - id: VIN-006
+    title: vPIC explanatory error text present
+    description: >-
+      The vPIC decoder attached human-readable error text (for example
+      which position failed). This is the detailed companion to a non-zero
+      error code and usually explains exactly why the identifier looked
+      wrong to the registry.
+    severity: low
+    weight: 10
+    tags: [registry]
+    conditions:
+      - field: vpic_error_text
+        operator: not_empty
+        value: true
+
+  - id: VIN-007
+    title: Check digit invalid and WMI unknown
+    description: >-
+      The identifier fails the ISO 3779 check digit AND its WMI is not in
+      the registry. Each signal alone has innocent explanations; together
+      they are the strongest soft signal this pack can produce that the
+      VIN was never issued by any manufacturer.
+    severity: medium
+    weight: 15
+    tags: [validity, registry]
+    references: ["ISO 3779"]
+    conditions:
+      - field: check_digit_valid
+        operator: is_false
+      - field: manufacturer
+        operator: empty
+        value: true
+
+  - id: VIN-008
+    title: Registry hit without a country
+    description: >-
+      The WMI resolves to a manufacturer but the pack carries no assembly
+      country for it. Country attribution for older or badge-engineered
+      allocations is incomplete in any curated subset; treat the country
+      column as unknown rather than wrong.
+    severity: info
+    weight: 5
+    tags: [registry]
+    conditions:
+      - field: manufacturer
+        operator: not_empty
+        value: true
+      - field: country
+        operator: empty
+        value: true
+
+  - id: VIN-009
+    title: Valid, registered vehicle identifier
+    description: >-
+      The ISO 3779 check digit passes and the WMI resolves in the shipped
+      registry - a well-formed identifier mapping to a known manufacturer.
+      Positive context that documents what a clean VIN looks like here.
+    severity: info
+    weight: 0
+    tags: [validity, positive]
+    references: ["ISO 3779"]
+    conditions:
+      - field: check_digit_valid
+        operator: is_true
+      - field: manufacturer
+        operator: not_empty
+        value: true
+
+  - id: VIN-010
+    title: NHTSA vPIC decoded the vehicle
+    description: >-
+      The keyless vPIC decoder returned a make for this VIN, meaning the
+      vehicle is registered for the North American market and the report
+      carries registry-grade detail (model, body class, engine, plant).
+      Positive context for provenance rather than a risk signal.
+    severity: info
+    weight: 0
+    tags: [registry, positive]
+    conditions:
+      - field: vpic_make
+        operator: not_empty
+        value: true
+
+  - id: VIN-011
+    title: Model decoded by the registry
+    description: >-
+      vPIC resolved the model name (and with it the body class and engine
+      detail sections). Together with a passing check digit this is the
+      complete registry view of the vehicle the VIN belongs to.
+    severity: info
+    weight: 0
+    tags: [registry, positive]
+    conditions:
+      - field: vpic_model
+        operator: not_empty
+        value: true
+      - field: vpic_error_code
+        operator: eq
+        value: '0'

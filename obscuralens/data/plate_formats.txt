@@ -1,0 +1,106 @@
+# ObscuraLens license-plate format pack (v6.0)
+# ---------------------------------------------------------------------------
+# One entry per line, pipe-separated, '#' comments and blank lines ignored:
+#
+#     country|region|series|example|notes
+#
+# country  issuing jurisdiction: ISO 3166-1 alpha-2 (DE, GB, FR, ...) or a
+#          two-letter + '-XX' state/province form (US-CA, AU-NSW, CA-ON).
+# region   sub-national code inside the country (German city code, Indian
+#          state letters, Swiss canton, US state); empty when the national
+#          format carries no regional discriminator.
+# series   the pattern/series flag of the entry: 'M' = current main series,
+#          'O' = obsolete/historical series, 'S' = special series. The loose
+#          per-country matcher derives its regex from the EXAMPLE column
+#          (A-Z letters -> [A-Z], digits -> \d, separators -> optional
+#          space/hyphen, everything else literal), so examples must spell
+#          the shape with real slot characters.
+# example  a real-shape example of the series, uppercase where the national
+#          convention is uppercase.
+# notes    what the format means; 'general' whenever the shape is described
+#          only at confidence level (curated from public registration
+#          authority descriptions, never from a single observed plate).
+#
+# 79 entries. Plates are deliberately matched loosely: national formats
+# change per issuing year and many countries run parallel series, so a miss
+# means "not in this curated subset", not "impossible plate".
+# ---------------------------------------------------------------------------
+DE|B|M|B-AB 1234|Berlin: 1-3 letter city code + 1-2 letters + digits, blue EU band
+DE|M|M|M-CD 5678|Munich (Muenchen): city code M + letters + digits, blue EU band
+DE|S|M|S-EF 901|Stuttgart: city code S + letters + digits, blue EU band
+DE|HH|M|HH-GH 1234|Hamburg: two-letter city code HH + letters + digits
+DE|F|M|F-JK 456|Frankfurt am Main: city code F + letters + digits
+DE|K|M|K-LM 890|Cologne (Koeln): city code K + letters + digits
+DE|D|M|D-NP 1234|Duesseldorf: city code D + letters + digits
+DE|C|M|C-QR 567|Chemnitz: city code C + letters + digits
+DE|E|M|E-ST 8901|Essen: city code E + letters + digits
+DE|H|M|H-UV 234|Hannover: city code H + letters + digits
+DE|L|M|L-WX 5678|Leipzig: city code L + letters + digits
+DE|N|M|N-YZ 901|Nuremberg (Nuernberg): city code N + letters + digits
+DE|KA|M|KA-AB 123|Karlsruhe: two-letter city code KA + letters + digits
+DE|BN|M|BN-CD 4567|Bonn: city code BN + letters + digits
+DE|DO|M|DO-EF 890|Dortmund: city code DO + letters + digits
+GB||M|AB12 CDE|Two letters + two digits + three letters (post-2001 current series)
+GB||O|A123 BCD|Prefix series 1983-2001: letter(s) + digits + three-letter area code
+GB|NI|M|ABC 1234|Northern Ireland: three letters + four digits
+US-CA||M|8ABC123|California: digit + 3 letters + 3 digits (2011+ series)
+US-CA||O|1ABC234|California: digit + 3 letters + 3 digits (pre-2011 series)
+US-NY||M|ABC-1234|New York: three letters + four digits
+US-TX||M|ABC-1234|Texas: three letters + four digits
+US-PA||M|ABC-1234|Pennsylvania: three letters + four digits
+US-OH||M|ABC-1234|Ohio: three letters + four digits
+FR||M|AA-123-AA|Two letters + three digits + two letters (post-2009)
+FR||O|123 ABC 75|Three digits + three letters + department code (pre-2009)
+IT||M|AA123BB|Two letters + three digits + two letters
+ES||M|1234 ABC|Four digits + three letters
+NL||M|XX-99-XX|Two letters + two digits + two letters
+CH|AG|M|AG 123456|Canton Aargau: two canton letters + up to six digits
+CH|ZH|M|ZH 123456|Canton Zurich: two canton letters + up to six digits
+AT||M|W 123ABC|State letters + digits + letters; Vienna uses W; general
+BE||M|1-ABC-123|One digit + three letters + three digits
+PL||M|AB 12345|One/two voivodeship letters + five digits
+CZ||M|1AB2345|Digit + two letters + four digits
+SE||M|ABC 123|Three letters + three digits
+DK||M|AB 12 345|Two letters + two digits + three digits
+NO||M|AB 12345|Two letters + five digits
+FI||M|ABC-123|Three letters + three digits
+RU||M|A123BC 77|Letter + three digits + two letters + region code (2-3 digits)
+CN|BJ|M|京A12345|Beijing: province character + letter + five characters
+CN|SH|M|沪A12345|Shanghai: province character + letter + five characters
+CN|GD|M|粤A12345|Guangdong: province character + letter + five characters
+JP||M|品川 500 み 12-34|Place name + number + hiragana class character + number pair
+JP||M|横浜 300 か 56-78|Place name + number + hiragana class character + number pair
+AU-NSW||M|AB 12 CD|New South Wales: two letters + two digits + two letters
+AU-VIC||M|ABC 123|Victoria: three letters + three digits
+CA-ON||M|ABCD 123|Ontario: four letters + three digits
+CA-BC||M|ABC 123|British Columbia: three letters + three digits
+BR||M|ABC1D23|Mercosul format: three letters + digit + letter + two digits
+IN|MH|M|MH 12 AB 3456|Maharashtra: state letters + two digits + two letters + four digits
+IN|KA|M|KA 05 CD 1234|Karnataka: state letters + two digits + two letters + four digits
+IN|DL|M|DL 01 AB 1234|Delhi: state letters + two digits + two letters + four digits
+ZA||M|CA 123-456|Two letters + three digits + three digits
+IE||O|12-D-1234|Year digits + county letter + sequence digits (1987-2012 series)
+PT||M|AA-12-BB|Two letters + two digits + two letters
+GR||M|ABC-1234|Three letters + four digits
+TR||M|34 ABC 123|Two-digit province code + three letters + three digits; general
+HU||M|ABC-123|Three letters + three digits
+RO||M|B 12 ABC|County letter(s) + two digits + three letters; general
+BG||M|A 1234 BC|Letter + four digits + two letters; general
+UA||M|AA 1234 BC|Two letters + four digits + two letters; general
+MX||M|ABC-123-A|Three letters + three digits + state letter; general
+AR||M|ABC 123|Three letters + three digits
+NZ||M|ABC123|Three letters + three digits, no separator
+MY||M|ABC 1234|Three letters + four digits
+SG||M|SKX 1234 B|Three letters + four digits + checksum letter
+ID||M|B 1234 ABC|One/two region letters + up to four digits + up to three letters; general
+PH||M|ABC 1234|Three letters + four digits
+VN||M|30A-123.45|Province digits + series letter + sequence digits; general
+KR||M|12가 3456|Two digits + hangul class character + four digits
+IL||M|123-45-678|Seven digits grouped 3-2-3
+AE||M|A 12345|Letter + five digits
+SA||M|ABC 1234|Three letters + four digits; general
+SK||M|BA 123 AB|District letters + three digits + two letters; general
+SI||M|LJ 123 AB|Two letters + three digits + two letters; general
+HR||M|ZG 123-A|Two letters + three/four digits + letter; general
+RS||M|BG 123-AA|Two letters + three digits + two letters; general
+EE||M|123 ABC|Three digits + three letters

@@ -533,6 +533,199 @@ def coords_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [s for s in sections if s.get('data') or s.get('rows')]
 
 
+# ---------------------------------------------------------------------------
+# v6.0 additions: vin / flight / mmsi / app / bssid / plate sections
+# ---------------------------------------------------------------------------
+
+def vin_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Identity', ('wmi', 'manufacturer', 'country', 'region_hint')),
+        ('ISO 3779 Decomposition',
+         ('vds', 'vis', 'year_code', 'model_year_candidates', 'model_year',
+          'model_year_cycle', 'plant_code', 'serial_number', 'check_digit',
+          'check_digit_valid', 'expected_check_digit')),
+        ('Vehicle (NHTSA vPIC)',
+         ('vpic_make', 'vpic_model', 'vpic_vehicle_type', 'vpic_body_class',
+          'vpic_drive_type', 'vpic_fuel_type', 'vpic_transmission_style',
+          'vpic_engine_cylinders', 'vpic_engine_hp', 'vpic_displacement_l',
+          'vpic_doors', 'vpic_series', 'vpic_trim', 'vpic_gvwr',
+          'vpic_electrification')),
+        ('Assembly Plant', ('vpic_manufacturer', 'vpic_plant_city',
+                            'vpic_plant_state', 'vpic_plant_country')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def flight_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Airline', ('airline_name', 'airline_iata', 'airline_icao',
+                     'country', 'callsign')),
+        ('Designator Anatomy',
+         ('carrier_code', 'carrier_code_type', 'flight_number_digits',
+          'digit_count', 'suffix_letter', 'flight_iata_code',
+          'flight_icao_code', 'radio_callsign', 'direction_hint',
+          'number_band_hint')),
+        ('Live Status (aviationstack)',
+         ('avstack_status', 'avstack_airline',
+          'avstack_departure_airport', 'avstack_departure_iata',
+          'avstack_departure_scheduled', 'avstack_arrival_airport',
+          'avstack_arrival_iata', 'avstack_arrival_scheduled',
+          'avstack_aircraft_registration')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def mmsi_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Station Identity (ITU-R M.1085)',
+         ('station_type', 'station_type_code', 'itu_series')),
+        ('Flag State & Serial',
+         ('mid', 'country', 'serial_digits', 'trailing_zero_notes')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def app_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Identity', ('ecosystem', 'ecosystem_label', 'registry_url',
+                      'namespace', 'package_name')),
+        ('Registry Record',
+         ('name', 'version', 'latest_version', 'summary', 'description',
+          'author', 'author_email', 'maintainer', 'requires_python',
+          'license', 'homepage', 'repository', 'documentation', 'created',
+          'updated', 'pushed', 'archived')),
+        ('Security (OSV.dev)', ('vulnerabilities_count',)),
+        ('Community & Maintenance',
+         ('downloads', 'recent_downloads', 'stars', 'pulls', 'forks',
+          'open_issues', 'topics_count', 'maintainers_count',
+          'versions_count', 'categories', 'keywords')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    vulns = info.get('vulnerability_ids')
+    if isinstance(vulns, list) and vulns:
+        rows = [[v.get('id', ''), v.get('severity', ''), v.get('summary', '')]
+                for v in vulns if isinstance(v, dict)]
+        if rows:
+            sections.append({
+                'title': f'Known Vulnerabilities ({len(rows)})',
+                'type': 'table',
+                'columns': ['Advisory', 'Severity', 'Summary'],
+                'rows': rows,
+            })
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def bssid_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Identity', ('vendor', 'oui_prefix', 'transmission', 'assignment',
+                      'is_multicast', 'is_locally_administered')),
+        ('Address Anatomy (EUI-48)',
+         ('eui64_expansion', 'ipv6_interface_id', 'ipv6_link_local_hint',
+          'randomization_hint')),
+        ('Location (crowd-sourced)',
+         ('lat', 'lon', 'accuracy_range', 'time')),
+        ('Network (WiGLE)', ('ssid', 'encryption', 'last_seen')),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
+def plate_sections(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    info = result.get('info', {})
+    sections: List[Dict[str, Any]] = []
+    for title, keys in (
+        ('Format Analysis', ('normalized', 'country_prefix', 'country_known',
+                             'matched_count', 'match_note')),
+        ('Composition', ('length', 'letters_count', 'digits_count',
+                         'separators', 'composition_note')),
+        ('German City Code', ('german_city_code', 'german_city')),
+        ('Style Heuristic', ('style_hint',)),
+    ):
+        section = _grid(title, keys, info)
+        if section['data']:
+            sections.append(section)
+
+    matched = info.get('matched_countries')
+    if isinstance(matched, list) and matched:
+        rows = [[m.get('country', ''), m.get('region', ''), m.get('example', ''),
+                 f"{float(m.get('confidence', 0) or 0):.1f}"]
+                for m in matched if isinstance(m, dict)]
+        if rows:
+            sections.append({
+                'title': f'Matched Jurisdictions ({len(rows)})',
+                'type': 'table',
+                'columns': ['Country', 'Region', 'Example', 'Confidence'],
+                'rows': rows,
+            })
+
+    rest = _fields_grid('Other Fields', info)
+    used = _used_labels(sections)
+    rest['data'] = {k: v for k, v in rest['data'].items() if k not in used}
+    if rest['data']:
+        sections.append(rest)
+    sections.append(sources_table(result))
+    return [s for s in sections if s.get('data') or s.get('rows')]
+
+
 def sections_for(kind: str, result: Dict[str, Any]) -> List[Dict[str, Any]]:
     builders = {
         'ip': ip_sections,
@@ -551,6 +744,13 @@ def sections_for(kind: str, result: Dict[str, Any]) -> List[Dict[str, Any]]:
         'iban': iban_sections,
         'imei': imei_sections,
         'coords': coords_sections,
+        # v6.0 kinds
+        'vin': vin_sections,
+        'flight': flight_sections,
+        'mmsi': mmsi_sections,
+        'app': app_sections,
+        'bssid': bssid_sections,
+        'plate': plate_sections,
     }
     builder = builders.get(kind)
     return builder(result) if builder else []

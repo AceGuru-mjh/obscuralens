@@ -1,7 +1,7 @@
 """
 Model Context Protocol (MCP) server for ObscuraLens.
 
-Exposes 34 ObscuraLens tools to AI assistants over stdio using
+Exposes 40 ObscuraLens tools to AI assistants over stdio using
 newline-delimited JSON-RPC 2.0 (one JSON object per line), which is the
 transport MCP defines. This is deliberately *not* LSP Content-Length
 framing.
@@ -10,6 +10,8 @@ Tool families:
 
 * 14 target lookups - ip, phone, username, email, domain, url, crypto,
   hash, cve, asn and the v5.0 mac, iban, imei and coords kinds.
+* 6 v6.0 sensor lookups - vin_lookup, flight_lookup, mmsi_lookup,
+  app_lookup, bssid_lookup and plate_lookup.
 * 6 investigation and history views - investigate, risk_report,
   correlate, timeline, tools_geo_profile and tools_patterns.
 * 2 intel/health views - threat_intel and source_health.
@@ -369,6 +371,135 @@ TOOLS: List[Dict[str, Any]] = [
             'additionalProperties': False,
         },
     },
+    # -- v6.0 additions --------------------------------------------------------
+    {
+        'name': 'vin_lookup',
+        'description': 'Decode a Vehicle Identification Number (ISO 3779): '
+                       'check-digit verdict, World Manufacturer Identifier '
+                       'with manufacturer and assembly country, model-year '
+                       'candidates, plant code and production serial, plus '
+                       'NHTSA vPIC make/model/body/engine details for North '
+                       'American market vehicles. Offline decomposition plus '
+                       'the keyless vPIC decoder.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'vin': {'type': 'string',
+                        'description': '17-character VIN (letters and digits '
+                                       'without I, O or Q), e.g. '
+                                       '1M8GDM9AXKP042788; hyphens and '
+                                       'lowercase are tolerated.'},
+            },
+            'required': ['vin'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'flight_lookup',
+        'description': 'Decode a flight designator (IATA like BA2490 or ICAO '
+                       'like DLH400A): airline name, country and callsign '
+                       'from the offline IATA/ICAO pack, IATA/ICAO renderings '
+                       'and the radio callsign, plus today\'s live status, '
+                       'departure/arrival airports and aircraft registration '
+                       'when an aviationstack API key is configured.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'flight': {'type': 'string',
+                           'description': 'Flight designator: 2-letter IATA '
+                                          'or 3-letter ICAO carrier code, '
+                                          '1-4 digit flight number and an '
+                                          'optional suffix letter.'},
+            },
+            'required': ['flight'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'mmsi_lookup',
+        'description': 'Decode a Maritime Mobile Service Identity (ITU-R '
+                       'M.1085): station class (ship, coast, group, handheld, '
+                       'aid-to-navigation), Maritime Identification Digit, '
+                       'serial digits and the flag country from the offline '
+                       'MID pack. Fully offline (keyless, no network).',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'mmsi': {'type': 'string',
+                         'description': '9-digit MMSI, e.g. 366910000; a '
+                                        '\"MMSI:\" marker and dash/space '
+                                        'separators are tolerated.'},
+            },
+            'required': ['mmsi'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'app_lookup',
+        'description': 'Software package intelligence for an '
+                       '<ecosystem>:<name> coordinate: the registry record '
+                       '(pypi.org, registry.npmjs.org, crates.io, Docker Hub '
+                       'or api.github.com) with version, summary, author, '
+                       'license, downloads and timestamps, offline ecosystem '
+                       'metadata (registry URL, name rules, mirrors) and the '
+                       'known CVEs from a keyless OSV.dev query. Only the '
+                       'registry matching the ecosystem is contacted.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'app': {'type': 'string',
+                        'description': 'Package coordinate such as '
+                                       "'pypi:requests', 'npm:@babel/core', "
+                                       "'crate:serde', 'docker:library/nginx' "
+                                       "or 'github:psf/requests'; the "
+                                       'ecosystem prefix is case-insensitive.'},
+            },
+            'required': ['app'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'bssid_lookup',
+        'description': 'WiFi access point intelligence for a BSSID (EUI-48): '
+                       'vendor from the offline IEEE OUI pack, '
+                       'multicast/locally-administered bits (randomized MAC '
+                       'detection), EUI-64 and IPv6 interface-id expansion, '
+                       'and crowd-sourced geolocation (keyless mylnikov.org, '
+                       'keyed WiGLE). Works offline thanks to the pack and '
+                       'the bit math.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'bssid': {'type': 'string',
+                          'description': '48-bit BSSID in colon, dash, Cisco '
+                                         'dotted or bare hex notation, e.g. '
+                                         '00:1A:2B:3C:4D:5E.'},
+            },
+            'required': ['bssid'],
+            'additionalProperties': False,
+        },
+    },
+    {
+        'name': 'plate_lookup',
+        'description': 'License plate format intelligence: matches the plate '
+                       'text against a curated pack of 79 national formats '
+                       '(country prefix or loose pattern matching with a '
+                       'confidence per candidate), resolves German '
+                       'distinguishing-sign city codes and analyses the '
+                       'letter/digit composition with an EU vs North American '
+                       'style heuristic. Fully offline (keyless, no network).',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'plate': {'type': 'string',
+                          'description': 'Plate text, optionally prefixed with '
+                                         "the issuing country: 'DE:B-AB 1234', "
+                                         "'GB:AB12 CDE' or 'US-CA:8ABC123'."},
+            },
+            'required': ['plate'],
+            'additionalProperties': False,
+        },
+    },
     {
         'name': 'tools_encode',
         'description': 'Encode text through every supported scheme at once '
@@ -632,10 +763,10 @@ def _required_str(arguments: Dict[str, Any], key: str) -> str:
     """
     Return a required non-blank string argument or raise ValueError.
 
-    Mirrors :func:`_target` for the v5.0 tools whose primary argument is
-    not called ``target`` (``mac``, ``iban``, ``imei``, ``coords``,
-    ``text``, ``value``, ``token``, ``hash``, ``domain``, ``path`` or
-    ``kind``).
+    Mirrors :func:`_target` for the v5.0/v6.0 tools whose primary argument
+    is not called ``target`` (``mac``, ``iban``, ``imei``, ``coords``,
+    ``vin``, ``flight``, ``mmsi``, ``text``, ``value``, ``token``,
+    ``hash``, ``domain``, ``path`` or ``kind``).
     """
     value = arguments.get(key)
     if not isinstance(value, str) or not value.strip():
@@ -902,6 +1033,167 @@ def _tool_coords_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
                               ('utm', 'utm'), ('place', 'formatted_address')):
         compact[top_key] = info.get(info_key)
     return compact
+
+
+# ---------------------------------------------------------------------------
+# v6.0 additions: vin / flight / mmsi / app / bssid / plate lookup handlers
+# ---------------------------------------------------------------------------
+
+def _tool_vin_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Vehicle intelligence for a VIN (ISO 3779 / NHTSA vPIC).
+
+    Input: ``vin`` - 17-character Vehicle Identification Number; hyphens,
+    spaces and lowercase are tolerated (``'1M8-GDM9-A-XKP042788'`` works).
+
+    Output: compact tracker report - canonical ``vin``, merged ``info``
+    fields (WMI, manufacturer and assembly country from the offline ISO
+    3780 pack, transliterated check-digit verdict with the expected digit
+    on failure, model-year candidates from the 30-year code cycle, plant
+    code, production serial, and vPIC make / model / body class / engine /
+    plant details for North American market vehicles), ``sources_ok`` /
+    ``sources_failed``, per-field provenance counts and the standard
+    verdict keys. Identifiers failing the check digit return
+    ``success=False`` before any network traffic or history write.
+
+    Sources: offline ISO 3779 decomposition (always available) plus the
+    keyless NHTSA vPIC decoder - no API keys are used.
+    """
+    from .trackers import VINTracker
+    result = VINTracker().track(_required_str(arguments, 'vin'))
+    return _compact_tracker_result(result, 'vin')
+
+
+def _tool_flight_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Airline and live-status intelligence for a flight designator.
+
+    Input: ``flight`` - designator such as ``'UA1'``, ``'BA2490'`` or
+    ``'DLH400A'`` (2-letter IATA or 3-letter ICAO carrier code, 1-4 digit
+    flight number, optional single suffix letter).
+
+    Output: compact tracker report - canonical ``flight``, merged ``info``
+    fields (airline name, country and callsign from the offline IATA/ICAO
+    pack, carrier-code type, IATA/ICAO renderings, radio callsign,
+    direction and number-band convention notes, plus today's live status,
+    departure/arrival airports and aircraft registration when an
+    aviationstack key is configured), source status and provenance
+    counts. The offline sources always answer, so the report works with
+    the network down.
+
+    Sources: offline airline pack + designator anatomy (always available)
+    plus aviationstack.com live status when the OBSCURALENS_
+    AVIATIONSTACK_API_KEY is configured.
+    """
+    from .trackers import FlightTracker
+    result = FlightTracker().track(_required_str(arguments, 'flight'))
+    return _compact_tracker_result(result, 'flight')
+
+
+def _tool_mmsi_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Maritime identity anatomy for an MMSI (ITU-R M.1085).
+
+    Input: ``mmsi`` - nine-digit Maritime Mobile Service Identity; a
+    ``'MMSI:'`` marker and dash/space separators are tolerated
+    (``'366-910-000'`` normalises to ``'366910000'``).
+
+    Output: compact tracker report - canonical ``mmsi``, merged ``info``
+    fields (station class from the leading digits - ship, coast, group,
+    handheld, aid-to-navigation or reserved - Maritime Identification
+    Digit, station serial digits, ITU series label and the flag country
+    from the offline MID pack), source status and provenance counts.
+    Shape failures return ``success=False`` without network or history.
+
+    Sources: fully offline (ITU-R M.1085 structure decode + curated MID
+    pack) - no network, no keys.
+    """
+    from .trackers import MMSITracker
+    result = MMSITracker().track(_required_str(arguments, 'mmsi'))
+    return _compact_tracker_result(result, 'mmsi')
+
+
+def _tool_app_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Software package intelligence for an <ecosystem>:<name> coordinate.
+
+    Input: ``app`` - a package coordinate such as ``'pypi:requests'``,
+                                       "'crate:serde', 'docker:library/nginx' "
+                                       "or 'github:psf/requests'; the "
+    case-insensitive and the name grammar is validated per ecosystem.
+
+    Output: compact tracker report - canonical ``app``, merged ``info``
+    fields (offline ecosystem metadata: label, registry URL, namespace,
+    package name, name conventions, mirror notes; the registry record:
+    version, summary, description, author, license, homepage, downloads,
+    stars, timestamps; and the OSV.dev vulnerability count with per-CVE
+    id/summary/severity records for pypi/npm/crates.io), ``sources_ok`` /
+    ``sources_failed``, per-field provenance counts and the standard
+    verdict keys. Only the registry matching the ecosystem is queried;
+    malformed coordinates return ``success=False`` without network or
+    history writes.
+
+    Sources: offline ecosystem metadata (always available) plus the one
+    keyless registry reader matching the ecosystem and the keyless
+    OSV.dev query - no API keys are used.
+    """
+    from .trackers import AppTracker
+    result = AppTracker().track(_required_str(arguments, 'app'))
+    return _compact_tracker_result(result, 'app')
+
+
+def _tool_bssid_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    WiFi access point intelligence for a BSSID (EUI-48).
+
+    Input: ``bssid`` - 48-bit access point address in colon
+    (``'00:1A:2B:3C:4D:5E'``), dash, Cisco dotted (``'001a.2b3c.4d5e'``)
+    or bare hex notation; lower case is tolerated.
+
+    Output: compact tracker report - canonical ``bssid``, merged ``info``
+    fields (vendor and OUI prefix from the offline curated IEEE pack,
+    multicast / locally-administered bits with their transmission and
+    assignment classes, EUI-64 expansion, modified-EUI-64 IPv6 interface
+    identifier and link-local hint, randomization hint when the local bit
+    is set, plus crowd-sourced latitude / longitude / accuracy range and
+    the WiGLE SSID / encryption / last-seen record when a key is
+    configured), source status and provenance counts. Malformed
+    identifiers return ``success=False`` without network or history.
+
+    Sources: offline OUI pack + EUI-48 bit decomposition (always
+    available) plus keyless api.mylnikov.org geolocation and keyed
+    WiGLE.net network search.
+    """
+    from .trackers import BSSIDTracker
+    result = BSSIDTracker().track(_required_str(arguments, 'bssid'))
+    return _compact_tracker_result(result, 'bssid')
+
+
+def _tool_plate_lookup(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    License plate format intelligence (fully offline).
+
+    Input: ``plate`` - plate text, optionally prefixed with the issuing
+                                         "'GB:AB12 CDE' or 'US-CA:8ABC123'."},
+    lower case and doubled spaces are tolerated.
+
+    Output: compact tracker report - canonical ``plate``, merged ``info``
+    fields (the matched-country candidate list with region, example and
+    confidence per candidate; the parsed country prefix and whether the
+    curated pack knows it; the composition analysis with letter/digit
+    counts and separators; the German city code when a ``DE:`` plate's
+    leading token resolves; and the EU-style vs North-American-style
+    heuristic), source status and provenance counts. Malformed values
+    return ``success=False`` without network or history.
+
+    Sources: fully offline - the curated plate format pack (79 national
+    formats) plus pure-Python composition analysis. National owner
+    registries are deliberately not queried (they are paywalled and
+    lawful-purpose gated everywhere).
+    """
+    from .trackers import PlateTracker
+    result = PlateTracker().track(_required_str(arguments, 'plate'))
+    return _compact_tracker_result(result, 'plate')
 
 
 def _tool_encode(arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -1362,6 +1654,13 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     'iban_lookup': _tool_iban_lookup,
     'imei_lookup': _tool_imei_lookup,
     'coords_lookup': _tool_coords_lookup,
+    # v6.0 additions
+    'vin_lookup': _tool_vin_lookup,
+    'flight_lookup': _tool_flight_lookup,
+    'mmsi_lookup': _tool_mmsi_lookup,
+    'app_lookup': _tool_app_lookup,
+    'bssid_lookup': _tool_bssid_lookup,
+    'plate_lookup': _tool_plate_lookup,
     'tools_encode': _tool_encode,
     'tools_decode': _tool_decode,
     'tools_jwt': _tool_jwt,

@@ -48,8 +48,12 @@ __all__ = [
     'reload_plugins',
 ]
 
-# Target kinds a tracker can feed to plugin sources. Other kinds are ignored.
-KNOWN_KINDS = ('ip', 'phone', 'username', 'email', 'domain')
+# Target kinds a tracker can feed to plugin sources. Other kinds are
+# ignored. The tuple mirrors the platform KINDS registries: the original
+# five, the v4.0/v5.0 additions and the six v6.0 sensor kinds.
+KNOWN_KINDS = ('ip', 'phone', 'username', 'email', 'domain', 'url', 'crypto',
+               'hash', 'cve', 'asn', 'mac', 'iban', 'imei', 'coords',
+               'vin', 'flight', 'mmsi', 'app', 'bssid', 'plate')
 
 
 @dataclass

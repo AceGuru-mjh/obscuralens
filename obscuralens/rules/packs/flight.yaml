@@ -1,0 +1,181 @@
+# ObscuraLens explainable rule pack -- flight
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the flight tracker output: carrier_code, carrier_code_type,
+# flight_iata_code, flight_icao_code, radio_callsign, airline_name, country,
+# callsign, avstack_status, avstack_airline, avstack_departure_airport,
+# avstack_arrival_iata, avstack_aircraft_registration... Flight rules are
+# designator-integrity and operations-status signals, never statements
+# about any passenger or crew.
+# ---------------------------------------------------------------------------
+
+name: flight-rules
+description: >-
+  Explainable designator-integrity and live-status heuristics for flight
+  designator lookups built on the offline IATA/ICAO airline pack and the
+  optional aviationstack live feed.
+version: 1
+rules:
+  - id: FLIGHT-001
+    title: Carrier not in the airline pack
+    description: >-
+      The carrier code does not resolve to an airline in the shipped
+      IATA/ICAO pack. The pack is a curated subset of several thousand
+      designators, so a miss is usually a small charter, cargo or
+      regional carrier (or a defunct code) rather than a fake designator;
+      the structural decode still stands.
+    severity: low
+    weight: 10
+    tags: [registry]
+    conditions:
+      - field: airline_name
+        operator: empty
+        value: true
+
+  - id: FLIGHT-002
+    title: ICAO three-letter designator form
+    description: >-
+      The designator was written with a 3-letter ICAO carrier code rather
+      than the 2-letter IATA form. ICAO codes are the operational/radio
+      namespace used by air traffic control and appear in leaked logs and
+      ATC data more often than in passenger-facing material - context for
+      where the identifier was probably observed.
+    severity: info
+    weight: 0
+    tags: [context]
+    references: ["ICAO Doc 8583"]
+    conditions:
+      - field: carrier_code_type
+        operator: eq
+        value: ICAO
+
+  - id: FLIGHT-003
+    title: 'Live status: cancelled'
+    description: >-
+      Today's operation of this designator is marked cancelled by the
+      aviationstack feed. Useful when a report references a specific
+      rotation as an alibi or a timeline anchor: the flight did not fly
+      as scheduled on the queried date.
+    severity: medium
+    weight: 15
+    tags: [status]
+    conditions:
+      - field: avstack_status
+        operator: eq
+        value: cancelled
+
+  - id: FLIGHT-004
+    title: 'Live status: diverted'
+    description: >-
+      Today's operation of this designator is marked diverted. A diverted
+      rotation lands somewhere other than the scheduled destination,
+      which matters when airport presence is being used as a location
+      signal.
+    severity: medium
+    weight: 15
+    tags: [status]
+    conditions:
+      - field: avstack_status
+        operator: eq
+        value: diverted
+
+  - id: FLIGHT-005
+    title: 'Live status: active'
+    description: >-
+      The designator is airborne right now per the aviationstack feed.
+      Positive context that documents a live, normally operating flight -
+      the airframe registration and both airports in the report describe
+      the current rotation.
+    severity: info
+    weight: 0
+    tags: [status, positive]
+    conditions:
+      - field: avstack_status
+        operator: eq
+        value: active
+
+  - id: FLIGHT-006
+    title: 'Live status: landed'
+    description: >-
+      Today's operation of this designator has already landed. Together
+      with the scheduled times this anchors the rotation to a specific
+      arrival airport and window of time.
+    severity: info
+    weight: 0
+    tags: [status, positive]
+    conditions:
+      - field: avstack_status
+        operator: eq
+        value: landed
+
+  - id: FLIGHT-007
+    title: Operational suffix letter present
+    description: >-
+      The designator carries a trailing suffix letter (BA2490A style),
+      which airlines use for operational sections of the same numbered
+      service - a second aircraft flying the same route moments apart.
+      The suffix disambiguates which section a report refers to.
+    severity: info
+    weight: 0
+    tags: [context]
+    conditions:
+      - field: suffix_letter
+        operator: not_empty
+        value: true
+
+  - id: FLIGHT-008
+    title: Registry hit without a country
+    description: >-
+      The carrier resolves to an airline but the pack carries no country
+      for it. Country attribution lags for newly certified or rebranded
+      carriers in any curated subset; treat the country column as unknown
+      rather than wrong.
+    severity: info
+    weight: 5
+    tags: [registry]
+    conditions:
+      - field: airline_name
+        operator: not_empty
+        value: true
+      - field: country
+        operator: empty
+        value: true
+
+  - id: FLIGHT-009
+    title: Registered international carrier
+    description: >-
+      The carrier resolves in the airline pack with both a name and a
+      country, and the radio callsign is known. Positive context that
+      documents what a fully attributed designator looks like here.
+    severity: info
+    weight: 0
+    tags: [registry, positive]
+    conditions:
+      - field: airline_name
+        operator: not_empty
+        value: true
+      - field: country
+        operator: not_empty
+        value: true
+      - field: callsign
+        operator: not_empty
+        value: true
+
+  - id: FLIGHT-010
+    title: Airframe registration identified
+    description: >-
+      The live feed reports the tail registration of the aircraft
+      operating today's rotation. The registration is a separate,
+      independently queryable identifier that anchors the flight to one
+      physical airframe.
+    severity: info
+    weight: 0
+    tags: [context]
+    conditions:
+      - field: avstack_aircraft_registration
+        operator: not_empty
+        value: true

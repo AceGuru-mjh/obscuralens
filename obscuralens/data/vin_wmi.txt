@@ -1,0 +1,190 @@
+# ObscuraLens offline data pack -- VIN World Manufacturer Identifiers (WMI)
+# ---------------------------------------------------------------------------
+# Format:      WMI|manufacturer|country
+# One entry per line, pipe-delimited, '#' comment lines and blank lines
+# ignored by the loader (obscuralens/trackers/vin_sources.py and
+# obscuralens/utils/data_catalog.py both parse this file).
+#
+# The WMI is the first section of an ISO 3779 VIN: the first three
+# characters identify the manufacturer and, roughly, the country where the
+# vehicle was assembled. WMI values are allocated per ISO 3780 through the
+# national registration authorities (SAE in the US, BSI in the UK, VDA in
+# Germany, ...). This pack carries a curated subset of well-documented
+# assignments (the WMI registry holds tens of thousands of entries, many of
+# them for low-volume coachbuilders), so a miss means "not in this curated
+# subset", NOT "invalid VIN".
+#
+# The first character of the WMI alone already narrows the country region
+# (1/4/5 United States, 2 Canada, 3 Mexico, J Japan, W Germany, ...) -- that
+# coarser mapping lives in the vin tracker code, this pack carries only the
+# precise three-character assignments. Entries include several historically
+# important manufacturers (Pan Am era is airlines, not VINs -- here: Rover,
+# Saab, Alitalia-era Fiat brands) because OSINT work regularly meets
+# registration documents from the 1980s onward.
+# ---------------------------------------------------------------------------
+1FA|Ford|United States
+1FB|Ford|United States
+1FC|Ford|United States
+1FD|Ford|United States
+1FM|Ford|United States
+1FT|Ford|United States
+1FU|Ford|United States
+1F9|Ford|United States
+1ZV|Ford|United States
+1G1|Chevrolet|United States
+1G2|Pontiac|United States
+1G3|Oldsmobile|United States
+1G4|Buick|United States
+1G6|Cadillac|United States
+1G8|Saturn|United States
+1GC|Chevrolet|United States
+1GK|GMC|United States
+1C3|Chrysler|United States
+1C4|Chrysler|United States
+1C6|Chrysler|United States
+1J4|Jeep|United States
+1LN|Lincoln|United States
+1M2|Mack Trucks|United States
+1HG|Honda|United States
+19U|Acura|United States
+1N4|Nissan|United States
+1N6|Nissan|United States
+1VW|Volkswagen|United States
+1YV|Mazda|United States
+4S3|Subaru|United States
+4T1|Toyota|United States
+4US|BMW|United States
+4JG|Mercedes-Benz|United States
+5FN|Honda|United States
+5N1|Nissan|United States
+5NP|Hyundai|United States
+5TB|Toyota|United States
+5XX|Kia|United States
+5YJ|Tesla|United States
+7SA|Tesla|United States
+2FA|Ford|Canada
+2FB|Ford|Canada
+2FM|Ford|Canada
+2FT|Ford|Canada
+2G1|General Motors|Canada
+2HG|Honda|Canada
+2T1|Toyota|Canada
+2C4|Chrysler|Canada
+3FA|Ford|Mexico
+3FM|Ford|Mexico
+3C4|Chrysler|Mexico
+3G1|General Motors|Mexico
+3HG|Honda|Mexico
+3MZ|Mazda|Mexico
+3N1|Nissan|Mexico
+3VW|Volkswagen|Mexico
+6FP|Ford|Australia
+6G1|Holden|Australia
+6T1|Toyota|Australia
+8AD|Peugeot|Argentina
+9BD|Fiat|Brazil
+9BF|Ford|Brazil
+9BG|General Motors|Brazil
+9BR|Toyota|Brazil
+9BW|Volkswagen|Brazil
+JH4|Acura|Japan
+JHM|Honda|Japan
+JHG|Honda|Japan
+JHL|Honda|Japan
+JA3|Mitsubishi|Japan
+JA4|Mitsubishi|Japan
+JF1|Subaru|Japan
+JF2|Subaru|Japan
+JKA|Kawasaki|Japan
+JM1|Mazda|Japan
+JMZ|Mazda|Japan
+JMB|Mitsubishi|Japan
+JMY|Mitsubishi|Japan
+JN1|Nissan|Japan
+JSA|Suzuki|Japan
+JS1|Suzuki|Japan
+JTD|Toyota|Japan
+JTE|Toyota|Japan
+JTK|Toyota|Japan
+JTL|Toyota|Japan
+JTM|Toyota|Japan
+JTN|Toyota|Japan
+JYA|Yamaha|Japan
+KMH|Hyundai|South Korea
+KM8|Hyundai|South Korea
+KNA|Kia|South Korea
+KNM|GM Korea|South Korea
+KLA|GM Daewoo|South Korea
+KMJ|Renault Samsung|South Korea
+LFV|FAW-Volkswagen|China
+LRW|Tesla|China
+LSG|SAIC General Motors|China
+LSV|SAIC Volkswagen|China
+LVS|Changan Ford|China
+LGW|Great Wall Motor|China
+LGX|BYD|China
+LZW|SAIC-GM-Wuling|China
+MA1|Mahindra|India
+MA3|Maruti Suzuki|India
+MAL|Hyundai|India
+MAT|Tata Motors|India
+MDH|Toyota|India
+MMB|Mitsubishi|Thailand
+MR0|Toyota|Thailand
+MRH|Honda|Thailand
+MNT|Nissan|Thailand
+NMT|Toyota|Turkey
+NLH|Hyundai|Turkey
+NAA|Iran Khodro|Iran
+SAJ|Jaguar|United Kingdom
+SAL|Land Rover|United Kingdom
+SAR|Rover|United Kingdom
+SB1|TVR|United Kingdom
+SCA|Rolls-Royce|United Kingdom
+SCB|Bentley|United Kingdom
+SCC|Lotus|United Kingdom
+SHH|Honda|United Kingdom
+SHS|Honda|United Kingdom
+SJA|Jaguar|United Kingdom
+SMT|Triumph|United Kingdom
+TMB|Skoda|Czech Republic
+TNE|Tatra|Czech Republic
+VF1|Renault|France
+VF3|Peugeot|France
+VF6|Renault Trucks|France
+VF7|Citroen|France
+VNK|Toyota|France
+VSS|SEAT|Spain
+VXK|Nissan|Spain
+W0L|Opel|Germany
+WA1|Audi|Germany
+WAU|Audi|Germany
+WBA|BMW|Germany
+WBS|BMW M|Germany
+WBY|BMW|Germany
+WDB|Mercedes-Benz|Germany
+WDC|Mercedes-Benz|Germany
+WDD|Mercedes-Benz|Germany
+W1K|Mercedes-Benz|Germany
+WF0|Ford|Germany
+WMA|MAN|Germany
+WME|Smart|Germany
+WP0|Porsche|Germany
+WP1|Porsche|Germany
+WV1|Volkswagen|Germany
+WV2|Volkswagen|Germany
+WVW|Volkswagen|Germany
+XTA|Lada|Russia
+X4X|BMW|Russia
+YS2|Scania|Sweden
+YS3|Saab|Sweden
+YV1|Volvo|Sweden
+YV2|Volvo|Sweden
+ZAP|Piaggio|Italy
+ZAR|Alfa Romeo|Italy
+ZDM|Ducati|Italy
+ZFA|Fiat|Italy
+ZFF|Ferrari|Italy
+ZGU|Moto Guzzi|Italy
+ZHW|Lamborghini|Italy
+ZLA|Lancia|Italy

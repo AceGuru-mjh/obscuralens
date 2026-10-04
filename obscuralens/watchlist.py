@@ -16,8 +16,13 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .config import config
 from .utils.validators import (
+    normalize_app,
+    normalize_bssid,
+    normalize_flight,
     normalize_iban,
     normalize_imei,
+    normalize_mmsi,
+    normalize_vin,
     validate_coords,
     validate_cve,
     validate_domain,
@@ -26,6 +31,7 @@ from .utils.validators import (
     validate_ip,
     validate_mac,
     validate_phone,
+    validate_plate,
     validate_url,
     validate_username,
 )
@@ -87,9 +93,9 @@ def _detect_kind(target: str) -> Optional[str]:
 
     Mirrors ``investigate.detect_kind``'s ordering so a target added to the
     watchlist classifies exactly the way an investigation would classify it:
-    identifier shapes (MAC, IBAN, IMEI, coordinates) must run before the
-    looser phone/domain/username validators that would otherwise swallow
-    them.
+    identifier shapes (MAC, VIN, IBAN, IMEI, MMSI, coordinates) must run
+    before the looser phone/domain/username validators that would otherwise
+    swallow them.
     """
     value = (target or '').strip()
     if not value:
@@ -98,6 +104,17 @@ def _detect_kind(target: str) -> Optional[str]:
         return 'ip'
     if validate_email(value)[0]:
         return 'email'
+    # v6.0 flight: mirrors investigate.detect_kind - designators carry
+    # letters and no dot, so only the username catch-all below could
+    # otherwise swallow them ('AS1234' collisions with ASN notation are
+    # resolved the same way the investigation engine resolves them).
+    if normalize_flight(value):
+        return 'flight'
+    # v6.0 app: mirrors investigate.detect_kind - the single ':' of a
+    # package coordinate cannot be an email ('@') or URL ('://'), but the
+    # username catch-all would swallow it, so it is checked early.
+    if normalize_app(value):
+        return 'app'
     # v4.0 kinds: URLs, CVEs and hashes are unambiguous shapes.
     if '://' in value and validate_url(value)[0]:
         return 'url'
@@ -111,6 +128,17 @@ def _detect_kind(target: str) -> Optional[str]:
     # shapes) - so MAC and IBAN run before the domain check.
     if validate_mac(value)[0]:
         return 'mac'
+    # v6.0 bssid: grammatically an EUI-48 MAC, so the mac branch above
+    # claims every separator form (auto-detection prefers 'mac'; the
+    # bssid kind is chosen explicitly). Bare-hex 12-digit strings, which
+    # validate_mac rejects, still classify as bssid here.
+    if normalize_bssid(value):
+        return 'bssid'
+    # v6.0 VIN: before iban for the same reason as the investigation engine
+    # - a 17-character alphanumeric VIN whose WMI starts with two letters
+    # and two digits also satisfies the (shape-only) IBAN pattern.
+    if normalize_vin(value):
+        return 'vin'
     if normalize_iban(value):
         return 'iban'
     # The validators are intentionally loose, so a single label can look like
@@ -123,10 +151,19 @@ def _detect_kind(target: str) -> Optional[str]:
     # checksum verdicts belong to the trackers.
     if normalize_imei(value):
         return 'imei'
+    # v6.0 MMSI: nine digits would otherwise pass validate_phone below
+    # (it accepts any 8-15 digit string), mirroring the investigation
+    # engine's imei-then-mmsi ordering.
+    if normalize_mmsi(value):
+        return 'mmsi'
     if validate_coords(value)[0]:
         return 'coords'
     if validate_phone(value)[0]:
         return 'phone'
+    # v6.0 plate: the loosest gate, so it runs last before the username
+    # catch-all - exactly like the investigation engine orders it.
+    if validate_plate(value)[0]:
+        return 'plate'
     if validate_username(value)[0]:
         return 'username'
     return None
@@ -135,20 +172,26 @@ def _detect_kind(target: str) -> Optional[str]:
 def _default_checker(kind: str, target: str) -> Dict[str, Any]:
     """Run the tracker matching kind (imported lazily to avoid cycles)."""
     from .trackers import (
+        AppTracker,
         ASNTracker,
+        BSSIDTracker,
         CoordsTracker,
         CryptoTracker,
         CVETracker,
         DomainTracker,
         EmailTracker,
+        FlightTracker,
         HashTracker,
         IBANTracker,
         IMEITracker,
         IPTracker,
         MACTracker,
+        MMSITracker,
         PhoneTracker,
+        PlateTracker,
         URLTracker,
         UsernameTracker,
+        VINTracker,
     )
     trackers = {
         'ip': IPTracker,
@@ -165,6 +208,13 @@ def _default_checker(kind: str, target: str) -> Dict[str, Any]:
         'iban': IBANTracker,
         'imei': IMEITracker,
         'coords': CoordsTracker,
+        # v6.0 kinds
+        'vin': VINTracker,
+        'flight': FlightTracker,
+        'mmsi': MMSITracker,
+        'app': AppTracker,
+        'bssid': BSSIDTracker,
+        'plate': PlateTracker,
     }
     tracker_class = trackers.get(kind)
     if tracker_class is None:

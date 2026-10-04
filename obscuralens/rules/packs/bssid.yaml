@@ -1,0 +1,159 @@
+# ObscuraLens explainable rule pack -- bssid
+# ---------------------------------------------------------------------------
+# YAML schema (v1), identical for every pack in this directory:
+#   name / description / version, then rules: each with id, title,
+#   description (why it matters), severity, weight, tags, references and
+#   conditions (ALL must match). See packs/shared.yaml for the full
+#   annotated schema and the operator list.
+# Fields mirror the BSSID tracker output: vendor, oui_prefix, is_multicast,
+# is_locally_administered, transmission, assignment, eui64_expansion,
+# ipv6_interface_id, ipv6_link_local_hint, randomization_hint, lat, lon,
+# accuracy_range, time, ssid, encryption, last_seen... BSSID rules are
+# address-integrity and observation signals about the access point radio,
+# never statements about any person connected to it.
+# ---------------------------------------------------------------------------
+
+name: bssid-rules
+description: >-
+  Explainable address-integrity and observation heuristics for WiFi BSSID
+  lookups built on the IEEE OUI pack, the EUI-48 bit decomposition and
+  crowd-sourced geolocation.
+version: 1
+rules:
+  - id: BSSID-001
+    title: Multicast (group) bit set
+    description: >-
+      The individual/group bit of the first octet is set, marking a group
+      address. A group address cannot be a real access point BSSID, so the
+      value is either mistyped, a protocol reserved address (STP uses the
+      01:80:c2 block) or a hand-crafted identifier.
+    severity: medium
+    weight: 15
+    tags: [validity]
+    references: ["IEEE 802", "RFC 7042"]
+    conditions:
+      - field: is_multicast
+        operator: is_true
+
+  - id: BSSID-002
+    title: Locally administered bit set (randomized or virtual MAC)
+    description: >-
+      The universal/local bit of the first octet is set, meaning the
+      address was crafted rather than burned in: a privacy-randomized
+      client MAC, a Docker/QEMU/VMware virtual NIC, or a deliberately
+      spoofed address. The OUI prefix of such an address identifies no
+      real vendor, so vendor attribution is void.
+    severity: medium
+    weight: 15
+    tags: [validity, randomization]
+    references: ["IEEE 802", "RFC 7042"]
+    conditions:
+      - field: is_locally_administered
+        operator: is_true
+
+  - id: BSSID-003
+    title: Vendor not in the curated OUI pack
+    description: >-
+      The 24-bit OUI does not resolve in the shipped curated subset of the
+      IEEE registry. With roughly 40,000 public assignments and 766
+      curated, a miss is expected for smaller vendors; it only means the
+      offline pack cannot name the manufacturer.
+    severity: info
+    weight: 5
+    tags: [registry]
+    references: ["IEEE OUI registry"]
+    conditions:
+      - field: vendor
+        operator: not_exists
+
+  - id: BSSID-004
+    title: Crowd-sourced geolocation present
+    description: >-
+      A community database (mylnikov.org or WiGLE) has placed this BSSID
+      on the map, meaning the network was observed in the field at least
+      once. Context for physical attribution work - treat the fix as a
+      coarse hint, not a survey-grade position.
+    severity: info
+    weight: 5
+    tags: [geolocation, context]
+    conditions:
+      - field: lat
+        operator: exists
+
+  - id: BSSID-005
+    title: Coarse geolocation fix (over 100 m accuracy range)
+    description: >-
+      The crowd-sourced fix reports an accuracy range above 100 metres.
+      Ranges that wide can cover whole neighbourhoods, so the coordinates
+      must not be read as a building-level position.
+    severity: low
+    weight: 10
+    tags: [geolocation, precision]
+    conditions:
+      - field: accuracy_range
+        operator: gt
+        value: 100
+
+  - id: BSSID-006
+    title: Unencrypted network observed
+    description: >-
+      The WiGLE record classifies the network's encryption as NONE - an
+      open access point. Anyone in radio range could have used it, which
+      matters whenever a location or timeline is being attributed to a
+      person through this network.
+    severity: low
+    weight: 10
+    tags: [security, context]
+    conditions:
+      - field: encryption
+        operator: eq
+        value: NONE
+
+  - id: BSSID-007
+    title: Network not observed for over a year
+    description: >-
+      The most recent community observation (WiGLE last-seen) is older
+      than 365 days. The network may have moved, been renamed, or been
+      decommissioned since - stale SSID and location data must not anchor
+      a current-position claim.
+    severity: info
+    weight: 5
+    tags: [staleness, geolocation]
+    conditions:
+      - field: last_seen
+        operator: age_gt_days
+        value: 365
+
+  - id: BSSID-008
+    title: Burned-in unicast address with a known vendor
+    description: >-
+      Neither the multicast nor the locally-administered bit is set and
+      the OUI resolves in the curated IEEE pack - a normally assigned
+      access point radio address. Positive context that documents what a
+      clean BSSID looks like in this pack.
+    severity: info
+    weight: 0
+    tags: [validity, registry, positive]
+    references: ["IEEE 802"]
+    conditions:
+      - field: is_multicast
+        operator: is_false
+      - field: is_locally_administered
+        operator: is_false
+      - field: vendor
+        operator: not_empty
+        value: true
+
+  - id: BSSID-009
+    title: Named network observed in the field
+    description: >-
+      The WiGLE record carries an SSID for this BSSID, so the network was
+      seen broadcasting under a name. The SSID is a free-text field chosen
+      by the operator - useful pivoting context, but not identity.
+    severity: info
+    weight: 0
+    tags: [context, positive]
+    conditions:
+      - field: ssid
+        operator: not_empty
+        value: true
