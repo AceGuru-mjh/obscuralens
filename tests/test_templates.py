@@ -3,10 +3,14 @@ Offline tests for the Jinja2 report templates (reporting.template_render).
 
 Covers template discovery and the shared environment, rendering of the three
 shipped templates (standalone HTML, Markdown, executive summary) with a
-realistic sections/meta context, the esc / nl2br / fmt_date / fmt_pct
-filters, the friendly ``TemplateNotFound`` error, and the defensive
+realistic sections/meta context, the esc / nl2br / fmt_date / fmt_pct /
+pct_width filters, the friendly ``TemplateNotFound`` error, and the defensive
 normalisation performed by the ``render_standalone_html_report`` /
 ``render_markdown_report`` convenience wrappers.
+
+It also pins the ``meta.band`` / ``meta.score`` hardening: the band whitelist,
+score clamping, and the escaping of every hostile context a caller can reach
+through the public ``render_template`` entry point.
 
 Everything runs offline; no files are written outside ``tmp_path``-free
 in-memory rendering.
@@ -606,3 +610,205 @@ class TestRenderReport:
         with pytest.raises(TemplateNotFound) as excinfo:
             tr.render_report('does-not-exist', sections=self.SECTIONS)
         assert 'available templates' in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------- #
+# meta.band / meta.score hardening
+# --------------------------------------------------------------------------- #
+
+#: Payloads that must never reach the output as live markup.  Each one breaks
+#: out of a different context: text, a double-quoted attribute, a class
+#: attribute and a CSS declaration.
+HOSTILE = (
+    '<script>alert(document.cookie)</script>',
+    '"><img src=x onerror=alert(1)>',
+    "high\"><style>body{display:none}</style>",
+    '72%;background:url(javascript:alert(1))',
+    "'-alert(1)-'",
+)
+
+
+class TestScoreCoercion:
+    """`pct_width` / `_coerce_score`: numeric, clamped, never raising."""
+
+    @pytest.mark.parametrize('value,expected', [
+        (0, 0), (72, 72), (100, 100), (42.5, 42.5), ('72', 72),
+        (150, 100), (-5, 0), (100.0, 100),
+    ])
+    def test_coerce_score_clamps_and_preserves_intness(self, value, expected):
+        assert tr._coerce_score(value) == expected
+
+    @pytest.mark.parametrize('value', [
+        None, '', 'abc', [], {}, object(), True, False,
+        float('nan'), float('inf'), float('-inf'),
+    ])
+    def test_coerce_score_rejects_non_numbers(self, value):
+        assert tr._coerce_score(value) is None
+
+    def test_coerce_score_keeps_72_as_72_not_72_0(self):
+        # Pinned: the standalone report renders "Rule score: 72 / 100".
+        assert str(tr._coerce_score(72)) == '72'
+
+    @pytest.mark.parametrize('value,expected', [
+        (72, '72'), (150, '100'), (-5, '0'), (42.5, '42.5'),
+        (None, '0'), ('abc', '0'), ('', '0'), (float('nan'), '0'),
+        (True, '0'), ([], '0'),
+    ])
+    def test_pct_width_is_always_a_bare_number(self, value, expected):
+        width = tr.pct_width(value)
+        assert width == expected
+        assert width.replace('.', '', 1).isdigit(), width
+
+    def test_pct_width_replaces_the_min_filter_dos(self):
+        # The old `[[meta.score, 100]|min]` raised TypeError on a string.
+        assert tr.pct_width('<script>') == '0'
+
+    def test_pct_width_is_registered_as_a_filter(self):
+        assert 'pct_width' in tr.template_env().filters
+
+
+class TestBandWhitelist:
+    """`meta.band` lands in a class attribute, so it is whitelisted."""
+
+    @pytest.mark.parametrize('band', tr.BAND_VALUES)
+    def test_known_bands_survive_normalisation(self, band):
+        assert tr._normalize_meta({'band': band})['band'] == band
+
+    @pytest.mark.parametrize('band', ['HIGH', ' Critical ', 'Elevated'])
+    def test_known_bands_are_case_and_space_insensitive(self, band):
+        assert tr._normalize_meta({'band': band})['band'] == band.strip().lower()
+
+    @pytest.mark.parametrize('band', [
+        'high" onmouseover="alert(1)', '<script>', 'not-a-band', '', None, 42,
+    ])
+    def test_unknown_bands_are_dropped(self, band):
+        assert tr._normalize_meta({'band': band})['band'] == ''
+
+    def test_band_values_are_the_documented_set(self):
+        assert tr.BAND_VALUES == ('clean', 'watch', 'elevated', 'high', 'critical')
+        # Every band the risk mapping can produce must be styleable.
+        assert set(tr.RISK_BANDS.values()) <= set(tr.BAND_VALUES)
+
+    def test_absent_band_is_not_invented(self):
+        assert 'band' not in tr._normalize_meta({'target': 'x'})
+
+    def test_score_is_normalised_alongside_band(self):
+        meta = tr._normalize_meta({'band': 'high', 'score': 'abc'})
+        assert meta['band'] == 'high'
+        assert meta['score'] is None
+
+
+class TestContextEscaping:
+    """Hostile meta must never produce live markup in either HTML template.
+
+    ``render_template`` is public and bypasses ``_normalize_meta``, so the
+    templates are exercised through both paths: the raw one (escaping is the
+    only defence) and the convenience wrappers (normalisation plus escaping).
+    """
+
+    @pytest.mark.parametrize('payload', HOSTILE)
+    def test_standalone_target_is_escaped_via_raw_render(self, payload):
+        html = tr.render_template(
+            'standalone_report.html.j2', sections=[],
+            meta={'title': 'T', 'target': payload, 'version': payload,
+                  'band': payload, 'score': payload})
+        assert '<script>alert' not in html
+        assert '<img src=x onerror' not in html
+        assert '<style>body{display:none}</style>' not in html
+        assert 'onmouseover="alert' not in html
+
+    @pytest.mark.parametrize('payload', HOSTILE)
+    def test_standalone_target_is_escaped_via_wrapper(self, payload):
+        html = tr.render_standalone_html_report(
+            [], {'title': 'T', 'target': payload, 'band': payload,
+                 'score': payload})
+        assert '<script>alert' not in html
+        assert '<img src=x onerror' not in html
+
+    @pytest.mark.parametrize('payload', HOSTILE)
+    def test_summary_band_and_score_are_escaped(self, payload):
+        html = tr.render_template(
+            'summary.html.j2', sections=[],
+            meta={'title': 'T', 'target': 'x', 'kind': 'ip',
+                  'band': payload, 'score': payload})
+        assert '<script>alert' not in html
+        assert '<img src=x onerror' not in html
+        assert '<style>body{display:none}</style>' not in html
+
+    @pytest.mark.parametrize('score', [
+        'abc', '', [], {}, '<script>', float('nan'), object(),
+    ])
+    def test_summary_never_500s_on_a_non_numeric_score(self, score):
+        # Regression: `[[meta.score, 100]|min]` raised TypeError -> 500.
+        html = tr.render_template(
+            'summary.html.j2', sections=[],
+            meta={'title': 'T', 'target': 'x', 'band': 'high', 'score': score})
+        assert '<div class="score-fill"' in html
+        assert 'style="width: 0%;"' in html
+
+    def test_summary_omits_the_progress_bar_when_score_is_none(self):
+        # `None` means "no score", so the whole track is skipped rather than
+        # drawn at zero width - pinned so the guard above is not "fixed" by
+        # silently rendering an empty bar.
+        html = tr.render_template(
+            'summary.html.j2', sections=[],
+            meta={'title': 'T', 'target': 'x', 'band': 'high', 'score': None})
+        assert '<div class="score-fill"' not in html
+        assert '<div class="score-track"' not in html
+        # The band chip still renders, and still shows no score suffix.
+        assert 'band-chip high' in html
+        assert '/100' not in html
+
+    def test_summary_width_is_clamped_not_overflowing(self):
+        # An out-of-contract score must not blow out the CSS: the numeric
+        # contexts (bar width, aria-valuenow) are clamped to 100.
+        html = tr.render_template(
+            'summary.html.j2', sections=[],
+            meta={'title': 'T', 'target': 'x', 'band': 'high', 'score': 4242})
+        assert 'style="width: 100%;"' in html
+        assert 'aria-valuenow="100"' in html
+        assert 'width: 4242%' not in html
+
+    def test_wrapper_path_clamps_an_out_of_range_score_everywhere(self):
+        # Through the convenience wrapper `_normalize_meta` clamps the score
+        # itself, so the visible label agrees with the bar.
+        summary = tr.render_template(
+            'summary.html.j2', sections=[],
+            meta=tr._normalize_meta(
+                {'title': 'T', 'target': 'x', 'band': 'high', 'score': 4242}))
+        assert 'style="width: 100%;"' in summary
+        assert '100/100' in summary
+        assert '4242' not in summary
+
+    def test_raw_path_renders_a_hostile_score_as_inert_text(self):
+        # `render_template` is public and skips normalisation, so the label is
+        # the caller's value - escaped, and with the bar still clamped.
+        html = tr.render_template(
+            'summary.html.j2', sections=[],
+            meta={'title': 'T', 'target': 'x', 'band': 'high',
+                  'score': '<b>4242</b>'})
+        assert '<b>4242</b>' not in html
+        assert '&lt;b&gt;4242&lt;/b&gt;' in html
+        assert 'style="width: 0%;"' in html
+
+    def test_summary_aria_valuenow_is_numeric(self):
+        html = tr.render_template(
+            'summary.html.j2', sections=[],
+            meta={'title': 'T', 'target': 'x', 'band': 'high', 'score': 72})
+        assert 'aria-valuenow="72"' in html
+
+    def test_escaped_payload_is_visible_as_text_not_markup(self):
+        # The analyst still sees what was supplied - it is inert, not hidden.
+        html = tr.render_standalone_html_report(
+            [], {'title': 'T', 'target': '<b>bold</b>'})
+        assert '&lt;b&gt;bold&lt;/b&gt;' in html
+        assert '<b>bold</b>' not in html
+
+    def test_legitimate_report_is_unchanged_by_the_hardening(self):
+        # The hardening must not alter a well-formed report's rendered facts.
+        html = tr.render_standalone_html_report(SECTIONS, META)
+        assert 'aria-label="Risk band high (score 72)"' in html
+        assert 'Rule score: <strong>72</strong> / 100' in html
+        summary = tr.render_template('summary.html.j2', sections=[], meta=SUMMARY_META)
+        assert 'band-chip high' in summary
+        assert 'width: 72%' in summary

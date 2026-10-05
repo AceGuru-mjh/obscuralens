@@ -13,14 +13,16 @@
 {# The document is fully self-contained: every style is inline in the   #}
 {# single <style> block below, so the report survives being emailed,    #}
 {# archived or opened from disk with no network access. Values are      #}
-{# escaped through the `esc` filter; notes use `nl2br`.                 #}
+{# escaped through the `esc` filter; notes use `nl2br`. `meta.band` is   #}
+{# matched against a fixed list and `meta.score` only ever reaches an    #}
+{# attribute through `esc`, so a hostile meta block cannot inject.       #}
 {# ------------------------------------------------------------------ #}
 
 {# ---------------- shared macros (defined before use) --------------- #}
 
 {#- badge(text, tone): small coloured pill used in the legend and heads -#}
 {% macro badge(text, tone='tone-neutral') -%}
-<span class="badge {{ tone }}">{{ text|esc }}</span>
+<span class="badge {{ tone|esc }}">{{ text|esc }}</span>
 {%- endmacro %}
 
 {#- section_table(section, index): one report section with a data table.
@@ -70,8 +72,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="generator" content="ObscuraLens v{{ meta.version }}">
-<meta name="description" content="ObscuraLens OSINT report for {{ meta.target }}">
+<meta name="generator" content="ObscuraLens v{{ meta.version|esc }}">
+<meta name="description" content="ObscuraLens OSINT report for {{ meta.target|esc }}">
 <title>{{ meta.title|esc }}</title>
 <style>
 /* ------------------------------------------------------------------ */
@@ -584,7 +586,7 @@ table.data-table th.num { text-align: right; font-variant-numeric: tabular-nums;
       ('critical', 'critical'),
   ] %}
   <div class="band-strip" role="img"
-       aria-label="Risk band {{ meta.band|esc }}{% if meta.score is not none %} (score {{ meta.score }}){% endif %}">
+       aria-label="Risk band {{ meta.band|esc }}{% if meta.score is not none %} (score {{ meta.score|esc }}){% endif %}">
     {% for value, label in bands %}
     <div class="band-seg{% if meta.band == value %} is-active active-{{ value }}{% endif %}">
       {{ label }}
@@ -592,7 +594,7 @@ table.data-table th.num { text-align: right; font-variant-numeric: tabular-nums;
     {% endfor %}
   </div>
   {% if meta.score is defined and meta.score is not none %}
-  <p class="band-score">Rule score: <strong>{{ meta.score }}</strong> / 100</p>
+  <p class="band-score">Rule score: <strong>{{ meta.score|esc }}</strong> / 100</p>
   {% endif %}
   {% endif %}
 

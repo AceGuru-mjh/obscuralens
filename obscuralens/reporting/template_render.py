@@ -52,17 +52,19 @@ summary template additionally understands ``band`` (risk band),
 import html
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
 __all__ = [
+    'BAND_VALUES',
     'RISK_BANDS',
     'TEMPLATES_DIR',
     'available_templates',
     'fmt_date',
     'fmt_pct',
     'nl2br',
+    'pct_width',
     'render_markdown_report',
     'render_report',
     'render_standalone_html_report',
@@ -161,8 +163,9 @@ def template_env() -> Environment:
     ``trim_blocks`` / ``lstrip_blocks`` keep template control lines out of
     the rendered output, and ``keep_trailing_newline`` preserves the final
     newline of Markdown templates.  The filters :func:`esc`, :func:`nl2br`,
-    :func:`fmt_date` and :func:`fmt_pct` are installed as ``esc``,
-    ``nl2br``, ``fmt_date`` and ``fmt_pct`` respectively.
+    :func:`fmt_date`, :func:`fmt_pct` and :func:`pct_width` are installed
+    as ``esc``, ``nl2br``, ``fmt_date``, ``fmt_pct`` and ``pct_width``
+    respectively.
     """
     global _ENV
     if _ENV is not None:
@@ -178,6 +181,7 @@ def template_env() -> Environment:
     env.filters['nl2br'] = nl2br
     env.filters['fmt_date'] = fmt_date
     env.filters['fmt_pct'] = fmt_pct
+    env.filters['pct_width'] = pct_width
     _ENV = env
     return env
 
@@ -256,9 +260,63 @@ def _default_version() -> str:
         return 'unknown'
 
 
+#: The only risk bands the report templates know how to style.  ``meta.band``
+#: is interpolated into a ``class`` attribute and into visible text, so an
+#: unrecognised value is dropped rather than rendered - there is no CSS for it
+#: anyway, and dropping it keeps the class attribute closed.
+BAND_VALUES: Tuple[str, ...] = (
+    'clean', 'watch', 'elevated', 'high', 'critical',
+)
+
+
+def _coerce_score(value: Any) -> Optional[float]:
+    """
+    *value* as a score in ``[0, 100]``, or ``None`` when it is not a number.
+
+    Integers stay integers so a score of ``72`` still renders as ``72`` and not
+    ``72.0``; booleans are rejected because they are flags, not scores, and
+    NaN/infinity have no bar width.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number in (float('inf'), float('-inf')):
+        return None
+    number = max(0.0, min(100.0, number))
+    return int(number) if number.is_integer() else round(number, 2)
+
+
+def pct_width(value: Any) -> str:
+    """
+    A CSS/ARIA-safe percentage for a score: clamped, numeric, never empty.
+
+    The summary card used to compute its progress-bar width with
+    ``{{ [meta.score, 100]|min }}``, which raises ``TypeError`` - and so a 500
+    - for any non-numeric score.  This renders ``0`` instead.
+    """
+    number = _coerce_score(value)
+    return '0' if number is None else str(number)
+
+
 def _normalize_meta(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Fill meta defaults and keep any extra keys (band, score, ...)."""
+    """
+    Fill meta defaults and keep any extra keys (band, score, ...).
+
+    ``band`` is restricted to :data:`BAND_VALUES` and ``score`` to a number in
+    ``[0, 100]``; anything else is normalised away before it reaches a
+    template.  This is the first of two layers - the templates escape too,
+    because :func:`render_template` is public and can be handed a meta block
+    that never passed through here.
+    """
     normalized: Dict[str, Any] = dict(meta or {})
+    if 'band' in normalized:
+        band = str(normalized.get('band') or '').strip().lower()
+        normalized['band'] = band if band in BAND_VALUES else ''
+    if 'score' in normalized:
+        normalized['score'] = _coerce_score(normalized.get('score'))
     defaults = {
         'title': 'ObscuraLens Report',
         'target': '',

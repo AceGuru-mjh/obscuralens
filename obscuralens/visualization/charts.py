@@ -95,11 +95,20 @@ class ChartGenerator:
         }
 
     def _save(self, fig: Any, filename: str) -> str:
-        """Write *fig* to ``output_dir/filename`` and release it."""
+        """
+        Write *fig* to ``output_dir/filename`` and always release it.
+
+        The close is in a ``finally`` because a figure that survives a failed
+        save stays registered with pyplot for the life of the process - and at
+        300 dpi these are tens of megabytes each, which a long-running web or
+        daemon process would accumulate one bad render at a time.
+        """
         output_path = self.output_dir / filename
-        fig.savefig(output_path, dpi=300, bbox_inches='tight',
-                    facecolor='#1a1a2e', edgecolor='none')
-        plt.close(fig)
+        try:
+            fig.savefig(output_path, dpi=300, bbox_inches='tight',
+                        facecolor='#1a1a2e', edgecolor='none')
+        finally:
+            plt.close(fig)
         return str(output_path)
 
     def _no_data_figure(self, title: str, message: str = _NO_DATA_MESSAGE) -> Any:

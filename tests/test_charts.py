@@ -434,27 +434,51 @@ class TestNoFigureLeaks:
 
     The generators used to call the pyplot-global ``plt.close()``; they now
     close the figure they own, so a chart rendered while another is open can
-    not silently discard it.
+    not silently discard it.  Assertions compare against the figures already
+    open on entry, because pyplot's registry is process-global and another
+    test module may legitimately hold one.
     """
 
     def test_rendering_leaves_no_figures_open(self, tmp_path):
+        before = set(matplotlib.pyplot.get_fignums())
         gen = ChartGenerator(output_dir=str(tmp_path))
         gen.create_pie_chart({'a': 1}, 'T', 'p.png')
         gen.create_bar_chart({'a': 1}, 'T', 'x', 'y', 'b.png')
         gen.create_threat_gauge(10, filename='g.png')
         gen.create_statistics_dashboard({}, filename='d.png')
         gen.create_timeline_chart([], 'T', 't.png')
-        assert matplotlib.pyplot.get_fignums() == []
+        # create_word_cloud is deliberately excluded: at 300 dpi it needs a
+        # contiguous ~150 MiB buffer and belongs to TestWordCloud, not to a
+        # leak check that must stay cheap.
+        assert set(matplotlib.pyplot.get_fignums()) == before
 
     def test_placeholder_path_also_closes_its_figure(self, tmp_path):
+        before = set(matplotlib.pyplot.get_fignums())
         gen = ChartGenerator(output_dir=str(tmp_path))
         gen.create_pie_chart({}, 'T', 'p.png')
         gen.create_timeline_chart([], 'T', 't.png')
-        assert matplotlib.pyplot.get_fignums() == []
+        assert set(matplotlib.pyplot.get_fignums()) == before
 
     def test_unrelated_open_figure_survives_a_render(self, tmp_path):
         gen = ChartGenerator(output_dir=str(tmp_path))
         keeper = matplotlib.pyplot.figure()
-        gen.create_pie_chart({'a': 1}, 'T', 'p.png')
-        assert matplotlib.pyplot.fignum_exists(keeper.number)
-        matplotlib.pyplot.close(keeper)
+        try:
+            gen.create_pie_chart({'a': 1}, 'T', 'p.png')
+            assert matplotlib.pyplot.fignum_exists(keeper.number)
+        finally:
+            matplotlib.pyplot.close(keeper)
+
+    def test_a_failed_save_still_releases_the_figure(self, tmp_path, monkeypatch):
+        # Regression: the close sat after savefig, so any save error (a full
+        # disk, an OOM at 300 dpi) leaked the figure for the life of the
+        # process. It must be released in a `finally`.
+        before = set(matplotlib.pyplot.get_fignums())
+        gen = ChartGenerator(output_dir=str(tmp_path))
+
+        def boom(*args, **kwargs):
+            raise MemoryError('unable to allocate')
+
+        monkeypatch.setattr(matplotlib.figure.Figure, 'savefig', boom)
+        with pytest.raises(MemoryError):
+            gen.create_pie_chart({'a': 1}, 'T', 'p.png')
+        assert set(matplotlib.pyplot.get_fignums()) == before
