@@ -394,7 +394,11 @@ def _gravatar(email: str) -> Dict[str, Any]:
     Gravatar check. Gravatar is blocked from some networks, so failures are
     reported as 'unknown' rather than 'no avatar'.
     """
-    digest = hashlib.md5(email.strip().lower().encode('utf-8')).hexdigest()
+    # Gravatar's URL scheme is defined as md5(lowercase(trim(email))); MD5 is
+    # the protocol here, not a security choice, so it is flagged as such
+    # (bandit B324) and must not be "upgraded" or the lookup breaks.
+    digest = hashlib.md5(email.strip().lower().encode('utf-8'),
+                         usedforsecurity=False).hexdigest()
     status, _text, error = http.fetch(
         f"https://www.gravatar.com/avatar/{digest}?d=404&s=80")
     if error or status == 0:

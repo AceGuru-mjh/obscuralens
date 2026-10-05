@@ -92,3 +92,57 @@ def test_metrics_count_requests(client, monkeypatch, fake_response):
                         lambda url, **kw: fake_response(json_data={'a': 1}))
     client.get_json('https://metrics.test/a', use_cache=False)
     assert metrics.snapshot()['requests'] == 1
+
+
+class TestCacheKey:
+    """`_cache_key`: a stable, header-aware identifier - not a MAC.
+
+    The digest moved from SHA-1 to SHA-256 (bandit B324 flags SHA-1 whatever
+    its purpose). These pin the observable contract so the change stays
+    behaviour-preserving: same shape, same 12-hex truncation, order-insensitive.
+    """
+
+    def test_url_without_headers_is_returned_verbatim(self):
+        assert HttpClient._cache_key('https://x.test/a', None) == 'https://x.test/a'
+        assert HttpClient._cache_key('https://x.test/a', {}) == 'https://x.test/a'
+
+    def test_headers_append_a_12_hex_digest(self):
+        key = HttpClient._cache_key('https://x.test/a', {'A': '1'})
+        assert key.startswith('https://x.test/a#')
+        digest = key.split('#', 1)[1]
+        assert len(digest) == 12
+        assert all(c in '0123456789abcdef' for c in digest)
+
+    def test_digest_is_sha256_of_the_sorted_header_repr(self):
+        import hashlib
+        headers = {'A': '1', 'B': '2'}
+        expected = hashlib.sha256(
+            repr(sorted(headers.items())).encode('utf-8'),
+            usedforsecurity=False).hexdigest()[:12]
+        key = HttpClient._cache_key('https://x.test/a', headers)
+        assert key == f'https://x.test/a#{expected}'
+        # And it is specifically *not* the old SHA-1 digest.
+        sha1 = hashlib.sha1(  # noqa: S324 - asserting the migration happened
+            repr(sorted(headers.items())).encode('utf-8')).hexdigest()[:12]
+        assert not key.endswith(sha1)
+
+    def test_header_order_does_not_change_the_key(self):
+        first = HttpClient._cache_key('u', {'A': '1', 'B': '2'})
+        second = HttpClient._cache_key('u', {'B': '2', 'A': '1'})
+        assert first == second
+
+    def test_different_headers_produce_different_keys(self):
+        a = HttpClient._cache_key('u', {'Authorization': 'Bearer one'})
+        b = HttpClient._cache_key('u', {'Authorization': 'Bearer two'})
+        assert a != b
+
+    def test_key_is_deterministic_across_calls(self):
+        headers = {'X-Key': 'v'}
+        assert HttpClient._cache_key('u', headers) == \
+            HttpClient._cache_key('u', headers)
+
+    def test_the_same_url_with_and_without_headers_differs(self):
+        # Two callers of one URL with different auth must not share a cache
+        # entry - that is the whole reason the suffix exists.
+        assert HttpClient._cache_key('u', None) != \
+            HttpClient._cache_key('u', {'Authorization': 'Bearer t'})

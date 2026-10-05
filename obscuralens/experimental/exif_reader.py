@@ -1456,10 +1456,13 @@ def analyze(path_or_bytes: Any) -> Dict[str, Any]:
     gps = meta.get('gps') if isinstance(meta.get('gps'), dict) else {}
     xmp = meta.get('xmp') if isinstance(meta.get('xmp'), dict) else {}
 
+    # Both digests are identification fingerprints of the analyst's own file,
+    # emitted so the image can be matched against a hash-lookup service or a
+    # case record. MD5 is not a security control here (bandit B324).
     file_facts: Dict[str, Any] = {
         'size': len(data),
-        'sha256': hashlib.sha256(data).hexdigest(),
-        'md5': hashlib.md5(data).hexdigest(),
+        'sha256': hashlib.sha256(data, usedforsecurity=False).hexdigest(),
+        'md5': hashlib.md5(data, usedforsecurity=False).hexdigest(),
         'magic': binascii.hexlify(data[:16]).decode('ascii'),
         'format': fmt,
     }
