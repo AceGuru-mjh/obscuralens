@@ -51,6 +51,12 @@ jobs:
           python -m obscuralens --version
       - name: Dependency consistency
         run: pip check
+      - name: Username platform registry integrity
+        # Offline: validates the 112 hand-maintained platform entries and the
+        # tables keyed by platform name. Fails on a duplicate registration, a
+        # URL with no placeholder, an API spec missing a callable, or an
+        # extractor orphaned by a rename. Makes no network requests.
+        run: python -m obscuralens sources check
 
   web:
     runs-on: ubuntu-latest

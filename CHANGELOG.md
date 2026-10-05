@@ -2,6 +2,105 @@
 
 ## Changelog
 
+## Unreleased — CI repair, report hardening & registry integrity
+
+Four independent fixes, each reproduced before the change and covered by tests
+after it. Test count 4,586 → 5,042 (+456).
+
+### Fixed — CI was red on `main`
+
+- **Charts no longer raise on unusable input.** matplotlib 3.11.0 (PR #30019)
+  started raising `ValueError: All wedge sizes are zero` for an all-zero pie
+  instead of drawing an empty axes, which made `create_pie_chart({})` a hard
+  failure and left the `test` job red across all six matrix Python versions.
+  Five more uncoerced-input paths were reproduced and fixed alongside it:
+  all-zero and negative pie values, `success_rate` above 100 (negative wedge),
+  `None` and string `success_rate` (`TypeError` on `100 - value`), and a
+  timeline event with no `date` (`KeyError`). Values are now coerced through
+  module-level helpers, an unplottable pie renders an explicit
+  "No data to plot" placeholder, and `create_threat_gauge` clamps its score
+  before deriving the needle angle. Bar charts still allow negative bars -
+  they encode position, not share of a whole.
+- **Figures are released even when saving fails.** The close sat after
+  `savefig`, so any save error leaked the figure for the life of the process;
+  at 300 dpi those are tens of megabytes each, which a long-running web or
+  daemon process would accumulate one bad render at a time.
+
+### Security — report templates
+
+- **`meta.*` is escaped in both HTML templates.** They run with
+  `autoescape=False` and document that values go through the `esc` filter, but
+  `meta.target` reached the standalone report's `<meta name="description">`
+  raw (a working `<script>` injection), and `meta.band` / `meta.score` reached
+  the summary card's class attribute, text and `aria-valuenow` raw. Severity is
+  moderate, not critical: `advanced/report_builder.py` - the generator behind
+  `obscuralens report` and `GET /api/report/{kind}/{target}`, which also
+  validates its target - already escapes everything. The Jinja templates are
+  the second reporting path, reached from `--template`, the SDK and plugins.
+- **`[meta.score, 100]|min` no longer 500s.** A non-numeric score raised
+  `TypeError` from the `min` filter; a new `pct_width` filter clamps to 0-100
+  and always emits a bare number, which also makes `aria-valuenow` ARIA-valid.
+- **`meta.band` is whitelisted, not just escaped.** It lands in a `class`
+  attribute, so `_normalize_meta` now restricts it to the five bands the
+  templates can style and drops anything else. `meta.score` is coerced into
+  `[0, 100]`, preserving int-ness so 72 still renders as "72".
+
+### Security — hash hygiene (completes the stalled #14)
+
+- **SHA-256 for deterministic identifiers.** `HttpClient._cache_key` and
+  `plugins._module_name` used SHA-1 for what are cache and `sys.modules` keys,
+  not MACs; bandit B324 flags SHA-1 regardless of intent. The 12-hex
+  truncation is unchanged, so both keep their shape.
+- **Protocol-mandated MD5 annotated, not "upgraded".** Gravatar's URL scheme
+  *is* `md5(lowercase(trim(email)))`, and the analyst toolbox emits MD5/SHA-1
+  because hash-lookup services index on them. These now pass
+  `usedforsecurity=False` (Python 3.9+, this project's floor); all ten digests
+  verified byte-identical.
+- **`base85_decode` rejects a truncated payload.** A one-character input
+  decoded to `''` and reported success, while base32 and base64 validate up
+  front. Since `base85_encode('')` is `''`, empty output from non-empty input
+  is always garbage. Partial hunks of 2-4 characters still decode - that is
+  documented b85 behaviour and is now pinned by a test.
+
+### Added — username registry integrity check
+
+- **`obscuralens sources check`** (`obscuralens/trackers/registry_checks.py`)
+  validates the 112 hand-maintained username platform entries and the three
+  satellite tables keyed by platform name, entirely offline: entry shape, name
+  hygiene, duplicate registrations, `{}` placeholder arity, URL scheme and
+  host, duplicate profile URLs, JSON-API spec contract, orphaned
+  `EXTRACTORS` / `HTML_VERDICT_RULES` / `SOURCE_CATALOG` keys, and verdict-rule
+  signature arity. Errors fail; warnings never do. `-f json` emits the report.
+  `err_verdicts` is checked against how `username_tracker` actually consumes it
+  - an identity test on `False` - so a `True` or non-bool value is reported as
+  dead config.
+- Runs as a step in the CI `sanity` job. This is the offline half of rule
+  verification; proving a rule still matches a live site needs the network and
+  a known-good/known-bad account pair per platform, which `sources health`
+  tracks from real traffic.
+
+### Added — test coverage
+
+- **`tests/test_encoders.py` (193 cases)** for `experimental/encoders.py`: 747
+  lines backing `obscuralens tools encode|decode` and the `/api/tools/*`
+  endpoints, previously with no coverage at all. Pins the registry shape and
+  order, round-trips every scheme plus unicode and markup payloads, the
+  per-decoder `ValueError` contract, that no decoder leaks a non-`ValueError`
+  (`decode_auto` only catches `ValueError`/`UnicodeError`, so a leak would
+  reach the analyst as a crash), Caesar across all 26 shifts, ROT13
+  self-inverse, Morse's documented case-loss and ITU punctuation, XOR keyed
+  round-trips and their four error paths, the `_printable_ratio` treatment of
+  U+FFFD as non-printable, and `hash_all` against plain hashlib.
+- **`tests/test_registry_checks.py` (94 cases)** - asserts the shipped registry
+  is clean, then verifies each check still detects the defect it exists for, so
+  a check that silently stops firing is caught even while the real registry
+  happens to stay healthy.
+- **Charts 49 → 117 cases**, **templates 86 → 164**, plus new `TestCacheKey`
+  (6 → 13 in `test_http_client.py`), `TestModuleNameDigest` (10 → 17 in
+  `test_plugins.py`) and `TestGravatarDigest` (5 → 14 in
+  `test_email_sources.py`) pinning the three migrated digests - including
+  negative assertions that they are no longer the old SHA-1 values.
+
 ## 6.2.0 — Quality, Benchmarks & Docs
 
 v6.2 completes the six-part v6.0 programme: the benchmark suite, a
