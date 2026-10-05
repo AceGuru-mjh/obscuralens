@@ -4,8 +4,8 @@
 
 ## Unreleased — CI repair, report hardening & registry integrity
 
-Four independent fixes, each reproduced before the change and covered by tests
-after it. Test count 4,586 → 5,042 (+456).
+Five independent fixes, each reproduced before the change and covered by tests
+after it. Test count 4,586 → 5,044 (+458).
 
 ### Fixed — CI was red on `main`
 
@@ -62,6 +62,21 @@ after it. Test count 4,586 → 5,042 (+456).
   is always garbage. Partial hunks of 2-4 characters still decode - that is
   documented b85 behaviour and is now pinned by a test.
 
+### Fixed — a benchmark test asserted a false invariant
+
+- `test_timing_fields_on_trivial_fn` chained
+  `min_s <= mean_s <= median_s <= p95_s`. **Mean and median have no guaranteed
+  order**, and timing samples are right-skewed, so `mean_s > median_s` is the
+  common case - measured at **91.7% of 300 local runs**. It survived because on
+  a fast quiet runner the three samples land near-identically and mean equals
+  median, which is why it looked like a rare flake and split the CI matrix by
+  Python version (green on 3.12-3.14, red on 3.9-3.11) rather than failing
+  everywhere. Replaced with the relations that actually hold -
+  `min <= median <= p95`, `min <= mean <= max(samples)`, `min == min(samples)` -
+  and pinned by two new tests, one of which builds a deliberately skewed sample
+  so the bounds are proven to be properties of the statistics rather than
+  artefacts of a quiet machine. 0 failures in 200 repeat runs afterwards.
+
 ### Added — username registry integrity check
 
 - **`obscuralens sources check`** (`obscuralens/trackers/registry_checks.py`)
@@ -95,7 +110,7 @@ after it. Test count 4,586 → 5,042 (+456).
   is clean, then verifies each check still detects the defect it exists for, so
   a check that silently stops firing is caught even while the real registry
   happens to stay healthy.
-- **Charts 49 → 117 cases**, **templates 86 → 164**, plus new `TestCacheKey`
+- **`test_benchmarks.py` 42 → 44**, **charts 49 → 117**, **templates 86 → 164**, plus new `TestCacheKey`
   (6 → 13 in `test_http_client.py`), `TestModuleNameDigest` (10 → 17 in
   `test_plugins.py`) and `TestGravatarDigest` (5 → 14 in
   `test_email_sources.py`) pinning the three migrated digests - including
