@@ -366,7 +366,8 @@ def validate_plugin_file(path) -> Dict:
         report['errors'] = [('file', f'no such file: {file_path}')]
         return report
 
-    digest = hashlib.sha1(str(file_path).encode('utf-8')).hexdigest()[:12]
+    digest = hashlib.sha256(str(file_path).encode('utf-8'),
+                           usedforsecurity=False).hexdigest()[:12]
     module_name = f'_obscuralens_plugin_check_{file_path.stem}_{digest}'
     try:
         spec = importlib.util.spec_from_file_location(module_name, str(file_path))
@@ -512,8 +513,15 @@ def _import_module(path: Path) -> types.ModuleType:
 
 
 def _module_name(path: Path) -> str:
-    """Build a unique module name so equal stems in different dirs coexist."""
-    digest = hashlib.sha1(str(path).encode('utf-8')).hexdigest()[:12]
+    """
+    Build a unique module name so equal stems in different dirs coexist.
+
+    The digest disambiguates paths; it is not a security primitive, so it is
+    SHA-256 (bandit B324 flags SHA-1 regardless of intent).  Module names are
+    ephemeral ``sys.modules`` keys, so the change has no persisted effect.
+    """
+    digest = hashlib.sha256(str(path).encode('utf-8'),
+                            usedforsecurity=False).hexdigest()[:12]
     return f'_obscuralens_plugin_{path.stem}_{digest}'
 
 

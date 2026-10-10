@@ -251,6 +251,14 @@ def base85_decode(value: str) -> str:
     accepts classic ascii85 after stripping optional Adobe ``<~``/``~>``
     framing, because both flavors show up in PDFs and patches during
     malware triage.
+
+    Raises ``ValueError`` on an empty payload *and* on one that decodes to
+    zero bytes.  ``base64.b85decode`` silently discards a trailing
+    incomplete 5-character hunk, so a 1-4 character payload such as ``'a'``
+    used to decode to ``''`` and report success - unlike base32 and base64,
+    which validate up front.  Since :func:`base85_encode` only ever emits an
+    empty string for empty input, a non-empty payload decoding to nothing is
+    always truncated garbage, never a real value.
     """
     candidate = _squash(_require_text(value, 'value'))
     if not candidate:
@@ -267,6 +275,10 @@ def base85_decode(value: str) -> str:
             data = base64.a85decode(stripped, adobe=False)
         except (binascii.Error, ValueError) as err:
             raise ValueError(f'invalid base85 payload: {err}') from None
+    if not data:
+        raise ValueError(
+            f'base85 payload decoded to zero bytes ({len(candidate)} '
+            'character(s) - too short to form a complete hunk)')
     return data.decode('utf-8', errors='replace')
 
 
@@ -738,6 +750,10 @@ def hash_all(text: str) -> Dict[str, str]:
     )
     digests: Dict[str, str] = {}
     for name, builder in builders:
-        digests[name] = builder(payload).hexdigest()
+        # MD5 and SHA-1 are emitted because hash-lookup services index on them;
+        # they are fingerprints of the analyst's own input, never a security
+        # control. The flag documents that (and quiets bandit B324) without
+        # changing a single digest.
+        digests[name] = builder(payload, usedforsecurity=False).hexdigest()
     digests['crc32'] = format(zlib.crc32(payload) & 0xFFFFFFFF, '08x')
     return digests

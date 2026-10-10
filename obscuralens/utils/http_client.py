@@ -93,10 +93,20 @@ class HttpClient:
 
     @staticmethod
     def _cache_key(url: str, headers: Optional[Dict[str, str]]) -> str:
+        """
+        A stable cache key for *url*, suffixed when headers disambiguate it.
+
+        SHA-256 rather than SHA-1: the digest is a deterministic identifier,
+        not a MAC, so the algorithm is a free choice - and SHA-1 for any
+        purpose trips bandit B324.  The 12-hex truncation is unchanged, so the
+        key keeps its shape; entries written by the old digest simply miss
+        once and are rewritten (the cache is TTL-bound and disposable).
+        """
         if not headers:
             return url
-        digest = hashlib.sha1(
-            repr(sorted(headers.items())).encode('utf-8')).hexdigest()[:12]
+        digest = hashlib.sha256(
+            repr(sorted(headers.items())).encode('utf-8'),
+            usedforsecurity=False).hexdigest()[:12]
         return f"{url}#{digest}"
 
     # -- JSON -------------------------------------------------------------

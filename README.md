@@ -317,6 +317,7 @@ obscuralens intel tor 185.220.101.1      # exit node + Onionoo relay details
 obscuralens intel feeds                  # blocklist feed cache status
 obscuralens sources health               # reliability + circuit-breaker state
 obscuralens sources health --reset ip-api.com
+obscuralens sources check                # offline integrity check of the 112-platform username registry
 ```
 
 Experimental features (see [docs/experimental.md](docs/experimental.md)):

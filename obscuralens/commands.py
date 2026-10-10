@@ -475,7 +475,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_sources = sub.add_parser('sources', help='list data sources')
     p_sources.add_argument('kind', nargs='?',
-                           choices=KINDS + ('health',))
+                           choices=KINDS + ('health', 'check'))
     p_sources.add_argument('--reset', metavar='SOURCE',
                            help='reset health data for one source (with health)')
     add_common(p_sources)
@@ -1657,6 +1657,9 @@ def _cmd_sources(args: argparse.Namespace) -> int:
     if getattr(args, 'kind', None) == 'health' or \
             getattr(args, 'health', False):
         return _cmd_sources_health(args)
+    # `sources check` validates the username platform registry offline.
+    if getattr(args, 'kind', None) == 'check':
+        return _cmd_sources_check(args)
 
     from .trackers.app_sources import SOURCE_CATALOG as APP_CATALOG
     from .trackers.asn_sources import SOURCE_CATALOG as ASN_CATALOG
@@ -1751,6 +1754,40 @@ def _cmd_sources_health(args: argparse.Namespace) -> int:
         'state': r.get('state'), 'last error': (r.get('last_error') or '')[:40],
     } for r in rows[:100]]), getattr(args, 'output', None))
     return 0
+
+
+def _cmd_sources_check(args: argparse.Namespace) -> int:
+    """
+    Offline integrity check of the username platform registry.
+
+    Validates the 112 hand-maintained platform entries and the tables keyed by
+    platform name without making a single request, so it is safe to run in CI
+    and exits non-zero on any error-severity finding.
+    """
+    from .trackers.registry_checks import check_username_registry
+
+    report = check_username_registry()
+    counts = report['counts']
+    output = getattr(args, 'output', None)
+
+    if (getattr(args, 'format', None) or 'table') == 'json':
+        _emit(json.dumps(report, indent=2, ensure_ascii=False), output)
+        return 0 if report['ok'] else 1
+
+    _emit(f"Username platform registry: {counts['platforms']} platforms "
+          f"({counts['html_entries']} HTML + {counts['api_entries']} JSON API), "
+          f"{counts['checks_run']} checks run", output)
+    for finding in report['errors']:
+        _err(f"[{finding['check']}] {finding['platform']}: {finding['message']}")
+    for finding in report['warnings']:
+        _emit(f"  warning [{finding['check']}] "
+              f"{finding['platform']}: {finding['message']}", output)
+    if report['ok']:
+        _emit(f"OK - no integrity errors "
+              f"({counts['warnings']} warning(s))", output)
+        return 0
+    _err(f"{counts['errors']} integrity error(s) found")
+    return 1
 
 
 def _cmd_keys(args: argparse.Namespace) -> int:

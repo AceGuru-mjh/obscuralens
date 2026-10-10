@@ -198,3 +198,65 @@ def test_ip_tracker_runs_plugin_sources(plugin_dirs, monkeypatch):
     assert out['sources']['plugin:demo:Demo']['ok'] is True
     assert out['fields']['network_note'] == 'seen 1.2.3.4'
     assert out['provenance']['network_note'] == ['plugin:demo:Demo']
+
+
+class TestModuleNameDigest:
+    """`_module_name`: a unique, ephemeral sys.modules key - not a MAC.
+
+    The digest moved from SHA-1 to SHA-256 (bandit B324 flags SHA-1 whatever
+    its purpose). The observable contract - one module name per path, so equal
+    stems in different directories coexist - must survive the change.
+    """
+
+    def test_shape_is_prefix_stem_and_12_hex(self, tmp_path):
+        path = tmp_path / 'myplug.py'
+        name = plugins._module_name(path)
+        assert name.startswith('_obscuralens_plugin_myplug_')
+        digest = name.rsplit('_', 1)[1]
+        assert len(digest) == 12
+        assert all(c in '0123456789abcdef' for c in digest)
+
+    def test_digest_is_sha256_of_the_path(self, tmp_path):
+        import hashlib
+        path = tmp_path / 'p.py'
+        expected = hashlib.sha256(str(path).encode('utf-8'),
+                                 usedforsecurity=False).hexdigest()[:12]
+        assert plugins._module_name(path).endswith(expected)
+
+    def test_it_is_specifically_not_the_old_sha1_digest(self, tmp_path):
+        import hashlib
+        path = tmp_path / 'p.py'
+        stale = hashlib.sha1(str(path).encode('utf-8')).hexdigest()[:12]
+        assert not plugins._module_name(path).endswith(stale)
+
+    def test_deterministic_for_the_same_path(self, tmp_path):
+        path = tmp_path / 'p.py'
+        assert plugins._module_name(path) == plugins._module_name(path)
+
+    def test_equal_stems_in_different_dirs_do_not_collide(self, tmp_path):
+        # The reason the digest exists at all.
+        a = tmp_path / 'one' / 'tool.py'
+        b = tmp_path / 'two' / 'tool.py'
+        for p in (a, b):
+            p.parent.mkdir(parents=True, exist_ok=True)
+        assert plugins._module_name(a) != plugins._module_name(b)
+
+    def test_different_stems_in_the_same_dir_do_not_collide(self, tmp_path):
+        assert plugins._module_name(tmp_path / 'a.py') != \
+            plugins._module_name(tmp_path / 'b.py')
+
+    def test_loaded_plugins_get_distinct_sys_modules_entries(self, tmp_path):
+        # End-to-end: two same-stem plugins load side by side.
+        source = textwrap.dedent('''
+            PLUGIN_META = {'name': '%s', 'version': '1.0'}
+            def register(ctx):
+                return None
+        ''')
+        names = []
+        for label in ('one', 'two'):
+            directory = tmp_path / label
+            directory.mkdir()
+            path = directory / 'shared_stem.py'
+            path.write_text(source % label)
+            names.append(plugins._module_name(path))
+        assert len(set(names)) == 2

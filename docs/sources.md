@@ -518,6 +518,48 @@ Shipped as package data (works from wheels and the standalone executable);
 | `airlines_iata.txt` | 134 | `IATA\|ICAO\|Name\|Country\|Callsign` | flight `airline_pack`, entity extraction, data catalog `airline()` |
 | `mid_codes.txt` | 97 | `MID\|Country` | mmsi `mid_pack`, data catalog `mid()` |
 
+## Registry integrity check
+
+The username sweep is the largest hand-maintained table in the project - 112
+platform entries (101 HTML plus 11 JSON API) and three satellite tables keyed
+by platform name (`EXTRACTORS`, `HTML_VERDICT_RULES`, `SOURCE_CATALOG`). Those
+tables rot silently: a platform renames its profile path, an extractor is left
+pointing at a platform that was removed, a spec loses its `extract` callable -
+and the sweep keeps returning confident verdicts built on a rule that no longer
+describes the site.
+
+```bash
+obscuralens sources check          # human-readable, exits 1 on any error
+obscuralens sources check -f json  # machine-readable report
+```
+
+The check is **entirely offline** and runs nine validations:
+
+| Check | Catches |
+|---|---|
+| `html_entry_shape` | entries that are not `{name, url}` with non-empty strings |
+| `name_hygiene` | padded, blank or double-spaced platform names |
+| `duplicates` | a platform registered twice (one entry shadows the other); case-only collisions warn |
+| `url_templates` | a missing or doubled `{}` placeholder, a non-http(s) scheme, a hostless URL |
+| `duplicate_urls` | two platforms sharing one profile URL |
+| `api_spec_shape` | a spec missing `api_url`/`url`/`verdict`/`extract`, a non-callable `verdict`, an `err_verdicts` value the tracker will ignore |
+| `cross_references` | an `EXTRACTORS` / `HTML_VERDICT_RULES` / `SOURCE_CATALOG` key naming a platform that is not registered |
+| `callable_values` | a verdict rule whose signature cannot be called as `rule(username, body, low, response)` |
+| `source_catalog_coverage` | catalog coverage below half the registry (warning only) |
+
+Errors fail the build; warnings never do. `err_verdicts` is checked against how
+`username_tracker` actually consumes it - an identity test on `False` - so a
+`True` or non-bool value is reported as dead config rather than passing
+silently.
+
+This is the offline half of rule verification. Proving a rule still matches a
+*live* site needs the network and a known-good/known-bad account pair per
+platform, which is what `sources health` tracks at runtime from real traffic.
+
+It runs as a CI step in the `sanity` job and as
+`tests/test_registry_checks.py`, which asserts the shipped registry is clean
+and then verifies each check still detects the defect it exists for.
+
 ## Adding your own sources
 
 Two routes:

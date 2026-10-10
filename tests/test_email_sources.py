@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from obscuralens.trackers import email_sources as es
 
 
@@ -98,3 +100,78 @@ def test_pattern_analysis(fake_http):
     assert out['has_digits'] is True
     assert out['digit_count'] == 5
     assert out['looks_generated'] is True
+
+
+class TestGravatarDigest:
+    """Gravatar's URL scheme *is* MD5 - the digest must stay canonical.
+
+    MD5 here is a protocol requirement, not a security choice, so it is called
+    with ``usedforsecurity=False`` (bandit B324). These pin that the flag did
+    not change a single byte of the digest, and that the normalisation Gravatar
+    specifies - trim, then lowercase - is still applied before hashing.
+    """
+
+    @staticmethod
+    def _captured_url(fake_http, status=200):
+        """Run `_gravatar` against a fake transport and return the requested URL."""
+        captured = {}
+
+        def _fetch(url, **kwargs):
+            captured['url'] = url
+            return status, '', ''
+
+        fake_http.fetch = _fetch
+        return captured
+
+    @staticmethod
+    def _digest_of(url):
+        return url.rstrip('/').split('/')[-1].split('?')[0]
+
+    def test_digest_is_the_canonical_md5_of_the_address(self, fake_http):
+        import hashlib
+        captured = self._captured_url(fake_http)
+        es._gravatar('user@example.com')
+        expected = hashlib.md5(b'user@example.com').hexdigest()
+        assert self._digest_of(captured['url']) == expected
+
+    def test_email_is_trimmed_and_lowercased_before_hashing(self, fake_http):
+        import hashlib
+        captured = self._captured_url(fake_http)
+        es._gravatar('  MiXeD@Example.COM  ')
+        assert self._digest_of(captured['url']) == \
+            hashlib.md5(b'mixed@example.com').hexdigest()
+
+    def test_digest_is_32_lowercase_hex(self, fake_http):
+        import re
+        captured = self._captured_url(fake_http)
+        es._gravatar('a@b.co')
+        assert re.fullmatch(r'[0-9a-f]{32}', self._digest_of(captured['url']))
+
+    def test_the_md5_flag_does_not_alter_the_digest(self, fake_http):
+        # `usedforsecurity=False` is an annotation; prove it is not a behaviour
+        # change by recomputing the digest the plain way.
+        import hashlib
+        captured = self._captured_url(fake_http)
+        es._gravatar('flag.check@example.org')
+        plain = hashlib.md5(b'flag.check@example.org').hexdigest()
+        flagged = hashlib.md5(b'flag.check@example.org',
+                              usedforsecurity=False).hexdigest()
+        assert plain == flagged
+        assert self._digest_of(captured['url']) == plain
+
+    @pytest.mark.parametrize('status,expected', [
+        (200, True), (404, False), (500, 'unknown'), (0, 'unknown'),
+    ])
+    def test_verdict_mapping_is_unchanged(self, fake_http, status, expected):
+        captured = self._captured_url(fake_http, status=status)
+        result = es._gravatar('v@example.com')
+        assert result['gravatar'] is expected or result['gravatar'] == expected
+        assert 'url' in captured
+
+    def test_network_failure_reports_unknown_not_absent(self, fake_http):
+        # Gravatar is blocked from some networks; a transport error must not be
+        # reported as "this address has no avatar".
+        fake_http.fetch = lambda url, **kw: (0, '', 'timeout')
+        result = es._gravatar('down@example.com')
+        assert result['gravatar'] == 'unknown'
+        assert result['gravatar_error'] == 'timeout'

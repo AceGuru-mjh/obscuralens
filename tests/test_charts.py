@@ -287,3 +287,198 @@ class TestFileHandling:
         gen.create_bar_chart({'x': 1}, 'T', 'x', 'y', 'b.png')
         assert sorted(p.name for p in tmp_path.iterdir()) == \
             ['b.png', 'p.png', 'threat_gauge.png']
+
+
+class TestCoercionHelpers:
+    """The module-level coercion helpers that keep matplotlib off the floor."""
+
+    @pytest.mark.parametrize('value,expected', [
+        (0, 0.0), (7, 7.0), (2.5, 2.5), ('3', 3.0), ('-1.5', -1.5),
+    ])
+    def test_finite_accepts_numbers_and_numeric_strings(self, value, expected):
+        assert charts_module._finite(value) == expected
+
+    @pytest.mark.parametrize('value', [None, '', 'abc', [], {}, object()])
+    def test_finite_rejects_non_numeric(self, value):
+        assert charts_module._finite(value) is None
+
+    @pytest.mark.parametrize('value', [float('nan'), float('inf'), float('-inf')])
+    def test_finite_rejects_non_finite(self, value):
+        assert charts_module._finite(value) is None
+
+    def test_finite_rejects_bool(self):
+        # True would otherwise plot as a 1.0 slice; booleans are flags, not data.
+        assert charts_module._finite(True) is None
+        assert charts_module._finite(False) is None
+
+    @pytest.mark.parametrize('value,expected', [
+        (-50, 0.0), (0, 0.0), (42.5, 42.5), (100, 100.0),
+        (150, 100.0), (None, 0.0), ('abc', 0.0), ('73', 73.0),
+    ])
+    def test_clamp_percent_bounds_and_defaults(self, value, expected):
+        assert charts_module._clamp_percent(value) == expected
+
+    def test_clamp_percent_honours_explicit_default(self):
+        assert charts_module._clamp_percent(None, default=50.0) == 50.0
+        assert charts_module._clamp_percent('x', default=25.0) == 25.0
+
+    def test_finite_or_zero_keeps_negatives_and_zero(self):
+        # Bars encode position, not share-of-whole, so negatives are data.
+        assert charts_module._finite_or_zero(-3) == -3.0
+        assert charts_module._finite_or_zero(0) == 0.0
+        assert charts_module._finite_or_zero(None) == 0.0
+        assert charts_module._finite_or_zero('q') == 0.0
+
+    def test_plottable_drops_unusable_slices_but_keeps_the_rest(self):
+        labels, values = charts_module._plottable(
+            {'good': 4, 'none': None, 'text': 'x', 'neg': -2, 'also_good': 6})
+        assert labels == ['good', 'also_good']
+        assert values == [4.0, 6.0]
+
+    def test_plottable_handles_none_and_empty(self):
+        assert charts_module._plottable(None) == ([], [])
+        assert charts_module._plottable({}) == ([], [])
+
+
+class TestUnplottableInput:
+    """No chart call may raise on empty, zero, negative or non-numeric input.
+
+    matplotlib 3.11 started raising ``ValueError`` for an all-zero pie
+    (previously it drew an empty axes), which turned these inputs into hard
+    failures; negative wedges and non-numeric stats raised before that too.
+    Every method must degrade to a rendered placeholder or a coerced value.
+    """
+
+    @pytest.mark.parametrize('data', [
+        {},                                     # empty
+        {'a': 0, 'b': 0},                       # all zero
+        {'a': -5, 'b': -1},                     # all negative
+        {'a': None, 'b': 'x'},                  # nothing numeric
+        {'a': float('nan')},                    # not finite
+    ])
+    def test_pie_chart_renders_placeholder(self, tmp_path, data):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        assert_png(gen.create_pie_chart(data, 'T', 'p.png'))
+
+    def test_pie_chart_keeps_usable_slices_alongside_junk(self, tmp_path):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        path = gen.create_pie_chart(
+            {'ok': 3, 'none': None, 'neg': -4, 'text': 'z'}, 'T', 'p.png')
+        assert_png(path)
+        # A real pie was drawn, not the placeholder: the good slice survives.
+        assert path.endswith('p.png')
+
+    def test_pie_placeholder_message_is_configurable(self, tmp_path):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        fig = gen._no_data_figure('T', message='nothing here')
+        assert fig is not None
+        matplotlib.pyplot.close(fig)
+
+    @pytest.mark.parametrize('stats', [
+        None,
+        {},
+        {'success_rate': 150},          # above range -> negative wedge
+        {'success_rate': -20},          # below range -> negative wedge
+        {'success_rate': None},
+        {'success_rate': 'not-a-rate'},
+        {'success_rate': float('nan')},
+        {'queries_by_type': 'not-a-dict'},
+        {'queries_by_type': {'ip': -3, 'domain': None}},
+        'not-a-dict',
+    ])
+    def test_statistics_dashboard_never_raises(self, tmp_path, stats):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        assert_png(gen.create_statistics_dashboard(stats, filename='d.png'))
+
+    @pytest.mark.parametrize('score', [
+        'abc', None, 500, -20, float('nan'), [], '42',
+    ])
+    def test_threat_gauge_coerces_score(self, tmp_path, score):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        assert_png(gen.create_threat_gauge(score, filename='g.png'))
+
+    def test_threat_gauge_clamps_out_of_range_scores(self, tmp_path):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        # Both extremes render; the needle angle stays inside [0, pi].
+        assert_png(gen.create_threat_gauge(500, filename='hi.png'))
+        assert_png(gen.create_threat_gauge(-500, filename='lo.png'))
+
+    def test_threat_gauge_renders_fractional_score(self, tmp_path):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        assert_png(gen.create_threat_gauge(42.5, filename='frac.png'))
+
+    @pytest.mark.parametrize('data', [
+        None, {}, {'a': None}, {'a': 'x'}, {'a': float('inf')},
+    ])
+    def test_bar_chart_coerces_values_to_zero(self, tmp_path, data):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        assert_png(gen.create_bar_chart(data, 'T', 'x', 'y', 'b.png'))
+
+    @pytest.mark.parametrize('events', [
+        None, [], [{'nope': 1}], [{'date': None}], ['not-a-dict'],
+    ])
+    def test_timeline_chart_renders_placeholder(self, tmp_path, events):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        assert_png(gen.create_timeline_chart(events, 'T', 't.png'))
+
+    def test_timeline_chart_keeps_dated_events_drops_undated(self, tmp_path):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        events = [{'date': '2026-01-01', 'description': 'kept'},
+                  {'description': 'undated, dropped'},
+                  {'date': '2026-02-01'}]
+        assert_png(gen.create_timeline_chart(events, 'T', 't.png'))
+
+
+class TestNoFigureLeaks:
+    """Each call must close exactly the figure it created.
+
+    The generators used to call the pyplot-global ``plt.close()``; they now
+    close the figure they own, so a chart rendered while another is open can
+    not silently discard it.  Assertions compare against the figures already
+    open on entry, because pyplot's registry is process-global and another
+    test module may legitimately hold one.
+    """
+
+    def test_rendering_leaves_no_figures_open(self, tmp_path):
+        before = set(matplotlib.pyplot.get_fignums())
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        gen.create_pie_chart({'a': 1}, 'T', 'p.png')
+        gen.create_bar_chart({'a': 1}, 'T', 'x', 'y', 'b.png')
+        gen.create_threat_gauge(10, filename='g.png')
+        gen.create_statistics_dashboard({}, filename='d.png')
+        gen.create_timeline_chart([], 'T', 't.png')
+        # create_word_cloud is deliberately excluded: at 300 dpi it needs a
+        # contiguous ~150 MiB buffer and belongs to TestWordCloud, not to a
+        # leak check that must stay cheap.
+        assert set(matplotlib.pyplot.get_fignums()) == before
+
+    def test_placeholder_path_also_closes_its_figure(self, tmp_path):
+        before = set(matplotlib.pyplot.get_fignums())
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        gen.create_pie_chart({}, 'T', 'p.png')
+        gen.create_timeline_chart([], 'T', 't.png')
+        assert set(matplotlib.pyplot.get_fignums()) == before
+
+    def test_unrelated_open_figure_survives_a_render(self, tmp_path):
+        gen = ChartGenerator(output_dir=str(tmp_path))
+        keeper = matplotlib.pyplot.figure()
+        try:
+            gen.create_pie_chart({'a': 1}, 'T', 'p.png')
+            assert matplotlib.pyplot.fignum_exists(keeper.number)
+        finally:
+            matplotlib.pyplot.close(keeper)
+
+    def test_a_failed_save_still_releases_the_figure(self, tmp_path, monkeypatch):
+        # Regression: the close sat after savefig, so any save error (a full
+        # disk, an OOM at 300 dpi) leaked the figure for the life of the
+        # process. It must be released in a `finally`.
+        before = set(matplotlib.pyplot.get_fignums())
+        gen = ChartGenerator(output_dir=str(tmp_path))
+
+        def boom(*args, **kwargs):
+            raise MemoryError('unable to allocate')
+
+        monkeypatch.setattr(matplotlib.figure.Figure, 'savefig', boom)
+        with pytest.raises(MemoryError):
+            gen.create_pie_chart({'a': 1}, 'T', 'p.png')
+        assert set(matplotlib.pyplot.get_fignums()) == before
